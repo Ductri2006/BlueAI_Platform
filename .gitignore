@@ -1,0 +1,28 @@
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated vector indexes and logs
+*.faiss
+*.pkl
+*.log
+
+# Java / Maven
+target/
+*.jar
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
