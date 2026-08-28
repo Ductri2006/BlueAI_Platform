@@ -21,6 +21,12 @@ C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\bluea
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\auth\repository\RefreshTokenRepository.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\auth\repository\UserRepository.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\auth\service\AuthService.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\chat\controller\RagChatController.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\chat\dto\AskQuestionRequest.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\chat\dto\RagAnswerResponse.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\chat\dto\RagSourceResponse.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\chat\RagChatProperties.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\chat\service\RagChatService.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\controller\ConversationController.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\controller\ConversationMessageController.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\dto\ConversationMessageResponse.java
@@ -29,9 +35,11 @@ C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\bluea
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\dto\CreateUserMessageRequest.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\model\Conversation.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\model\ConversationMessage.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\model\ConversationSummary.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\model\MessageRole.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\repository\ConversationMessageRepository.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\repository\ConversationRepository.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\repository\ConversationSummaryRepository.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\service\ConversationMessageService.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\service\ConversationService.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\controller\DocumentController.java
@@ -44,3 +52,9 @@ C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\bluea
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\model\RagDocument.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\repository\RagDocumentRepository.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\service\DocumentService.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\memory\controller\UserMemoryController.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\memory\dto\UpsertUserMemoryRequest.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\memory\dto\UserMemoryResponse.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\memory\model\UserMemory.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\memory\repository\UserMemoryRepository.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\memory\service\UserMemoryService.java

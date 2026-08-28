@@ -9,4 +9,8 @@ import java.util.List;
 public interface ConversationMessageRepository extends JpaRepository<ConversationMessage, String> {
 
     List<ConversationMessage> findByConversation_IdOrderByCreatedAtDescIdDesc(String conversationId, Pageable pageable);
+
+    List<ConversationMessage> findByConversation_IdOrderByCreatedAtAscIdAsc(String conversationId, Pageable pageable);
+
+    long countByConversation_Id(String conversationId);
 }
