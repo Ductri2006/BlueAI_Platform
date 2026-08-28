@@ -63,6 +63,10 @@ public class Conversation {
         updatedAt = Instant.now();
     }
 
+    public void touch() {
+        updatedAt = Instant.now();
+    }
+
     public String getId() {
         return id;
     }

@@ -1,4 +1,5 @@
+com\blueai\rag\document\controller\DocumentUploadIntegrationTest.class
 com\blueai\rag\conversation\controller\ConversationIntegrationTest.class
 com\blueai\rag\document\controller\WorkerDocumentIntegrationTest.class
-com\blueai\rag\document\controller\DocumentUploadIntegrationTest.class
+com\blueai\rag\conversation\controller\ConversationMessageIntegrationTest.class
 com\blueai\auth\controller\AuthFlowIntegrationTest.class
