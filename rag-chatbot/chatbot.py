@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-from pprint import pprint
 
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders.csv_loader import CSVLoader
@@ -57,111 +56,7 @@ CSV_METADATA_COLUMNS = [
     "content_hash",
 ]
 
-loader = DirectoryLoader(
-    path=str(PROJECT_DIR / "Papers"),
-    glob="**/*.csv",
-
-    # Mỗi file tìm được sẽ được đọc bằng CSVLoader của LangChain.
-    # Ta truyền tên lớp CSVLoader, DirectoryLoader sẽ tự tạo loader cho từng file.
-    loader_cls=CSVLoader,
-
-    # Các tham số bên trong dictionary này sẽ được truyền cho CSVLoader.
-    loader_kwargs={
-        # Đọc file theo chuẩn UTF-8 và tự xử lý ký tự BOM thường có trong CSV từ Excel.
-        "encoding": "utf-8-sig",
-
-        # Lấy giá trị ở cột record_id làm nguồn (source) của mỗi Document.
-        # Ví dụ: record_id = "KB-POL-001" thì metadata["source"] cũng là "KB-POL-001".
-        "source_column": "record_id",
-
-        # Các cột được ghép vào page_content để AI đọc, tạo embedding và tìm kiếm.
-        # Danh sách cụ thể đã được khai báo trong biến CSV_CONTENT_COLUMNS ở phía trên.
-        "content_columns": CSV_CONTENT_COLUMNS,
-
-        # Các cột được lưu trong metadata để lọc dữ liệu và truy vết nguồn sau này.
-        # Danh sách cụ thể đã được khai báo trong biến CSV_METADATA_COLUMNS ở phía trên.
-        "metadata_columns": CSV_METADATA_COLUMNS,
-    },
-
-    # True nghĩa là hiển thị thanh tiến trình khi chương trình đang đọc các file.
-    show_progress=True,
-
-    # True nghĩa là cho phép đọc nhiều file đồng thời bằng nhiều luồng.
-    # Tùy chọn này hữu ích khi thư mục Papers có nhiều file CSV.
-    use_multithreading=True,
-)
-
-docs = loader.load()
-
-print("Số document đọc được:", len(docs))
-print("Document đầu tiên:")
-pprint(docs[0] if docs else None)
-
-
-# Bước 2: chunking.
-# CSVLoader đã tách mỗi dòng CSV thành một Document, nên splitter chỉ cắt khi record quá dài.
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1200, # số ký tự tối đa mong muốn trong mỗi chunk là 1200
-
-    # Số ký tự được lặp lại giữa hai chunk liên tiếp.
-    # Phần lặp 200 ký tự giúp câu hoặc ý ở vị trí cắt không bị mất ngữ cảnh.
-    chunk_overlap=200,
-
-    # Khi True, LangChain thêm trường "start_index" vào metadata của mỗi chunk.
-    # Trường này cho biết chunk bắt đầu gần vị trí ký tự nào trong Document gốc.
-    add_start_index=True,
-
-    # Khi True, khoảng trắng thừa ở đầu và cuối mỗi chunk sẽ được loại bỏ.
-    strip_whitespace=True,
-
-    # Các dấu phân cách được thử lần lượt từ trên xuống dưới.
-    # Splitter ưu tiên cắt theo trường dữ liệu có ý nghĩa trước, sau đó mới dùng
-    # xuống dòng, khoảng trắng và cuối cùng là từng ký tự nếu vẫn chưa đủ nhỏ.
-    separators=[
-        # Ưu tiên cắt tại nơi bắt đầu trường content.
-        # \n là ký tự xuống dòng; phần còn lại là tên trường trong page_content.
-        "\ncontent: ",
-
-        # Nếu cần chia nhỏ hơn, tiếp tục thử cắt tại trường safety_rule.
-        "\nsafety_rule: ",
-
-        # Nếu vẫn còn quá dài, tiếp tục thử cắt tại trường keywords.
-        "\nkeywords: ",
-
-        # Sau các trường trên, thử cắt tại mỗi vị trí xuống dòng.
-        "\n",
-
-        # Nếu một dòng vẫn quá dài, thử cắt tại khoảng trắng giữa các từ.
-        " ",
-
-        # Chuỗi rỗng là phương án cuối: cho phép cắt theo từng ký tự để bảo đảm
-        # đoạn quá dài vẫn có thể được chia thành các chunk nhỏ hơn chunk_size.
-        "",
-    ],
-)
-
-splits = text_splitter.split_documents(docs)
-
-# Bước 3: sử dụng Embedding model
-# Để chuyển dữ liệu knowledge base sang thành embedding vector vào vector database để trộn ngữ cảnh
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/gemini-embedding-001"
-)
-
-vectorstore = FAISS.from_documents(
-    documents=splits, # Embed các cái chunks của mình
-    embedding=embeddings, # khai báo mình sử dụng model embedding gì dựa vào embeddings
-    distance_strategy = DistanceStrategy.COSINE, # so sánh các sự tương đồng giữa các vector thông qua cosine similarity
-)
-
-retriever = vectorstore.as_retriever(
-    # chỉ ra rằng là mình sẽ chỉ lấy lại các cái chunk tài liệu mà có cái điểm similarity có điểm tương đồng với câu hỏi của người dùng vượt quá cái ngưỡng mà mình chỉ định
-    # k = 5 là lấy 5 chunk tài liệu , và ngưỡng threshold mình đặt là 0.2 , nếu vượt quá ngưỡng này thì chỉ lấy 5 cái ngưỡng cao nhất thôi
-    search_type="similarity_score_threshold",
-    search_kwargs={"k" : 5 , "score_threshold": 0.2},
-)
-
-template = ("""
+template = """
 Bạn là BlueAI, trợ lý tra cứu tri thức cho hệ sinh thái eSIM Bluecom.
 Bạn hỗ trợ các câu hỏi thuộc phạm vi chăm sóc khách hàng, sản phẩm,
 vận hành, bán hàng và tích hợp đối tác.
@@ -239,39 +134,84 @@ QUESTION:
 {question}
 
 ANSWER:
-""")
+"""
 
-prompt = ChatPromptTemplate.from_template(template)
 
-# Bước 4: thiết lập mô hình ngôn ngữ lớn Gemini.
-# API key được đọc từ GOOGLE_API_KEY (ưu tiên) hoặc GEMINI_API_KEY trong file .env.
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.5-flash-lite",
+def load_documents():
+    """Đọc mỗi dòng CSV thành một LangChain Document."""
+    loader = DirectoryLoader(
+        path=str(PROJECT_DIR / "Papers"),
+        glob="**/*.csv",
+        loader_cls=CSVLoader,
+        loader_kwargs={
+            "encoding": "utf-8-sig",
+            "source_column": "record_id",
+            "content_columns": CSV_CONTENT_COLUMNS,
+            "metadata_columns": CSV_METADATA_COLUMNS,
+        },
+        show_progress=True,
+        use_multithreading=True,
+    )
+    return loader.load()
 
-    # Gemini 3.x được khuyến nghị chạy với temperature=1.0.
-    # temperature càng cao thì mô hình LLM trả lời càng có tính sáng tạo cao
-    # temperature=1.0,
 
-    # Mức suy luận thấp phù hợp chatbot RAG: phản hồi nhanh và tiết kiệm hơn.
-    thinking_level="low",
+def build_rag_chain():
+    """Tạo retriever, prompt và Gemini LLM cho chatbot."""
+    documents = load_documents()
+    print("Số document đọc được:", len(documents))
 
-    # Giới hạn độ dài câu trả lời và tránh retry quá nhiều khi API gặp lỗi.
-    max_tokens=2048,
-    retries=2,
-    request_timeout=60,
-)
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1200,
+        chunk_overlap=200,
+        add_start_index=True,
+        strip_whitespace=True,
+        separators=[
+            "\ncontent: ",
+            "\nsafety_rule: ",
+            "\nkeywords: ",
+            "\n",
+            " ",
+            "",
+        ],
+    )
+    splits = text_splitter.split_documents(documents)
 
-rag_chain = (
-    # Khi người dùng đặt câu hỏi, input được truyền vào retriever.
-    {"context": retriever, "question": RunnablePassthrough()}
-    | prompt
-    | llm
-    | StrOutputParser()  # Chuyển câu trả lời của LLM thành chuỗi văn bản.
-    # Dấu | chuyển output của bước trước thành input của bước tiếp theo.
-)
+    embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/gemini-embedding-001"
+    )
+    vectorstore = FAISS.from_documents(
+        documents=splits,
+        embedding=embeddings,
+        distance_strategy=DistanceStrategy.COSINE,
+    )
+    retriever = vectorstore.as_retriever(
+        search_type="similarity_score_threshold",
+        search_kwargs={"k": 5, "score_threshold": 0.2},
+    )
 
-question = input("Question: ")
+    prompt = ChatPromptTemplate.from_template(template)
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-3.5-flash-lite",
+        thinking_level="low",
+        max_tokens=2048,
+        retries=2,
+        request_timeout=60,
+    )
 
-answer = rag_chain.invoke(question)
+    return (
+        {"context": retriever, "question": RunnablePassthrough()}
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
 
-print(answer)
+
+def main():
+    rag_chain = build_rag_chain()
+    question = input("Question: ")
+    answer = rag_chain.invoke(question)
+    print(answer)
+
+
+if __name__ == "__main__":
+    main()
