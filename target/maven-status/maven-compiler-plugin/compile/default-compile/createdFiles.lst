@@ -13,6 +13,7 @@ com\blueai\rag\document\service\DocumentService.class
 com\blueai\auth\dto\RefreshRequest.class
 com\blueai\auth\model\UserStatus.class
 com\blueai\auth\exception\GlobalExceptionHandler.class
+com\blueai\rag\document\service\DocumentService$StoredDocumentFile.class
 com\blueai\auth\service\AuthService.class
 com\blueai\auth\controller\AuthController.class
 com\blueai\auth\dto\LoginRequest.class

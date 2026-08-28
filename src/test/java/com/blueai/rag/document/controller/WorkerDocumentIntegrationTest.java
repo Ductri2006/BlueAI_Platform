@@ -23,10 +23,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = BlueAiAuthApplication.class)
@@ -117,6 +119,26 @@ class WorkerDocumentIntegrationTest {
                         .header("X-Worker-Api-Key", "incorrect-key"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INVALID_WORKER_API_KEY"));
+    }
+
+    @Test
+    void workerCanDownloadOnlyAClaimedDocument() throws Exception {
+        String documentId = uploadDocument();
+
+        mockMvc.perform(get("/api/v1/internal/documents/{documentId}/content", documentId)
+                        .header("X-Worker-Api-Key", WORKER_API_KEY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DOCUMENT_NOT_PROCESSING"));
+
+        mockMvc.perform(post("/api/v1/internal/documents/claim")
+                        .header("X-Worker-Api-Key", WORKER_API_KEY))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/internal/documents/{documentId}/content", documentId)
+                        .header("X-Worker-Api-Key", WORKER_API_KEY))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_PLAIN))
+                .andExpect(content().string("This is the document that the worker will process."));
     }
 
     private String uploadDocument() throws Exception {

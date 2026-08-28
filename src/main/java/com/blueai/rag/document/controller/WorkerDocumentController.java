@@ -6,8 +6,14 @@ import com.blueai.rag.document.dto.WorkerDocumentResponse;
 import com.blueai.rag.document.service.DocumentService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,6 +51,26 @@ public class WorkerDocumentController {
     ) {
         requireWorkerApiKey(apiKey);
         return documentService.claimPendingDocuments(limit);
+    }
+
+    @GetMapping("/{documentId}/content")
+    ResponseEntity<Resource> downloadContent(
+            @RequestHeader(value = WORKER_API_KEY_HEADER, required = false) String apiKey,
+            @PathVariable String documentId
+    ) {
+        requireWorkerApiKey(apiKey);
+        DocumentService.StoredDocumentFile document = documentService.getClaimedDocumentFile(documentId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(document.contentType()))
+                .contentLength(document.sizeBytes())
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(document.originalFilename(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString()
+                )
+                .body(new FileSystemResource(document.path()));
     }
 
     @PatchMapping("/{documentId}/result")

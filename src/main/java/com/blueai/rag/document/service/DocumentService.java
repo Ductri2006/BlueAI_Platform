@@ -120,6 +120,34 @@ public class DocumentService {
         return documents.stream().map(WorkerDocumentResponse::from).toList();
     }
 
+    @Transactional(readOnly = true)
+    public StoredDocumentFile getClaimedDocumentFile(String documentId) {
+        RagDocument document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document was not found."));
+        if (document.getStatus() != DocumentStatus.PROCESSING) {
+            throw new ApiException(
+                    HttpStatus.CONFLICT,
+                    "DOCUMENT_NOT_PROCESSING",
+                    "Only a claimed document can be downloaded by a worker."
+            );
+        }
+
+        Path storedFile = resolveStoragePath(document.getStorageKey());
+        if (!Files.isRegularFile(storedFile)) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "DOCUMENT_FILE_NOT_FOUND", "Document file was not found in storage.");
+        }
+        try {
+            return new StoredDocumentFile(
+                    storedFile,
+                    document.getOriginalFilename(),
+                    document.getContentType(),
+                    Files.size(storedFile)
+            );
+        } catch (IOException exception) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "DOCUMENT_STORAGE_READ_FAILED", "Unable to read document.");
+        }
+    }
+
     @Transactional
     public void recordProcessingResult(String documentId, DocumentProcessingResultRequest request) {
         RagDocument document = documentRepository.findById(documentId)
@@ -244,5 +272,8 @@ public class DocumentService {
     }
 
     private record UploadDetails(String filename, String extension, String contentType, int chunkSize, int chunkOverlap) {
+    }
+
+    public record StoredDocumentFile(Path path, String originalFilename, String contentType, long sizeBytes) {
     }
 }
