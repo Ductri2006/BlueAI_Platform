@@ -21,6 +21,12 @@ C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\bluea
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\auth\repository\RefreshTokenRepository.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\auth\repository\UserRepository.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\auth\service\AuthService.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\controller\ConversationController.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\dto\ConversationResponse.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\dto\CreateConversationRequest.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\model\Conversation.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\repository\ConversationRepository.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\conversation\service\ConversationService.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\controller\DocumentController.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\controller\WorkerDocumentController.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\dto\DocumentProcessingResultRequest.java

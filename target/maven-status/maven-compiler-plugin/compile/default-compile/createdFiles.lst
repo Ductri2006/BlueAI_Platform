@@ -1,7 +1,10 @@
+com\blueai\rag\conversation\dto\CreateConversationRequest.class
 com\blueai\rag\document\service\DocumentService$UploadDetails.class
 com\blueai\auth\dto\LogoutRequest.class
 com\blueai\auth\exception\ApiException.class
+com\blueai\rag\conversation\repository\ConversationRepository.class
 com\blueai\auth\model\UserRole.class
+com\blueai\rag\conversation\dto\ConversationResponse.class
 com\blueai\auth\config\JwtProperties.class
 com\blueai\rag\document\controller\DocumentController.class
 com\blueai\rag\document\dto\DocumentResponse.class
@@ -24,6 +27,7 @@ com\blueai\rag\document\model\RagDocument.class
 com\blueai\auth\repository\UserRepository.class
 com\blueai\rag\document\dto\DocumentUploadResponse.class
 com\blueai\auth\BlueAiAuthApplication.class
+com\blueai\rag\conversation\model\Conversation.class
 com\blueai\auth\model\User.class
 com\blueai\auth\exception\ApiError.class
 com\blueai\auth\exception\RestAccessDeniedHandler.class
@@ -31,7 +35,9 @@ com\blueai\rag\document\model\DocumentStatus.class
 com\blueai\auth\model\RefreshToken.class
 com\blueai\auth\service\AuthService$SessionTokens.class
 com\blueai\auth\config\CorsProperties.class
+com\blueai\rag\conversation\controller\ConversationController.class
 com\blueai\rag\document\dto\WorkerDocumentResponse.class
+com\blueai\rag\conversation\service\ConversationService.class
 com\blueai\rag\document\repository\RagDocumentRepository.class
 com\blueai\auth\dto\AuthResponse.class
 com\blueai\auth\dto\UserResponse.class
