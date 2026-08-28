@@ -6,6 +6,7 @@ import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.UserRepository;
 import com.blueai.rag.document.dto.DocumentUploadResponse;
 import com.blueai.rag.document.dto.DocumentProcessingResultRequest;
+import com.blueai.rag.document.dto.DocumentResponse;
 import com.blueai.rag.document.dto.WorkerDocumentResponse;
 import com.blueai.rag.document.model.DocumentStatus;
 import com.blueai.rag.document.model.RagDocument;
@@ -88,6 +89,21 @@ public class DocumentService {
             deleteStoredFile(destination);
             throw exception;
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<DocumentResponse> listDocuments(String ownerId, DocumentStatus status) {
+        List<RagDocument> documents = status == null
+                ? documentRepository.findByOwner_IdOrderByCreatedAtDesc(ownerId)
+                : documentRepository.findByOwner_IdAndStatusOrderByCreatedAtDesc(ownerId, status);
+        return documents.stream().map(DocumentResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentResponse getDocument(String ownerId, String documentId) {
+        RagDocument document = documentRepository.findByIdAndOwner_Id(documentId, ownerId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document was not found."));
+        return DocumentResponse.from(document);
     }
 
     @Transactional

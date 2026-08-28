@@ -24,6 +24,7 @@ C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\bluea
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\controller\DocumentController.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\controller\WorkerDocumentController.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\dto\DocumentProcessingResultRequest.java
+C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\dto\DocumentResponse.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\dto\DocumentUploadResponse.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\dto\WorkerDocumentResponse.java
 C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\src\main\java\com\blueai\rag\document\model\DocumentStatus.java

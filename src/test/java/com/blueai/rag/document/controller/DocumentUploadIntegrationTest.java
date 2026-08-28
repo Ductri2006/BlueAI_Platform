@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -107,6 +108,40 @@ class DocumentUploadIntegrationTest {
     }
 
     @Test
+    void ownerCanListAndReadOnlyTheirOwnDocuments() throws Exception {
+        String ownerToken = registerAndGetAccessToken("owner@example.com");
+        String otherUserToken = registerAndGetAccessToken("other@example.com");
+        MockMultipartFile file = new MockMultipartFile("file", "plan.txt", "text/plain", "RAG plan".getBytes());
+
+        String uploadResponse = mockMvc.perform(multipart("/api/v1/documents")
+                        .file(file)
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String documentId = objectMapper.readTree(uploadResponse).get("id").asText();
+
+        mockMvc.perform(get("/api/v1/documents")
+                        .param("status", "PENDING_CHUNKING")
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(documentId))
+                .andExpect(jsonPath("$[0].status").value("PENDING_CHUNKING"))
+                .andExpect(jsonPath("$[0].storageKey").doesNotExist());
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}", documentId)
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.originalFilename").value("plan.txt"));
+
+        mockMvc.perform(get("/api/v1/documents/{documentId}", documentId)
+                        .header("Authorization", "Bearer " + otherUserToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("DOCUMENT_NOT_FOUND"));
+    }
+
+    @Test
     void uploadWithoutJwtIsRejected() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "guide.txt", "text/plain", "text".getBytes());
 
@@ -115,15 +150,19 @@ class DocumentUploadIntegrationTest {
     }
 
     private String registerAndGetAccessToken() throws Exception {
+        return registerAndGetAccessToken("owner@example.com");
+    }
+
+    private String registerAndGetAccessToken(String email) throws Exception {
         String response = mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "email": "owner@example.com",
+                                  "email": "%s",
                                   "password": "StrongPassword123!",
                                   "fullName": "Owner"
                                 }
-                                """))
+                                """.formatted(email)))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()

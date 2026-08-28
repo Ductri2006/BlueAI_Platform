@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface RagDocumentRepository extends JpaRepository<RagDocument, String> {
 
@@ -21,4 +22,10 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, String
             order by document.createdAt asc
             """)
     List<RagDocument> findForClaim(@Param("status") DocumentStatus status, Pageable pageable);
+
+    List<RagDocument> findByOwner_IdOrderByCreatedAtDesc(String ownerId);
+
+    List<RagDocument> findByOwner_IdAndStatusOrderByCreatedAtDesc(String ownerId, DocumentStatus status);
+
+    Optional<RagDocument> findByIdAndOwner_Id(String documentId, String ownerId);
 }

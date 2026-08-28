@@ -4,6 +4,7 @@ com\blueai\auth\exception\ApiException.class
 com\blueai\auth\model\UserRole.class
 com\blueai\auth\config\JwtProperties.class
 com\blueai\rag\document\controller\DocumentController.class
+com\blueai\rag\document\dto\DocumentResponse.class
 com\blueai\auth\config\SecurityConfig.class
 com\blueai\auth\exception\RestAuthenticationEntryPoint.class
 com\blueai\auth\repository\RefreshTokenRepository.class
