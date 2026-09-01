@@ -1,0 +1,203 @@
+{
+  "$schema": "https://tokens.studio/schemas/token-set-v1.json",
+  "version": "1.0.0",
+  "name": "BlueAI Enterprise Design System - Figma Tokens",
+  "global": {
+    "color": {
+      "brand": {
+        "cobaltPrimary": {
+          "value": "#1E4FD8",
+          "type": "color",
+          "description": "Primary CTA, Active Navigation Rail, Key Branding"
+        },
+        "cobaltVivid": {
+          "value": "#2563EB",
+          "type": "color",
+          "description": "Primary Hover State, Interactive Highlights"
+        },
+        "cyberCyan": {
+          "value": "#38BDF8",
+          "type": "color",
+          "description": "3D Particle Rings, Connection Pulse, Live Status"
+        },
+        "iceCyan": {
+          "value": "#0EA5E9",
+          "type": "color",
+          "description": "Streaming Orb Glow, Focus Rings"
+        },
+        "cobaltSoft": {
+          "value": "#EBF2FF",
+          "type": "color",
+          "description": "Subtle badge backgrounds, light selection tint"
+        }
+      },
+      "surface": {
+        "voidNavy": {
+          "value": "#060B14",
+          "type": "color",
+          "description": "Dark Theme Deep Canvas Background"
+        },
+        "darkNavy900": {
+          "value": "#0B1324",
+          "type": "color",
+          "description": "Dark Theme Primary Surface / Sidebar"
+        },
+        "darkNavy800": {
+          "value": "#0E1A33",
+          "type": "color",
+          "description": "Dark Theme Elevated Bento Cards / Header"
+        },
+        "darkBorder": {
+          "value": "#182744",
+          "type": "color",
+          "description": "Dark Theme 1px Structural Divider"
+        },
+        "lightCanvas": {
+          "value": "#F8FAFD",
+          "type": "color",
+          "description": "Light Theme Soft Canvas Background"
+        },
+        "lightSurface": {
+          "value": "#FFFFFF",
+          "type": "color",
+          "description": "Light Theme Card Surface"
+        },
+        "lightBorder": {
+          "value": "#E2EAF4",
+          "type": "color",
+          "description": "Light Theme Subtle 1px Border"
+        }
+      },
+      "text": {
+        "primaryDark": {
+          "value": "#F8FAFC",
+          "type": "color",
+          "description": "High-contrast text on dark surfaces"
+        },
+        "secondaryDark": {
+          "value": "#94A3B8",
+          "type": "color",
+          "description": "Secondary subtext, timestamps on dark"
+        },
+        "primaryLight": {
+          "value": "#0A1224",
+          "type": "color",
+          "description": "High-contrast text on light surfaces"
+        },
+        "secondaryLight": {
+          "value": "#475569",
+          "type": "color",
+          "description": "Secondary subtext on light"
+        }
+      },
+      "semantic": {
+        "confirmedEmerald": {
+          "value": "#10B981",
+          "type": "color",
+          "description": "Grounded RAG Claims Verified from Policy"
+        },
+        "inferredAmber": {
+          "value": "#F59E0B",
+          "type": "color",
+          "description": "Synthesized / Inferred approximate answers"
+        },
+        "dangerRose": {
+          "value": "#EF4444",
+          "type": "color",
+          "description": "HITL Financial Approval / Critical Alerts"
+        }
+      }
+    },
+    "fontFamilies": {
+      "primary": {
+        "value": "Be Vietnam Pro",
+        "type": "fontFamilies"
+      },
+      "mono": {
+        "value": "IBM Plex Mono",
+        "type": "fontFamilies"
+      }
+    },
+    "fontSizes": {
+      "pageTitle": {
+        "value": "26px",
+        "type": "fontSizes"
+      },
+      "sectionHeading": {
+        "value": "18px",
+        "type": "fontSizes"
+      },
+      "cardTitle": {
+        "value": "14.5px",
+        "type": "fontSizes"
+      },
+      "body": {
+        "value": "14px",
+        "type": "fontSizes"
+      },
+      "subtext": {
+        "value": "12.5px",
+        "type": "fontSizes"
+      },
+      "metadata": {
+        "value": "11px",
+        "type": "fontSizes"
+      }
+    },
+    "lineHeights": {
+      "tight": { "value": "1.2", "type": "lineHeights" },
+      "snug": { "value": "1.35", "type": "lineHeights" },
+      "normal": { "value": "1.55", "type": "lineHeights" },
+      "relaxed": { "value": "1.65", "type": "lineHeights" }
+    },
+    "fontWeights": {
+      "regular": { "value": "400", "type": "fontWeights" },
+      "medium": { "value": "500", "type": "fontWeights" },
+      "semiBold": { "value": "600", "type": "fontWeights" },
+      "bold": { "value": "700", "type": "fontWeights" },
+      "extraBold": { "value": "800", "type": "fontWeights" }
+    },
+    "borderRadius": {
+      "input": { "value": "8px", "type": "borderRadius" },
+      "button": { "value": "12px", "type": "borderRadius" },
+      "bentoCard": { "value": "20px", "type": "borderRadius" },
+      "modal": { "value": "24px", "type": "borderRadius" },
+      "pill": { "value": "999px", "type": "borderRadius" }
+    },
+    "boxShadow": {
+      "subtle": {
+        "value": {
+          "x": "0",
+          "y": "1",
+          "blur": "3",
+          "spread": "0",
+          "color": "rgba(10, 18, 36, 0.05)",
+          "type": "dropShadow"
+        },
+        "type": "boxShadow"
+      },
+      "float": {
+        "value": {
+          "x": "0",
+          "y": "10",
+          "blur": "30",
+          "spread": "-10",
+          "color": "rgba(30, 79, 216, 0.12)",
+          "type": "dropShadow"
+        },
+        "type": "boxShadow"
+      },
+      "glowCobalt": {
+        "value": {
+          "x": "0",
+          "y": "0",
+          "blur": "25",
+          "spread": "-4",
+          "color": "rgba(56, 189, 248, 0.18)",
+          "type": "dropShadow"
+        },
+        "type": "boxShadow"
+      }
+    }
+  }
+}
