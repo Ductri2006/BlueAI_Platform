@@ -1,4 +1,8 @@
+import hashlib
+import json
+import logging
 import os
+import re
 import threading
 import uuid
 from contextlib import asynccontextmanager
@@ -16,6 +20,57 @@ from pydantic import BaseModel, Field
 
 from chatbot import load_documents
 from ingestion import start_worker
+
+LOGGER = logging.getLogger("blueai.rag")
+
+DEFAULT_CHAT_MODEL = "gemini-3.5-flash-lite"
+DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
+INDEX_METADATA_FILENAME = "index_meta.json"
+WHITESPACE = re.compile(r"\s+")
+
+
+def _int_env(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return max(minimum, min(maximum, value))
+
+
+def _float_env(name: str, default: float, minimum: float, maximum: float) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return max(minimum, min(maximum, value))
+
+
+def _embedding_model() -> str:
+    return os.getenv("GEMINI_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
+
+
+def _index_dir() -> Path:
+    return Path(os.getenv("RAG_INDEX_DIR", ".rag-index"))
+
+
+def _normalize_query(query: str) -> str:
+    return WHITESPACE.sub(" ", query).strip()
+
+
+def _relevance_from_distance(distance: float) -> float:
+    """Map a FAISS squared-L2 distance to an approximate cosine similarity in [0, 1].
+
+    Gemini embeddings are unit length at their default dimensionality, so
+    squared_l2 = 2 - 2 * cosine. The mapping is monotonic either way, so ranking
+    and thresholds stay consistent even if a future model returns unnormalized
+    vectors.
+    """
+    return max(0.0, min(1.0, 1.0 - float(distance) / 2.0))
+
+
+def _content_fingerprint(content: str) -> str:
+    return hashlib.sha256(_normalize_query(content).encode("utf-8")).hexdigest()
+
 
 
 class RetrievalRequest(BaseModel):
@@ -59,33 +114,95 @@ class ChatCompletionResponse(BaseModel):
     choices: list[CompletionChoice]
 
 
+def _select_diverse(
+    matches: list[RetrievalMatch], limit: int, per_document_limit: int
+) -> list[RetrievalMatch]:
+    """Keep the best matches while stopping one document from filling every slot.
+
+    Matches arrive ordered by relevance. A first pass caps how many chunks each
+    document may contribute; a second pass fills any remaining slots from the
+    capped-out chunks so recall never drops when only one document matches.
+    """
+    selected: list[RetrievalMatch] = []
+    deferred: list[RetrievalMatch] = []
+    used_per_document: dict[str, int] = {}
+    for match in matches:
+        if len(selected) >= limit:
+            break
+        used = used_per_document.get(match.documentId, 0)
+        if used >= per_document_limit:
+            deferred.append(match)
+            continue
+        used_per_document[match.documentId] = used + 1
+        selected.append(match)
+    for match in deferred:
+        if len(selected) >= limit:
+            break
+        selected.append(match)
+    selected.sort(key=lambda match: match.score, reverse=True)
+    return selected
+
+
 class RagRuntime:
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._vectorstore: FAISS | None = None
 
     def _embeddings(self) -> GoogleGenerativeAIEmbeddings:
-        return GoogleGenerativeAIEmbeddings(
-            model=os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
-        )
+        # task_type is left unset on purpose: langchain-google-genai then applies
+        # RETRIEVAL_DOCUMENT when indexing and RETRIEVAL_QUERY when searching,
+        # which is what Gemini recommends for RAG.
+        return GoogleGenerativeAIEmbeddings(model=_embedding_model())
 
     @staticmethod
     def is_gemini_configured() -> bool:
         return bool(os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"))
+
+    @staticmethod
+    def _read_index_model(index_dir: Path) -> str | None:
+        metadata_path = index_dir / INDEX_METADATA_FILENAME
+        if not metadata_path.exists():
+            return None
+        try:
+            return json.loads(metadata_path.read_text(encoding="utf-8")).get("embeddingModel")
+        except (OSError, ValueError) as error:
+            LOGGER.warning("Unreadable index metadata, treating the index as current: %s", error)
+            return None
+
+    @staticmethod
+    def _write_index_model(index_dir: Path) -> None:
+        try:
+            (index_dir / INDEX_METADATA_FILENAME).write_text(
+                json.dumps({"embeddingModel": _embedding_model()}), encoding="utf-8"
+            )
+        except OSError as error:
+            LOGGER.warning("Could not record index metadata: %s", error)
 
     def _get_vectorstore(self) -> FAISS:
         if self._vectorstore is not None:
             return self._vectorstore
         with self._lock:
             if self._vectorstore is None:
-                index_dir = Path(os.getenv("RAG_INDEX_DIR", ".rag-index"))
+                index_dir = _index_dir()
                 embeddings = self._embeddings()
-                if index_dir.joinpath("index.faiss").exists():
+                indexed_model = self._read_index_model(index_dir)
+                reusable = index_dir.joinpath("index.faiss").exists() and indexed_model in (None, _embedding_model())
+                if reusable:
+                    # DistanceStrategy.COSINE does not change the FAISS metric here:
+                    # langchain builds IndexFlatL2 for anything but MAX_INNER_PRODUCT,
+                    # so raw scores are squared L2 distances (see _relevance_from_distance).
                     self._vectorstore = FAISS.load_local(
                         str(index_dir), embeddings, allow_dangerous_deserialization=True,
                         distance_strategy=DistanceStrategy.COSINE,
                     )
+                    self._write_index_model(index_dir)
                 else:
+                    if indexed_model is not None:
+                        LOGGER.warning(
+                            "Embedding model changed from %s to %s: rebuilding the index. "
+                            "Documents ingested earlier must be re-uploaded to reappear in search.",
+                            indexed_model, _embedding_model(),
+                        )
                     documents = load_documents()
                     if not documents:
                         raise RuntimeError("Knowledge base has no documents.")
@@ -102,31 +219,55 @@ class RagRuntime:
                     )
                     index_dir.mkdir(parents=True, exist_ok=True)
                     self._vectorstore.save_local(str(index_dir))
+                    self._write_index_model(index_dir)
         return self._vectorstore
 
+
     def search(self, user_id: str, query: str, limit: int) -> list[RetrievalMatch]:
+        normalized_query = _normalize_query(query)
+        if not normalized_query:
+            return []
+
+        candidates = min(
+            max(limit * _int_env("RAG_CANDIDATE_MULTIPLIER", 8, 1, 40), 40),
+            _int_env("RAG_MAX_CANDIDATES", 200, limit, 1_000),
+        )
+        minimum_relevance = _float_env("RAG_MIN_RELEVANCE", 0.0, 0.0, 1.0)
+        per_document_limit = _int_env("RAG_MAX_CHUNKS_PER_DOCUMENT", 3, 1, 20)
+
         with self._lock:
-            results = self._get_vectorstore().similarity_search_with_relevance_scores(query, k=max(limit * 5, 20))
-        matches: list[RetrievalMatch] = []
-        for index, (document, score) in enumerate(results):
+            results = self._get_vectorstore().similarity_search_with_score(
+                normalized_query, k=candidates
+            )
+
+        visible: list[RetrievalMatch] = []
+        seen_chunks: set[str] = set()
+        for index, (document, distance) in enumerate(results):
             metadata = document.metadata
             source_type = str(metadata.get("source_type") or "UNKNOWN")
             if source_type == "USER_DOCUMENT" and metadata.get("owner_id") != user_id:
                 continue
+            relevance = _relevance_from_distance(distance)
+            if relevance < minimum_relevance:
+                continue
+            fingerprint = _content_fingerprint(document.page_content)
+            if fingerprint in seen_chunks:
+                continue
+            seen_chunks.add(fingerprint)
             document_id = str(metadata.get("document_id") or metadata.get("source") or "unknown")
             chunk_id = str(metadata.get("record_id") or f"{document_id}:{index}")
-            matches.append(RetrievalMatch(
+            visible.append(RetrievalMatch(
                 documentId=document_id,
                 chunkId=chunk_id,
                 content=document.page_content,
-                score=max(0.0, min(1.0, float(score))),
+                score=relevance,
                 filename=str(metadata.get("filename") or metadata.get("citation_label") or document_id),
                 sourceType=source_type,
                 approvalStatus=str(metadata.get("approval_status") or "UNKNOWN"),
             ))
-            if len(matches) >= limit:
-                break
-        return matches
+
+        return _select_diverse(visible, limit, per_document_limit)
+
 
     def add_user_document(self, document_id: str, owner_id: str, source_type: str, filename: str, text: str, chunk_size: int, chunk_overlap: int) -> int:
         chunks = RecursiveCharacterTextSplitter(
@@ -143,16 +284,22 @@ class RagRuntime:
         })])
         if not chunks:
             raise RuntimeError("Document produced no text chunks.")
+        texts = [chunk.page_content for chunk in chunks]
+        metadatas = [chunk.metadata for chunk in chunks]
+        # Embedding is a network call, so it stays outside the lock: ingesting a
+        # large document must not block every concurrent search for its duration.
+        vectors = self._embeddings().embed_documents(texts)
         with self._lock:
             vectorstore = self._get_vectorstore()
-            vectorstore.add_documents(chunks)
-            index_dir = Path(os.getenv("RAG_INDEX_DIR", ".rag-index"))
+            vectorstore.add_embeddings(list(zip(texts, vectors)), metadatas=metadatas)
+            index_dir = _index_dir()
             index_dir.mkdir(parents=True, exist_ok=True)
             vectorstore.save_local(str(index_dir))
+            self._write_index_model(index_dir)
         return len(chunks)
 
     def complete(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
-        configured_model = os.getenv("GEMINI_CHAT_MODEL", "gemini-3.5-flash-lite")
+        configured_model = os.getenv("GEMINI_CHAT_MODEL", DEFAULT_CHAT_MODEL)
         model_name = request.model or configured_model
         llm = ChatGoogleGenerativeAI(
             model=model_name,
@@ -197,16 +344,22 @@ app = FastAPI(title="BlueAI RAG Service", version="1.0.0", lifespan=lifespan)
 
 
 @app.get("/health")
-def health() -> dict[str, str | bool]:
-    index_dir = Path(os.getenv("RAG_INDEX_DIR", ".rag-index"))
+def health() -> dict[str, str | bool | dict[str, float | int]]:
+    index_dir = _index_dir()
     return {
         "status": "ok",
         "provider": "gemini",
         "geminiConfigured": runtime.is_gemini_configured(),
-        "chatModel": os.getenv("GEMINI_CHAT_MODEL", "gemini-3.5-flash-lite"),
-        "embeddingModel": os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
+        "chatModel": os.getenv("GEMINI_CHAT_MODEL", DEFAULT_CHAT_MODEL),
+        "embeddingModel": _embedding_model(),
         "indexPresent": index_dir.joinpath("index.faiss").exists(),
+        "indexEmbeddingModel": RagRuntime._read_index_model(index_dir) or "unknown",
         "documentWorkerConfigured": bool(os.getenv("JAVA_API_BASE_URL") and os.getenv("JAVA_WORKER_API_KEY")),
+        "retrievalTuning": {
+            "minRelevance": _float_env("RAG_MIN_RELEVANCE", 0.0, 0.0, 1.0),
+            "maxChunksPerDocument": _int_env("RAG_MAX_CHUNKS_PER_DOCUMENT", 3, 1, 20),
+            "candidateMultiplier": _int_env("RAG_CANDIDATE_MULTIPLIER", 8, 1, 40),
+        },
     }
 
 

@@ -1,8 +1,31 @@
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import api
 from langchain_core.documents import Document
+
+
+def _document(document_id, content, owner=None, source_type="USER_DOCUMENT", filename=None):
+    metadata = {"document_id": document_id, "source_type": source_type, "approval_status": "READY"}
+    if owner is not None:
+        metadata["owner_id"] = owner
+    if filename is not None:
+        metadata["filename"] = filename
+    return Document(page_content=content, metadata=metadata)
+
+
+class StubVectorStore:
+    """Returns squared-L2 distances, the same shape FAISS IndexFlatL2 produces."""
+
+    def __init__(self, results):
+        self.results = results
+        self.k = None
+
+    def similarity_search_with_score(self, _query, k):
+        self.k = k
+        return self.results
 
 
 class RagApiTest(unittest.TestCase):
@@ -11,6 +34,7 @@ class RagApiTest(unittest.TestCase):
         self.assertEqual("ok", response["status"])
         self.assertEqual("gemini", response["provider"])
         self.assertIn("geminiConfigured", response)
+        self.assertIn("retrievalTuning", response)
 
     def test_readiness_rejects_missing_gemini_key(self):
         with patch.dict("os.environ", {}, clear=True):
@@ -39,21 +63,78 @@ class RagApiTest(unittest.TestCase):
 
     def test_retrieval_filters_private_chunks_by_owner(self):
         runtime = api.RagRuntime()
-
-        class VectorStore:
-            def similarity_search_with_relevance_scores(self, _query, k):
-                self.k = k
-                return [
-                    (Document(page_content="other", metadata={"document_id": "other", "owner_id": "user-2", "source_type": "USER_DOCUMENT", "approval_status": "READY"}), 0.95),
-                    (Document(page_content="mine", metadata={"document_id": "mine", "owner_id": "user-1", "filename": "mine.md", "source_type": "USER_DOCUMENT", "approval_status": "READY"}), 0.9),
-                    (Document(page_content="enterprise", metadata={"document_id": "enterprise", "owner_id": "admin-1", "filename": "policy.md", "source_type": "ENTERPRISE_DOCUMENT", "approval_status": "READY"}), 0.85),
-                    (Document(page_content="demo", metadata={"document_id": "demo", "source_type": "SYNTHETIC_DEMO", "approval_status": "PENDING_OWNER_REVIEW"}), 0.8),
-                ]
-
-        runtime._vectorstore = VectorStore()
+        runtime._vectorstore = StubVectorStore([
+            (_document("other", "other", owner="user-2"), 0.1),
+            (_document("mine", "mine", owner="user-1", filename="mine.md"), 0.2),
+            (_document("enterprise", "enterprise", owner="admin-1", source_type="ENTERPRISE_DOCUMENT",
+                       filename="policy.md"), 0.3),
+            (_document("demo", "demo", source_type="SYNTHETIC_DEMO"), 0.4),
+        ])
         matches = runtime.search("user-1", "query", 5)
         self.assertEqual(["mine", "enterprise", "demo"], [match.documentId for match in matches])
         self.assertEqual("mine.md", matches[0].filename)
+        self.assertAlmostEqual(0.9, matches[0].score, places=6)
+
+    def test_retrieval_caps_chunks_per_document_without_losing_recall(self):
+        runtime = api.RagRuntime()
+        runtime._vectorstore = StubVectorStore([
+            (_document("doc-a", "a1", owner="user-1"), 0.10),
+            (_document("doc-a", "a2", owner="user-1"), 0.12),
+            (_document("doc-a", "a3", owner="user-1"), 0.14),
+            (_document("doc-a", "a4", owner="user-1"), 0.16),
+            (_document("doc-b", "b1", owner="user-1"), 0.90),
+        ])
+        with patch.dict("os.environ", {"RAG_MAX_CHUNKS_PER_DOCUMENT": "2"}):
+            matches = runtime.search("user-1", "query", 4)
+        self.assertEqual(4, len(matches))
+        self.assertIn("doc-b", [match.documentId for match in matches])
+        self.assertEqual(3, sum(1 for match in matches if match.documentId == "doc-a"))
+        self.assertEqual(sorted((match.score for match in matches), reverse=True),
+                         [match.score for match in matches])
+
+    def test_retrieval_drops_duplicate_chunk_content(self):
+        runtime = api.RagRuntime()
+        runtime._vectorstore = StubVectorStore([
+            (_document("doc-a", "Chinh sach hoan tien 7 ngay.", owner="user-1"), 0.10),
+            (_document("doc-b", "  Chinh sach hoan tien 7 ngay. ", owner="user-1"), 0.20),
+        ])
+        matches = runtime.search("user-1", "query", 5)
+        self.assertEqual(["doc-a"], [match.documentId for match in matches])
+
+    def test_retrieval_applies_minimum_relevance(self):
+        runtime = api.RagRuntime()
+        runtime._vectorstore = StubVectorStore([
+            (_document("doc-a", "strong match", owner="user-1"), 0.2),
+            (_document("doc-b", "weak match", owner="user-1"), 1.4),
+        ])
+        with patch.dict("os.environ", {"RAG_MIN_RELEVANCE": "0.5"}):
+            matches = runtime.search("user-1", "query", 5)
+        self.assertEqual(["doc-a"], [match.documentId for match in matches])
+
+    def test_retrieval_requests_a_wider_candidate_pool_than_the_limit(self):
+        runtime = api.RagRuntime()
+        store = StubVectorStore([])
+        runtime._vectorstore = store
+        runtime.search("user-1", "query", 6)
+        self.assertGreaterEqual(store.k, 48)
+
+    def test_retrieval_ignores_blank_query(self):
+        runtime = api.RagRuntime()
+        runtime._vectorstore = StubVectorStore([(_document("doc-a", "content", owner="user-1"), 0.1)])
+        self.assertEqual([], runtime.search("user-1", "   \n  ", 5))
+
+    def test_index_metadata_detects_embedding_model_change(self):
+        with tempfile.TemporaryDirectory() as directory:
+            index_dir = Path(directory)
+            with patch.dict("os.environ", {"GEMINI_EMBEDDING_MODEL": "model-a"}):
+                api.RagRuntime._write_index_model(index_dir)
+                self.assertEqual("model-a", api.RagRuntime._read_index_model(index_dir))
+            with patch.dict("os.environ", {"GEMINI_EMBEDDING_MODEL": "model-b"}):
+                self.assertNotEqual(api._embedding_model(), api.RagRuntime._read_index_model(index_dir))
+
+    def test_index_metadata_is_absent_for_a_legacy_index(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIsNone(api.RagRuntime._read_index_model(Path(directory)))
 
     def test_openai_compatible_completion_contract(self):
         expected = api.ChatCompletionResponse(

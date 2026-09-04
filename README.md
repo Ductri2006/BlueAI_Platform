@@ -116,6 +116,9 @@ Chỉ `GOOGLE_API_KEY` là bắt buộc, còn lại đều có giá trị mặc 
 | `APP_LLM_MODEL` | `gemini-3.5-flash-lite` | Model BE gửi kèm request, ghi đè `GEMINI_CHAT_MODEL` |
 | `GEMINI_EMBEDDING_MODEL` | `models/gemini-embedding-001` | Đổi giá trị này sẽ làm index cũ vô hiệu |
 | `APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE` | `false` | Cho phép CSV demo làm nguồn trả lời |
+| `RAG_MIN_RELEVANCE` | `0` | Ngưỡng loại chunk yếu (xấp xỉ cosine similarity, 0 = tắt; thử 0.5–0.6) |
+| `RAG_MAX_CHUNKS_PER_DOCUMENT` | `3` | Số chunk tối đa một tài liệu được chiếm trong 6 nguồn |
+| `RAG_CANDIDATE_MULTIPLIER` | `8` | Số ứng viên lấy từ FAISS = limit × giá trị này, tối đa 200 |
 | `DB_PASSWORD` / `MYSQL_ROOT_PASSWORD` | `blueai-local` / `blueai-root-local` | Mật khẩu MySQL |
 | `APP_JWT_SECRET` | secret dev | Khoá HS256 ký access token |
 | `APP_WORKER_API_KEY` | `local-worker-api-key-...` | Key BE ↔ worker Python, hai bên phải giống nhau |

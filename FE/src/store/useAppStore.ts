@@ -101,8 +101,11 @@ async function hydrateFromApi() {
         messages: messages.map(toChatMessage),
       };
     }));
-    state.sessions = sessions;
-    state.activeSessionId = sessions[0]?.id || '';
+    // A session created while hydration was still in flight must survive it,
+    // otherwise the chat the user just started disappears when the API answers.
+    const pendingLocalSessions = state.sessions.filter(session => session.id.startsWith('local-'));
+    state.sessions = [...pendingLocalSessions, ...sessions];
+    state.activeSessionId = state.activeSessionId || sessions[0]?.id || '';
   } catch (error) {
     const message = error instanceof BlueAiApiError ? error.message : 'Không thể tải dữ liệu từ BlueAI API.';
     state.toast = { message, type: 'warning' };
