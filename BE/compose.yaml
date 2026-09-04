@@ -1,6 +1,27 @@
 name: blueai-auth
 
 services:
+  rag-ai:
+    build:
+      context: ../feature-rag-chatbot/rag-chatbot
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_CHAT_MODEL: ${GEMINI_CHAT_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-models/gemini-embedding-001}
+      JAVA_API_BASE_URL: http://auth-api:8080
+      JAVA_WORKER_API_KEY: ${APP_WORKER_API_KEY:-local-worker-api-key-change-before-production}
+      RAG_INDEX_DIR: /app/.rag-index
+    ports:
+      - "8000:8000"
+    volumes:
+      - blueai-rag-index:/app/.rag-index
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   mysql:
     image: mysql:8.4
     environment:
@@ -28,13 +49,37 @@ services:
       APP_JWT_SECRET: ${APP_JWT_SECRET:-ZGV2LW9ubHktYmx1ZWFpLWp3dC1zZWNyZXQtbXVzdC1iZS1yZXBsYWNlZCE=}
       APP_JWT_ISSUER: ${APP_JWT_ISSUER:-blueai-auth}
       APP_JWT_AUDIENCE: ${APP_JWT_AUDIENCE:-blueai-api}
+      APP_PUBLIC_REGISTRATION_ENABLED: "false"
+      APP_BOOTSTRAP_ADMIN_EMAIL: ${APP_BOOTSTRAP_ADMIN_EMAIL:-admin@blueai.local}
+      APP_BOOTSTRAP_ADMIN_PASSWORD: ${APP_BOOTSTRAP_ADMIN_PASSWORD:-BlueAiAdmin123!}
+      APP_BOOTSTRAP_ADMIN_FULL_NAME: ${APP_BOOTSTRAP_ADMIN_FULL_NAME:-BlueAI Administrator}
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      APP_WORKER_API_KEY: ${APP_WORKER_API_KEY:-local-worker-api-key-change-before-production}
+      APP_RAG_RETRIEVAL_BASE_URL: ${APP_RAG_RETRIEVAL_BASE_URL:-http://rag-ai:8000}
+      APP_RAG_RETRIEVAL_SEARCH_PATH: ${APP_RAG_RETRIEVAL_SEARCH_PATH:-/v1/retrieval/search}
+      APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE: "false"
+      APP_LLM_BASE_URL: ${APP_LLM_BASE_URL:-http://rag-ai:8000}
+      APP_LLM_CHAT_PATH: ${APP_LLM_CHAT_PATH:-/v1/chat/completions}
+      APP_LLM_API_KEY: ${APP_LLM_API_KEY:-internal-rag-service}
+      APP_LLM_MODEL: ${APP_LLM_MODEL:-gemini-3.5-flash-lite}
     ports:
       - "8080:8080"
     depends_on:
       mysql:
         condition: service_healthy
+      rag-ai:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../FE
+    ports:
+      - "3000:80"
+    depends_on:
+      - auth-api
     restart: unless-stopped
 
 volumes:
   blueai-auth-mysql:
+  blueai-rag-index:

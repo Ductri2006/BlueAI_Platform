@@ -47,12 +47,20 @@ public class User {
     }
 
     public User(String email, String passwordHash, String fullName) {
+        this(email, passwordHash, fullName, UserRole.USER);
+    }
+
+    public User(String email, String passwordHash, String fullName, UserRole role) {
         this.id = UUID.randomUUID().toString();
         this.email = email;
         this.passwordHash = passwordHash;
         this.fullName = fullName;
-        this.role = UserRole.USER;
+        this.role = role;
         this.status = UserStatus.ACTIVE;
+    }
+
+    public void changeStatus(UserStatus status) {
+        this.status = status;
     }
 
     @PrePersist

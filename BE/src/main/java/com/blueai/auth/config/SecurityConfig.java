@@ -56,6 +56,7 @@ public class SecurityConfig {
                                 "/api/v1/internal/documents/**",
                                 "/actuator/health"
                         ).permitAll()
+                        .requestMatchers("/api/v1/admin/**", "/api/v1/documents/**", "/api/v1/system/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

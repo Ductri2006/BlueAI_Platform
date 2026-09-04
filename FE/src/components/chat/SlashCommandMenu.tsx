@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, DollarSign, Scale, Wifi, Shield, Network, RefreshCw, Smartphone } from 'lucide-react';
+import { DollarSign, Scale, Wifi, Shield, Smartphone } from 'lucide-react';
 
 export interface SlashCommand {
   key: string;
@@ -7,7 +7,6 @@ export interface SlashCommand {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   promptText: string;
-  action?: 'open_3d_graph';
 }
 
 export const SLASH_COMMANDS: SlashCommand[] = [
@@ -44,15 +43,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     label: '/iccid',
     description: 'Kiểm tra trạng thái quét mã ICCID của đơn hàng',
     icon: Smartphone,
-    promptText: 'Kiểm tra trạng thái kích hoạt của mã đơn hàng #ORD-JP-98214 trên Telco Gateway.'
-  },
-  {
-    key: '/3d-graph',
-    label: '/3d-graph',
-    description: 'Mở Mạng Lưới Tri Thức 3D (Three.js Graph)',
-    icon: Network,
-    promptText: '',
-    action: 'open_3d_graph'
+    promptText: 'Tôi cần kiểm tra trạng thái kích hoạt một đơn hàng. Hãy cho biết dữ liệu hoặc công cụ cần cung cấp, không tự suy đoán trạng thái.'
   }
 ];
 

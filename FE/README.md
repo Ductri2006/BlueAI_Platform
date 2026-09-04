@@ -1,15 +1,14 @@
 # BlueAI Platform — UI/UX Frontend
 
-Frontend prototype cho nền tảng BlueAI Enterprise, tập trung vào trải nghiệm hỏi đáp có căn cứ, hỗ trợ bán hàng, quản trị tri thức và vận hành hệ thống. Giao diện sử dụng tiếng Việt, hỗ trợ Light/Dark mode và được tối ưu cho desktop lẫn màn hình nhỏ.
+Frontend cho nền tảng BlueAI Enterprise, tập trung vào hỏi đáp RAG, quản trị nguồn tri thức và tài khoản hệ thống. Giao diện sử dụng tiếng Việt, hỗ trợ Light/Dark mode và được tối ưu cho desktop lẫn màn hình nhỏ.
 
 ## Các không gian làm việc
 
 - **Hỏi BlueAI:** hội thoại RAG, câu hỏi gợi ý, trích dẫn nguồn, đính kèm tệp, nhập giọng nói và mạng tri thức 3D.
-- **Trợ lý Bán hàng & CSKH:** hàng chờ khách hàng, hội thoại trực tiếp, Customer 360, gợi ý phản hồi và phê duyệt HITL.
-- **Tài liệu & Tri thức RAG:** KPI kho tri thức, tìm kiếm, lọc và kiểm tra tài liệu/chunks.
-- **Quản trị Hệ thống:** lưu lượng AI, độ trễ, độ chính xác RAG, chi phí token, model routing và RBAC.
-- **Cổng Đại lý:** doanh số, chiết khấu, hạn mức tín dụng và đơn hàng gần đây.
-- **Hỗ trợ Khách hàng B2C:** mã QR eSIM, hướng dẫn kích hoạt và trợ lý hỏi đáp nhanh.
+- **Tài liệu & Tri thức RAG (ADMIN):** tải nguồn lên, theo dõi trạng thái xử lý và quản lý kho tri thức dùng chung.
+- **Quản trị Hệ thống (ADMIN):** cấp tài khoản `USER`/`ADMIN`, bật/tắt tài khoản và xem số liệu runtime.
+
+`USER` chỉ thấy không gian Hỏi BlueAI. Các màn quản trị được ẩn trên FE và tiếp tục được chặn bằng phân quyền ở Backend.
 
 ## Design system
 
@@ -24,14 +23,15 @@ Frontend prototype cho nền tảng BlueAI Enterprise, tập trung vào trải n
 
 ```text
 src/
+├── auth/              # Phiên đăng nhập và thông tin người dùng
 ├── components/
+│   ├── auth/        # Màn hình đăng nhập (không có đăng ký công khai)
 │   ├── 3d/          # Orb AI dựng bằng Three.js
 │   ├── chat/        # Hội thoại, composer, nguồn dẫn và modal
 │   ├── copilot/     # Sales Copilot và luồng phê duyệt HITL
 │   ├── dashboards/  # Admin, Knowledge, Reseller và B2C
 │   ├── layout/      # App shell, sidebar và top header
 │   └── ui/          # Button, Card và Badge dùng chung
-├── data/            # Dữ liệu mẫu cho prototype
 ├── store/           # Trạng thái và tương tác toàn ứng dụng
 ├── types/           # Kiểu dữ liệu TypeScript
 ├── App.tsx
@@ -47,8 +47,19 @@ Yêu cầu Node.js 20 trở lên.
 
 ```bash
 npm install
+Copy-Item .env.example .env.local
 npm run dev
 ```
+
+Chat box gọi Spring Boot qua đường dẫn cùng origin `/api`; Vite local proxy sang
+`http://127.0.0.1:8080`, còn nginx trong Docker proxy sang service `auth-api`.
+Có thể đặt `VITE_API_BASE_URL` nếu cần gọi một API origin khác. Người dùng chỉ
+đăng nhập bằng tài khoản do admin cấp; FE lưu access token và refresh token do
+Backend cấp, tự làm mới access token khi hết hạn và thu hồi refresh token khi đăng xuất.
+
+Spring Boot cần được cấu hình cả retriever và LLM như mô tả trong
+`../BE/RAG_WORKER_CONTRACT.md`; nếu thiếu, UI sẽ hiển thị mã lỗi có cấu trúc từ
+backend thay vì trả câu trả lời giả lập.
 
 ## Build production
 
@@ -58,3 +69,9 @@ npm run preview
 ```
 
 Build output được tạo trong `dist/` và không được commit lên Git.
+
+## Test
+
+```bash
+npm test
+```

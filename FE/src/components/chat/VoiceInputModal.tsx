@@ -1,95 +1,61 @@
-import React, { useState, useEffect } from 'react';
-import { Mic, Square, Check, X, Sparkles, Volume2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Check, Mic, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 
-interface VoiceInputModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onTranscript: (text: string) => void;
+interface VoiceInputModalProps { isOpen: boolean; onClose: () => void; onTranscript: (text: string) => void; }
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string } }> }) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
 }
 
 export const VoiceInputModal: React.FC<VoiceInputModalProps> = ({ isOpen, onClose, onTranscript }) => {
-  const [isRecording, setIsRecording] = useState(true);
   const [transcript, setTranscript] = useState('');
-  const [bars, setBars] = useState<number[]>([30, 60, 45, 80, 50, 90, 40, 70, 55, 85, 60, 40]);
+  const [status, setStatus] = useState('Đang khởi tạo microphone…');
+  const recognition = useRef<SpeechRecognitionLike | undefined>(undefined);
 
   useEffect(() => {
     if (!isOpen) return;
-
-    setIsRecording(true);
     setTranscript('');
-
-    // Simulate audio wave animation
-    const waveInterval = setInterval(() => {
-      setBars(Array.from({ length: 14 }, () => Math.floor(Math.random() * 65) + 20));
-    }, 120);
-
-    // Simulate speech-to-text progress
-    const timeout1 = setTimeout(() => {
-      setTranscript('Khách hàng hỏi điều kiện hoàn tiền eSIM');
-    }, 1200);
-
-    const timeout2 = setTimeout(() => {
-      setTranscript('Khách hàng hỏi điều kiện hoàn tiền eSIM chưa quét mã QR đi Nhật Bản 7 ngày');
-    }, 2400);
-
-    return () => {
-      clearInterval(waveInterval);
-      clearTimeout(timeout1);
-      clearTimeout(timeout2);
+    const browserWindow = window as typeof window & {
+      SpeechRecognition?: new () => SpeechRecognitionLike;
+      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
     };
+    const Constructor = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition;
+    if (!Constructor) {
+      setStatus('Trình duyệt này không hỗ trợ Web Speech API.');
+      return;
+    }
+    const instance = new Constructor();
+    recognition.current = instance;
+    instance.lang = 'vi-VN';
+    instance.interimResults = true;
+    instance.continuous = false;
+    instance.onresult = event => {
+      const text = Array.from(event.results).map(result => result[0].transcript).join(' ');
+      setTranscript(text);
+      setStatus('Đã nhận giọng nói.');
+    };
+    instance.onerror = () => setStatus('Không thể nhận giọng nói. Hãy kiểm tra quyền microphone.');
+    instance.onend = () => setStatus(current => current.startsWith('Đang') ? 'Đã dừng lắng nghe.' : current);
+    setStatus('Đang lắng nghe…');
+    instance.start();
+    return () => { instance.stop(); recognition.current = undefined; };
   }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const handleDone = () => {
-    onTranscript(transcript || 'Khách hàng muốn hoàn tiền gói eSIM Nhật Bản 7 ngày vì chưa quét mã QR.');
-    onClose();
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in" role="dialog" aria-modal="true" aria-label="Nhập câu hỏi bằng giọng nói">
-      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 flex flex-col items-center text-center space-y-5 animate-in zoom-in-95">
-        <div className="flex items-center justify-between w-full">
-          <span className="text-xs font-bold uppercase tracking-wider text-cobalt-600 dark:text-cobalt-400 flex items-center gap-1.5">
-            <Mic className="w-3.5 h-3.5 animate-pulse" />
-            Nhận diện Giọng nói Tiếng Việt
-          </span>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Dynamic Waveform Visualizer */}
-        <div className="w-full h-20 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center gap-1.5 px-6">
-          {bars.map((height, i) => (
-            <div
-              key={i}
-              className="w-1.5 bg-gradient-to-t from-cobalt-600 to-cyan-400 rounded-full transition-all duration-100"
-              style={{ height: `${height}%` }}
-            />
-          ))}
-        </div>
-
-        {/* Live Transcribed Text */}
-        <div className="min-h-12 w-full p-3 rounded-xl bg-slate-100/70 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 leading-relaxed text-left font-sans">
-          {transcript ? (
-            <span className="font-medium">{transcript}</span>
-          ) : (
-            <span className="text-slate-400 italic">Đang lắng nghe giọng nói của bạn...</span>
-          )}
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 w-full">
-          <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={onClose}>
-            Hủy
-          </Button>
-          <Button variant="primary" size="sm" className="flex-1 text-xs font-semibold" onClick={handleDone}>
-            <Check className="w-3.5 h-3.5 mr-1" />
-            Chèn vào câu hỏi
-          </Button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70" role="dialog" aria-modal="true">
+      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-5">
+        <div className="flex justify-between"><h3 className="font-bold flex items-center gap-2"><Mic className="w-4 h-4 text-cobalt-600" />Nhập bằng giọng nói</h3><button onClick={onClose}><X className="w-4 h-4" /></button></div>
+        <p className="text-xs text-slate-500">{status}</p>
+        <div className="min-h-24 p-4 rounded-xl bg-slate-100 dark:bg-slate-800 text-sm">{transcript || 'Chưa nhận được nội dung.'}</div>
+        <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={onClose}>Huỷ</Button><Button variant="primary" className="flex-1" disabled={!transcript.trim()} onClick={() => { onTranscript(transcript); onClose(); }}><Check className="w-4 h-4 mr-1" />Chèn</Button></div>
       </div>
     </div>
   );

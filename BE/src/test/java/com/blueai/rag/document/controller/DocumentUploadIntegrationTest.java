@@ -1,6 +1,8 @@
 package com.blueai.rag.document.controller;
 
 import com.blueai.auth.BlueAiAuthApplication;
+import com.blueai.auth.model.User;
+import com.blueai.auth.model.UserRole;
 import com.blueai.auth.repository.RefreshTokenRepository;
 import com.blueai.auth.repository.UserRepository;
 import com.blueai.rag.document.model.RagDocument;
@@ -15,6 +17,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -49,6 +52,9 @@ class DocumentUploadIntegrationTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @BeforeEach
     @AfterEach
@@ -154,16 +160,16 @@ class DocumentUploadIntegrationTest {
     }
 
     private String registerAndGetAccessToken(String email) throws Exception {
-        String response = mockMvc.perform(post("/api/v1/auth/register")
+        userRepository.saveAndFlush(new User(email, passwordEncoder.encode("StrongPassword123!"), "Owner", UserRole.ADMIN));
+        String response = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "email": "%s",
-                                  "password": "StrongPassword123!",
-                                  "fullName": "Owner"
+                                  "password": "StrongPassword123!"
                                 }
                                 """.formatted(email)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();

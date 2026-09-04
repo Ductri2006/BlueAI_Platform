@@ -13,4 +13,6 @@ public interface ConversationMessageRepository extends JpaRepository<Conversatio
     List<ConversationMessage> findByConversation_IdOrderByCreatedAtAscIdAsc(String conversationId, Pageable pageable);
 
     long countByConversation_Id(String conversationId);
+
+    void deleteByConversation_Id(String conversationId);
 }

@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -43,5 +44,11 @@ public class ConversationController {
     @GetMapping("/{conversationId}")
     ConversationResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable String conversationId) {
         return conversationService.get(jwt.getSubject(), conversationId);
+    }
+
+    @DeleteMapping("/{conversationId}")
+    ResponseEntity<Void> delete(@AuthenticationPrincipal Jwt jwt, @PathVariable String conversationId) {
+        conversationService.delete(jwt.getSubject(), conversationId);
+        return ResponseEntity.noContent().build();
     }
 }

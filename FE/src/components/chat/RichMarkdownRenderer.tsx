@@ -197,10 +197,9 @@ function renderTable(tableLines: string[], key: string) {
   );
 }
 
-// Helper to render inline formatting (bold, italic, code pills, citation chips `[1]`)
+// Helper to render inline formatting and source chips (`[S1]` is the Backend contract).
 function renderInlineText(text: string, citations: Citation[], onOpenCitation: (c: Citation) => void): React.ReactNode {
-  // Regex to match bold `**text**`, inline code `\`code\``, citation `[1]` or `[2]`
-  const parts = text.split(/(\*\*.*?\*\*|`.*?`|\[\d+\]|\$\$.*?\$\$|\$.*?\$)/g);
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`|\[S?\d+\]|\$\$.*?\$\$|\$.*?\$)/gi);
 
   return parts.map((part, idx) => {
     if (part.startsWith('**') && part.endsWith('**')) {
@@ -213,13 +212,14 @@ function renderInlineText(text: string, citations: Citation[], onOpenCitation: (
         </code>
       );
     }
-    if (/^\[\d+\]$/.test(part)) {
-      const citNum = parseInt(part.slice(1, -1), 10);
-      const targetCitation = citations[citNum - 1] || citations[0];
+    if (/^\[S?\d+\]$/i.test(part)) {
+      const citNum = Number.parseInt(part.replace(/\D/g, ''), 10);
+      const targetCitation = citations[citNum - 1];
+      if (!targetCitation) return part;
       return (
         <button
           key={idx}
-          onClick={() => targetCitation && onOpenCitation(targetCitation)}
+          onClick={() => onOpenCitation(targetCitation)}
           className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded bg-cobalt-50 hover:bg-cobalt-100 text-cobalt-700 dark:bg-cobalt-950 dark:hover:bg-cobalt-900 dark:text-cobalt-300 text-[11px] font-bold border border-cobalt-200 dark:border-cobalt-800 cursor-pointer transition-colors align-baseline"
           title={`Xem nguồn tham chiếu ${part}`}
         >

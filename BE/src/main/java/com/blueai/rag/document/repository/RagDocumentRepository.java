@@ -2,6 +2,7 @@ package com.blueai.rag.document.repository;
 
 import com.blueai.rag.document.model.RagDocument;
 import com.blueai.rag.document.model.DocumentStatus;
+import com.blueai.auth.model.UserRole;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -28,4 +29,10 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, String
     List<RagDocument> findByOwner_IdAndStatusOrderByCreatedAtDesc(String ownerId, DocumentStatus status);
 
     Optional<RagDocument> findByIdAndOwner_Id(String documentId, String ownerId);
+
+    Optional<RagDocument> findByIdAndOwner_RoleAndStatus(String documentId, UserRole role, DocumentStatus status);
+
+    long countByStatus(DocumentStatus status);
+
+    long countByStatusIn(List<DocumentStatus> statuses);
 }

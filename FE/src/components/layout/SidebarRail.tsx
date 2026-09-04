@@ -1,9 +1,10 @@
 import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useAuth } from '../../auth/AuthContext';
 import { UserRole } from '../../types';
 import { 
-  MessageSquare, Users, BookOpen, ShieldCheck, 
-  Store, Smartphone, Plus, ChevronLeft, 
+  MessageSquare, BookOpen, ShieldCheck, 
+  Plus, ChevronLeft, 
   ChevronRight, Pin, Clock
 } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -19,15 +20,14 @@ export const SidebarRail: React.FC = () => {
     setActiveSessionId, 
     createNewSession
   } = useAppStore();
+  const { user } = useAuth();
 
-  const roleNavItems: { role: UserRole; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  const allRoleNavItems: { role: UserRole; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { role: 'employee', label: 'Hỏi BlueAI', icon: MessageSquare },
-    { role: 'sales_copilot', label: 'Trợ lý Bán hàng & CSKH', icon: Users },
     { role: 'knowledge_owner', label: 'Tài liệu & Tri thức RAG', icon: BookOpen },
     { role: 'admin', label: 'Quản trị Hệ thống', icon: ShieldCheck },
-    { role: 'reseller', label: 'Cổng Đại lý Phân phối', icon: Store },
-    { role: 'b2c_customer', label: 'Trung tâm Hỗ trợ Khách hàng', icon: Smartphone },
   ];
+  const roleNavItems = allRoleNavItems.filter(item => item.role === 'employee' || user?.role === 'ADMIN');
 
   return (
     <aside
@@ -97,7 +97,7 @@ export const SidebarRail: React.FC = () => {
       </div>
 
       {/* Chat History Section (When in Employee Mode) */}
-      {!isSidebarCollapsed && (
+      {!isSidebarCollapsed && activeRole === 'employee' && (
         <div className="hidden lg:block flex-1 overflow-y-auto p-3 space-y-3">
           <Button
             size="sm"
@@ -146,12 +146,12 @@ export const SidebarRail: React.FC = () => {
       <div className="p-3 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cobalt-600 to-cyan-500 text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm">
-            H
+            {user?.fullName?.charAt(0).toUpperCase() || 'U'}
           </div>
           {!isSidebarCollapsed && (
             <div className="hidden lg:block min-w-0 flex-1">
-              <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">Hà CSKH & Sales</p>
-              <p className="text-[10px] text-slate-400 font-mono truncate">Bluecom Main • ID: 8812</p>
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{user?.fullName}</p>
+              <p className="text-[10px] text-slate-400 font-mono truncate">{user?.role === 'ADMIN' ? 'ADMIN' : 'USER'} • {user?.email}</p>
             </div>
           )}
         </div>

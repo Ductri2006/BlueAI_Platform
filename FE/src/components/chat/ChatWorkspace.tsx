@@ -1,9 +1,9 @@
-import React, { lazy, Suspense, useRef, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { MessageItem } from './MessageItem';
 import { Composer } from './Composer';
 import { 
-  Sparkles, Shield, Wifi, Network, Download, 
+  Sparkles, Shield, Wifi, Download,
   Trash2, ArrowRight, Layers, FileText, Pin, 
   DollarSign, Scale, RefreshCw, Smartphone, Zap, 
   Terminal, Bot, CheckCircle2 
@@ -11,7 +11,6 @@ import {
 import { Button } from '../ui/Button';
 
 const IntelligenceOrb = lazy(() => import('../3d/IntelligenceOrb').then((module) => ({ default: module.IntelligenceOrb })));
-const KnowledgeGraph3DModal = lazy(() => import('./KnowledgeGraph3DModal').then((module) => ({ default: module.KnowledgeGraph3DModal })));
 
 export const ChatWorkspace: React.FC = () => {
   const { 
@@ -25,7 +24,6 @@ export const ChatWorkspace: React.FC = () => {
     showToast
   } = useAppStore();
 
-  const [is3DGraphModalOpen, setIs3DGraphModalOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const currentSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
   const messages = currentSession?.messages || [];
@@ -55,8 +53,8 @@ export const ChatWorkspace: React.FC = () => {
     {
       title: 'Hoàn tiền eSIM chưa kích hoạt',
       tag: 'Chính sách CSKH',
-      subtitle: 'Quy định hủy đơn & điều kiện ICCID Unused theo quy chế DOC-POL-042',
-      prompt: 'Khách hàng muốn hoàn tiền gói eSIM Nhật Bản 7 ngày vì chuyến đi bị hoãn, mã QR chưa quét thì chính sách xử lý như thế nào?',
+      subtitle: 'Tra cứu điều kiện hoàn huỷ trong kho tài liệu hiện có',
+      prompt: 'Khách hàng muốn hoàn tiền gói eSIM chưa quét mã QR thì chính sách xử lý như thế nào?',
       icon: DollarSign,
       gradient: 'from-emerald-500/10 to-transparent border-emerald-300 dark:border-emerald-800/80',
       iconBox: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/80 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
@@ -64,7 +62,7 @@ export const ChatWorkspace: React.FC = () => {
     {
       title: 'So sánh gói mạng Nhật Bản',
       tag: 'Kỹ thuật Telco',
-      subtitle: 'Docomo phủ sóng 99% đồi núi vs SoftBank 5G tốc độ 450Mbps nội đô',
+      subtitle: 'Chỉ so sánh khi kho tri thức có đủ căn cứ',
       prompt: 'So sánh ưu nhược điểm giữa gói mạng SoftBank 5G và Docomo Nhật Bản?',
       icon: Scale,
       gradient: 'from-cobalt-500/10 to-transparent border-cobalt-300 dark:border-cobalt-800/80',
@@ -73,7 +71,7 @@ export const ChatWorkspace: React.FC = () => {
     {
       title: 'Cấu hình APN vmobile.jp',
       tag: 'Cài đặt mạng',
-      subtitle: 'Xử lý sự cố không lên sóng 5G khi vừa hạ cánh tại sân bay quốc tế',
+      subtitle: 'Tra cứu hướng dẫn cấu hình và xử lý sự cố từ RAG',
       prompt: 'Hướng dẫn chi tiết cách cấu hình APN và xử lý lỗi không lên sóng khi hạ cánh?',
       icon: Wifi,
       gradient: 'from-sky-500/10 to-transparent border-sky-300 dark:border-sky-800/80',
@@ -82,7 +80,7 @@ export const ChatWorkspace: React.FC = () => {
     {
       title: 'Hạn mức chiết khấu Đại lý',
       tag: 'Kênh Phân phối',
-      subtitle: 'Chiết khấu cố định 24% hạng Kim Cương, thưởng quý và credit 50tr',
+      subtitle: 'Tra cứu chính sách kênh phân phối đang có trong kho',
       prompt: 'Chính sách chiết khấu và thưởng doanh số cho Đại lý Cấp 1 là bao nhiêu?',
       icon: Smartphone,
       gradient: 'from-amber-500/10 to-transparent border-amber-300 dark:border-amber-800/80',
@@ -92,15 +90,6 @@ export const ChatWorkspace: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-canvas-light dark:bg-canvas-dark bg-ambient-grid relative">
-      {is3DGraphModalOpen && (
-        <Suspense fallback={null}>
-          <KnowledgeGraph3DModal
-            isOpen
-            onClose={() => setIs3DGraphModalOpen(false)}
-          />
-        </Suspense>
-      )}
-
       {/* Top Workspace Bar */}
       <header className="h-12 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/75 dark:bg-[#070E1C]/75 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between shrink-0 z-10">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -122,16 +111,6 @@ export const ChatWorkspace: React.FC = () => {
 
         {/* Action Tools */}
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setIs3DGraphModalOpen(true)}
-            className="text-xs h-8 px-3 gap-1.5 font-bold text-cobalt-600 dark:text-cyan-400 border-cobalt-200 dark:border-cyan-900/60 bg-cobalt-50/60 dark:bg-cyan-950/30 hover:bg-cobalt-100 rounded-xl"
-          >
-            <Network className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Mạng 3D Tri thức</span>
-          </Button>
-
           <button
             onClick={handleExportMarkdown}
             className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors shadow-2xs"
@@ -171,15 +150,14 @@ export const ChatWorkspace: React.FC = () => {
                 {/* Status Pill */}
                 <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/80 dark:bg-[#0C1527]/90 border border-slate-200/80 dark:border-slate-700/80 text-cobalt-700 dark:text-cyan-300 text-xs font-bold shadow-subtle backdrop-blur-md">
                   <Sparkles className="w-3.5 h-3.5 text-cyan-500 animate-pulse" />
-                  <span>BlueAI Operational Intelligence v5.2</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span>Chat RAG có dẫn nguồn</span>
                 </div>
 
                 <h1 className="text-[1.65rem] sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-[-0.025em] leading-tight text-balance">
                   Chào bạn, tôi có thể hỗ trợ gì cho ca làm việc hôm nay?
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-xl mx-auto leading-relaxed">
-                  BlueAI tự động kết nối và đối chiếu với kho quy chế, chính sách hoàn hủy, bảng giá cước viễn thông và hệ thống OMS Core theo thời gian thực.
+                  BlueAI đối chiếu câu hỏi với kho tài liệu RAG. Dữ liệu giao dịch chỉ được sử dụng khi có connector nghiệp vụ cung cấp kết quả thật.
                 </p>
               </div>
 

@@ -8,6 +8,8 @@ import com.blueai.rag.conversation.dto.ConversationResponse;
 import com.blueai.rag.conversation.dto.CreateConversationRequest;
 import com.blueai.rag.conversation.model.Conversation;
 import com.blueai.rag.conversation.repository.ConversationRepository;
+import com.blueai.rag.conversation.repository.ConversationMessageRepository;
+import com.blueai.rag.conversation.repository.ConversationSummaryRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,10 +23,19 @@ public class ConversationService {
 
     private final UserRepository userRepository;
     private final ConversationRepository conversationRepository;
+    private final ConversationMessageRepository messageRepository;
+    private final ConversationSummaryRepository summaryRepository;
 
-    public ConversationService(UserRepository userRepository, ConversationRepository conversationRepository) {
+    public ConversationService(
+            UserRepository userRepository,
+            ConversationRepository conversationRepository,
+            ConversationMessageRepository messageRepository,
+            ConversationSummaryRepository summaryRepository
+    ) {
         this.userRepository = userRepository;
         this.conversationRepository = conversationRepository;
+        this.messageRepository = messageRepository;
+        this.summaryRepository = summaryRepository;
     }
 
     @Transactional
@@ -59,5 +70,18 @@ public class ConversationService {
                         "Conversation was not found."
                 ));
         return ConversationResponse.from(conversation);
+    }
+
+    @Transactional
+    public void delete(String ownerId, String conversationId) {
+        Conversation conversation = conversationRepository.findByIdAndOwner_Id(conversationId, ownerId)
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.NOT_FOUND,
+                        "CONVERSATION_NOT_FOUND",
+                        "Conversation was not found."
+                ));
+        summaryRepository.deleteByConversation_Id(conversationId);
+        messageRepository.deleteByConversation_Id(conversationId);
+        conversationRepository.delete(conversation);
     }
 }

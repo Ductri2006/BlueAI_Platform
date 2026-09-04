@@ -1,11 +1,6 @@
-.env
-.env.*
-.venv/
-venv/
-__pycache__/
-*.py[cod]
-*.faiss
-*.pkl
-*.log
-tests/
-scripts/
+.env*
+.venv
+__pycache__
+.pytest_cache
+.rag-index
+tests

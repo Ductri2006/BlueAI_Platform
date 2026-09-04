@@ -11,6 +11,7 @@ public class RagChatProperties {
     private String llmChatPath = "/v1/chat/completions";
     private String llmApiKey = "";
     private String llmModel = "";
+    private boolean allowSharedDemoKnowledge;
 
     public String getRetrievalBaseUrl() {
         return retrievalBaseUrl;
@@ -58,6 +59,14 @@ public class RagChatProperties {
 
     public void setLlmModel(String llmModel) {
         this.llmModel = llmModel;
+    }
+
+    public boolean isAllowSharedDemoKnowledge() {
+        return allowSharedDemoKnowledge;
+    }
+
+    public void setAllowSharedDemoKnowledge(boolean allowSharedDemoKnowledge) {
+        this.allowSharedDemoKnowledge = allowSharedDemoKnowledge;
     }
 
     public boolean isRetrieverConfigured() {

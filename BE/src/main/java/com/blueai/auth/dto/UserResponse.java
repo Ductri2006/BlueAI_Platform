@@ -9,6 +9,7 @@ public record UserResponse(
         String email,
         String fullName,
         String role,
+        String status,
         Instant createdAt
 ) {
     public static UserResponse from(User user) {
@@ -17,6 +18,7 @@ public record UserResponse(
                 user.getEmail(),
                 user.getFullName(),
                 user.getRole().name(),
+                user.getStatus().name(),
                 user.getCreatedAt()
         );
     }

@@ -1,15 +1,12 @@
-import React, { lazy, Suspense, useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { 
-  ArrowUp, Sparkles, Paperclip, X, Square, 
-  Shield, Mic, Network, FileText, Image as ImageIcon 
+  ArrowUp, Sparkles, X, Square,
+  Shield, Mic
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { SlashCommandMenu, SlashCommand } from './SlashCommandMenu';
 import { VoiceInputModal } from './VoiceInputModal';
-import { AttachmentModal, AttachedFile } from './AttachmentModal';
-
-const KnowledgeGraph3DModal = lazy(() => import('./KnowledgeGraph3DModal').then((module) => ({ default: module.KnowledgeGraph3DModal })));
 
 interface ComposerProps {
   placeholder?: string;
@@ -22,14 +19,11 @@ export const Composer: React.FC<ComposerProps> = ({
   contextChip,
   onClearContext
 }) => {
-  const { sendMessage, streamStatus, showToast } = useAppStore();
+  const { sendMessage, streamStatus } = useAppStore();
   const [text, setText] = useState('');
   const [slashFilter, setSlashFilter] = useState('');
   const [isSlashOpen, setIsSlashOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
-  const [isAttachOpen, setIsAttachOpen] = useState(false);
-  const [is3DGraphOpen, setIs3DGraphOpen] = useState(false);
-  const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = streamStatus === 'searching' || streamStatus === 'tool_calling' || streamStatus === 'streaming';
@@ -55,25 +49,13 @@ export const Composer: React.FC<ComposerProps> = ({
 
   const handleSelectSlashCommand = (cmd: SlashCommand) => {
     setIsSlashOpen(false);
-    if (cmd.action === 'open_3d_graph') {
-      setText('');
-      setIs3DGraphOpen(true);
-    } else {
-      setText(cmd.promptText);
-    }
+    setText(cmd.promptText);
   };
 
   const handleSend = () => {
-    if ((!text.trim() && !attachedFile) || isStreaming) return;
-
-    let fullPrompt = text;
-    if (attachedFile) {
-      fullPrompt = `[Đính kèm tệp: ${attachedFile.name} (${attachedFile.size})]\n${text || 'Hãy phân tích và đối chiếu tài liệu này với quy chế hệ thống.'}`;
-    }
-
-    sendMessage(fullPrompt);
+    if (!text.trim() || isStreaming) return;
+    sendMessage(text);
     setText('');
-    setAttachedFile(null);
     setIsSlashOpen(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -95,25 +77,7 @@ export const Composer: React.FC<ComposerProps> = ({
         onTranscript={(val) => setText(val)}
       />
 
-      <AttachmentModal
-        isOpen={isAttachOpen}
-        onClose={() => setIsAttachOpen(false)}
-        onSelectFile={(f) => {
-          setAttachedFile(f);
-          showToast(`Đã đính kèm tệp: ${f.name}`, 'success');
-        }}
-      />
-
-      {is3DGraphOpen && (
-        <Suspense fallback={null}>
-          <KnowledgeGraph3DModal
-            isOpen
-            onClose={() => setIs3DGraphOpen(false)}
-          />
-        </Suspense>
-      )}
-
-      {/* Active Context or Attached File Chips */}
+      {/* Active Context */}
       <div className="flex flex-wrap items-center gap-2">
         {contextChip && (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-cobalt-50 dark:bg-cobalt-950/60 border border-cobalt-200/80 dark:border-cobalt-800 text-cobalt-700 dark:text-cobalt-300 text-xs rounded-lg w-fit animate-in fade-in">
@@ -124,16 +88,6 @@ export const Composer: React.FC<ComposerProps> = ({
                 <X className="w-3 h-3" />
               </button>
             )}
-          </div>
-        )}
-
-        {attachedFile && (
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs rounded-lg w-fit animate-in fade-in">
-            {attachedFile.type === 'image' ? <ImageIcon className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
-            <span className="font-medium truncate max-w-[220px]">{attachedFile.name}</span>
-            <button onClick={() => setAttachedFile(null)} className="ml-1 hover:text-rose-500" aria-label="Gỡ tệp đính kèm">
-              <X className="w-3 h-3" />
-            </button>
           </div>
         )}
       </div>
@@ -161,16 +115,6 @@ export const Composer: React.FC<ComposerProps> = ({
         {/* Bottom Toolbar */}
         <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 mt-1">
           <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-            {/* Attachment Button */}
-            <button 
-              type="button" 
-              onClick={() => setIsAttachOpen(true)}
-              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-              title="Đính kèm tệp kiểm tra (PDF/Ảnh)"
-            >
-              <Paperclip className="w-4 h-4" />
-            </button>
-
             {/* Voice Input Button */}
             <button 
               type="button" 
@@ -181,16 +125,6 @@ export const Composer: React.FC<ComposerProps> = ({
               <Mic className="w-4 h-4" />
             </button>
 
-            {/* 3D Knowledge Graph Button */}
-            <button 
-              type="button" 
-              onClick={() => setIs3DGraphOpen(true)}
-              className="p-1.5 rounded-lg hover:bg-cobalt-50 dark:hover:bg-cobalt-950 text-cobalt-600 dark:text-cobalt-400 transition-colors flex items-center gap-1 text-xs font-semibold"
-              title="Mở đồ thị mạng lưới tri thức 3D"
-            >
-              <Network className="w-4 h-4" />
-              <span className="hidden sm:inline">Mạng 3D</span>
-            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -201,7 +135,7 @@ export const Composer: React.FC<ComposerProps> = ({
               size="icon"
               variant="primary"
               onClick={handleSend}
-              disabled={(!text.trim() && !attachedFile) && !isStreaming}
+              disabled={!text.trim() || isStreaming}
               className="h-8 w-8 rounded-xl shadow-sm"
               aria-label={isStreaming ? 'Đang xử lý câu hỏi' : 'Gửi câu hỏi'}
             >

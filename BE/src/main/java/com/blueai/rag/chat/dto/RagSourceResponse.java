@@ -5,6 +5,8 @@ public record RagSourceResponse(
         String filename,
         String chunkId,
         Double score,
-        String excerpt
+        String excerpt,
+        String sourceType,
+        String approvalStatus
 ) {
 }

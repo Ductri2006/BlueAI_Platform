@@ -4,11 +4,9 @@ import com.blueai.auth.dto.AuthResponse;
 import com.blueai.auth.dto.LoginRequest;
 import com.blueai.auth.dto.LogoutRequest;
 import com.blueai.auth.dto.RefreshRequest;
-import com.blueai.auth.dto.RegisterRequest;
 import com.blueai.auth.dto.UserResponse;
 import com.blueai.auth.service.AuthService;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -26,11 +24,6 @@ public class AuthController {
 
     public AuthController(AuthService authService) {
         this.authService = authService;
-    }
-
-    @PostMapping("/register")
-    ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
     }
 
     @PostMapping("/login")

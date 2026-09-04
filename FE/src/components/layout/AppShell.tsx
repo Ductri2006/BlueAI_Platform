@@ -1,33 +1,27 @@
 import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
+import { useAuth } from '../../auth/AuthContext';
 import { SidebarRail } from './SidebarRail';
 import { TopHeader } from './TopHeader';
 import { ChatWorkspace } from '../chat/ChatWorkspace';
-import { SalesCopilotWorkspace } from '../copilot/SalesCopilotWorkspace';
 import { KnowledgeDashboard } from '../dashboards/KnowledgeDashboard';
 import { AdminDashboard } from '../dashboards/AdminDashboard';
-import { ResellerDashboard } from '../dashboards/ResellerDashboard';
-import { B2CDashboard } from '../dashboards/B2CDashboard';
 import { EvidenceDrawer } from '../chat/EvidenceDrawer';
 import { CheckCircle2, Info, AlertTriangle } from 'lucide-react';
 
 export const AppShell: React.FC = () => {
   const { activeRole, toast } = useAppStore();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
 
   const renderActiveWorkspace = () => {
     switch (activeRole) {
       case 'employee':
         return <ChatWorkspace />;
-      case 'sales_copilot':
-        return <SalesCopilotWorkspace />;
       case 'knowledge_owner':
-        return <KnowledgeDashboard />;
+        return isAdmin ? <KnowledgeDashboard /> : <ChatWorkspace />;
       case 'admin':
-        return <AdminDashboard />;
-      case 'reseller':
-        return <ResellerDashboard />;
-      case 'b2c_customer':
-        return <B2CDashboard />;
+        return isAdmin ? <AdminDashboard /> : <ChatWorkspace />;
       default:
         return <ChatWorkspace />;
     }

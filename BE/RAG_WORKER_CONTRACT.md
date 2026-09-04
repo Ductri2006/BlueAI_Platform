@@ -30,13 +30,20 @@ Response body:
       "documentId": "rag-document-id",
       "chunkId": "vector-store-chunk-id",
       "content": "Relevant chunk text",
-      "score": 0.92
+      "score": 0.92,
+      "filename": "Refund policy",
+      "sourceType": "USER_DOCUMENT",
+      "approvalStatus": "READY"
     }
   ]
 }
 ```
 
-Python must filter its vector search by `userId`. Java performs a second ownership and `READY` status check before sending a result to the LLM, so chunks from another user are discarded.
+Python must filter uploaded private documents by `userId`. Java performs a second ownership and `READY` status check before sending a private result to the LLM, so chunks from another user are discarded.
+
+The bundled CSV contains only `SYNTHETIC_DEMO` / `PENDING_OWNER_REVIEW` records.
+Java accepts these shared demo records only when `APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE=true`;
+the flag defaults to false and responses preserve trust metadata for the frontend.
 
 ## Java calls the LLM
 
@@ -44,9 +51,9 @@ The LLM must expose the OpenAI-compatible `chat/completions` request and respons
 
 ```powershell
 $env:APP_RAG_RETRIEVAL_BASE_URL = "http://localhost:8000"
-$env:APP_LLM_BASE_URL = "https://your-llm-host"
-$env:APP_LLM_API_KEY = "your-api-key"
-$env:APP_LLM_MODEL = "your-model-name"
+$env:APP_LLM_BASE_URL = "http://localhost:8000"
+$env:APP_LLM_API_KEY = "internal-rag-service"
+$env:APP_LLM_MODEL = "gemini-3.5-flash-lite"
 ```
 
 Optional path overrides:

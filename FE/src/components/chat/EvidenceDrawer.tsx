@@ -103,9 +103,9 @@ export const EvidenceDrawer: React.FC = () => {
         <div className="flex items-start gap-2.5 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 text-xs">
           <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold">Nguồn đang có hiệu lực pháp lý</p>
+            <p className="font-semibold">Nguồn đã được backend xác minh</p>
             <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
-              Được tự động kiểm tra và đồng bộ từ kho quy chế Bluecom HUB lúc 04:00 sáng nay.
+              Tài liệu thuộc phạm vi truy cập của tài khoản và ở trạng thái READY tại thời điểm truy xuất.
             </p>
           </div>
         </div>

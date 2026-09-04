@@ -125,6 +125,14 @@ public class RagDocument {
         return originalFilename;
     }
 
+    public String getOwnerId() {
+        return owner.getId();
+    }
+
+    public User getOwner() {
+        return owner;
+    }
+
     public String getStorageKey() {
         return storageKey;
     }
