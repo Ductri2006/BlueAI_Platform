@@ -29,7 +29,7 @@ GOOGLE_API_KEY=AIza...key-của-bạn
 Bằng PowerShell:
 
 ```powershell
-cd "C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE"
+cd "your project link"
 'GOOGLE_API_KEY=AIza...key-của-bạn' | Set-Content -Encoding ascii .env
 ```
 
@@ -46,7 +46,7 @@ $env:GOOGLE_API_KEY = "AIza...key-của-bạn"
 ## 3. Khởi động
 
 ```powershell
-cd "C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE"
+cd "your project link"
 docker compose up --build
 ```
 
