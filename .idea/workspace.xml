@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="a2cd1ff8-2275-47aa-9b56-2821acb11074" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/postcss.config.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/App.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/3d/IntelligenceOrb.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/chat/AttachmentModal.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/chat/ChatWorkspace.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/chat/Composer.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/chat/EvidenceDrawer.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/chat/GroundedStatusBadge.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/chat/KnowledgeGraph3DModal.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/chat/MessageItem.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/chat/RichMarkdownRenderer.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/chat/SlashCommandMenu.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/chat/VoiceInputModal.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/copilot/HITLReviewDialog.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/copilot/SalesCopilotWorkspace.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/dashboards/AdminDashboard.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/dashboards/B2CDashboard.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/dashboards/KnowledgeDashboard.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/dashboards/ResellerDashboard.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/layout/AppShell.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/layout/SidebarRail.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/layout/TopHeader.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/ui/Badge.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/ui/Button.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/ui/Card.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/data/mockData.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/index.css" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/main.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/store/useAppStore.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/types/index.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tailwind.config.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tsconfig.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/vite.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/RAG_WORKER_CONTRACT.md" beforeDir="false" afterPath="$PROJECT_DIR$/RAG_WORKER_CONTRACT.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/blueai/auth/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/blueai/auth/config/SecurityConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/blueai/auth/model/User.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/blueai/auth/model/User.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/blueai/auth/service/AuthService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/blueai/auth/service/AuthService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/blueai/rag/document/controller/DocumentController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/blueai/rag/document/controller/DocumentController.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/blueai/rag/document/model/RagDocument.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/blueai/rag/document/model/RagDocument.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/java/com/blueai/rag/document/service/DocumentService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/com/blueai/rag/document/service/DocumentService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/com/blueai/rag/document/controller/DocumentUploadIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/blueai/rag/document/controller/DocumentUploadIntegrationTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/java/com/blueai/rag/document/controller/WorkerDocumentIntegrationTest.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/java/com/blueai/rag/document/controller/WorkerDocumentIntegrationTest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/test/resources/application-test.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/test/resources/application-test.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/blueai/auth/config/SecurityConfig.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/blueai/auth/config/SecurityConfig.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/blueai/auth/model/User.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/blueai/auth/model/User.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/blueai/auth/service/AuthService$AccessToken.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/blueai/auth/service/AuthService$AccessToken.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/blueai/auth/service/AuthService$SessionTokens.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/blueai/auth/service/AuthService$SessionTokens.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/blueai/auth/service/AuthService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/blueai/auth/service/AuthService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/blueai/rag/document/controller/DocumentController.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/blueai/rag/document/controller/DocumentController.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/blueai/rag/document/model/RagDocument.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/blueai/rag/document/model/RagDocument.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/blueai/rag/document/service/DocumentService$StoredDocumentFile.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/blueai/rag/document/service/DocumentService$StoredDocumentFile.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/blueai/rag/document/service/DocumentService$UploadDetails.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/blueai/rag/document/service/DocumentService$UploadDetails.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/classes/com/blueai/rag/document/service/DocumentService.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/classes/com/blueai/rag/document/service/DocumentService.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/createdFiles.lst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/inputFiles.lst" beforeDir="false" afterPath="$PROJECT_DIR$/target/maven-status/maven-compiler-plugin/testCompile/default-testCompile/inputFiles.lst" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.auth.controller.AuthFlowIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.auth.controller.AuthFlowIntegrationTest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.chat.controller.RagChatIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.chat.controller.RagChatIntegrationTest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.conversation.controller.ConversationIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.conversation.controller.ConversationIntegrationTest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.conversation.controller.ConversationMessageIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.conversation.controller.ConversationMessageIntegrationTest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.document.controller.DocumentUploadIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.document.controller.DocumentUploadIntegrationTest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.document.controller.WorkerDocumentIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.document.controller.WorkerDocumentIntegrationTest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.memory.controller.UserMemoryIntegrationTest.xml" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/TEST-com.blueai.rag.memory.controller.UserMemoryIntegrationTest.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.blueai.auth.controller.AuthFlowIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.blueai.auth.controller.AuthFlowIntegrationTest.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.chat.controller.RagChatIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.chat.controller.RagChatIntegrationTest.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.conversation.controller.ConversationIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.conversation.controller.ConversationIntegrationTest.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.conversation.controller.ConversationMessageIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.conversation.controller.ConversationMessageIntegrationTest.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.document.controller.DocumentUploadIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.document.controller.DocumentUploadIntegrationTest.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.document.controller.WorkerDocumentIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.document.controller.WorkerDocumentIntegrationTest.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.memory.controller.UserMemoryIntegrationTest.txt" beforeDir="false" afterPath="$PROJECT_DIR$/target/surefire-reports/com.blueai.rag.memory.controller.UserMemoryIntegrationTest.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/test-classes/application-test.properties" beforeDir="false" afterPath="$PROJECT_DIR$/target/test-classes/application-test.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/test-classes/com/blueai/rag/document/controller/DocumentUploadIntegrationTest.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/test-classes/com/blueai/rag/document/controller/DocumentUploadIntegrationTest.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/target/test-classes/com/blueai/rag/document/controller/WorkerDocumentIntegrationTest.class" beforeDir="false" afterPath="$PROJECT_DIR$/target/test-classes/com/blueai/rag/document/controller/WorkerDocumentIntegrationTest.class" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="ROOT_SYNC" value="DONT_SYNC" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3IWzMwoHmWpiAFKby1aPwO7fymA" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RequestMappingsPanelOrder0": "0",
+    "RequestMappingsPanelOrder1": "1",
+    "RequestMappingsPanelWidth0": "75",
+    "RequestMappingsPanelWidth1": "75",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "Spring Boot.BlueAiAuthApplication.executor": "Run",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "Merging merge__app",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "C:/Users/QUANGMINH/Documents/ChatGPT/New project/backend",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RunManager">
+    <configuration name="BlueAiAuthApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <module name="blueai-auth-api" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.blueai.auth.BlueAiAuthApplication" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-37e91769500f-intellij.indexing.shared.core-IU-261.27258.48" />
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-IU-261.27258.48" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="a2cd1ff8-2275-47aa-9b56-2821acb11074" name="Changes" comment="" />
+      <created>1787895068226</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1787895068226</updated>
+      <workItem from="1787895069312" duration="10773000" />
+      <workItem from="1787926067504" duration="254000" />
+      <workItem from="1788488674404" duration="1030000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>
