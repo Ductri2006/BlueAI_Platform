@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-canvas: #F8FAFD;
+    --bg-surface: #FFFFFF;
+    --bg-subtle: #F0F4FA;
+    --border-base: #E2EAF4;
+    --border-subtle: #EDF2F8;
+    --text-primary: #0A1224;
+    --text-secondary: #475569;
+    --text-muted: #64748B;
+    --cobalt-primary: #1E4FD8;
+    --cobalt-hover: #173EAF;
+    --cobalt-soft: #EBF2FF;
+  }
+
+  .dark {
+    --bg-canvas: #060B14;
+    --bg-surface: #0B1324;
+    --bg-subtle: #111C33;
+    --border-base: #182744;
+    --border-subtle: #1E3258;
+    --text-primary: #F8FAFC;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+    --cobalt-primary: #3B82F6;
+    --cobalt-hover: #2563EB;
+    --cobalt-soft: #142340;
+  }
+
+  html {
+    color-scheme: light;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100dvh;
+  }
+
+  button,
+  select,
+  textarea,
+  input {
+    font: inherit;
+  }
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #1E2D48;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #334B73;
+}
+
+/* Smooth Focus States */
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #2563EB;
+  outline-offset: 2px;
+}
+
+.dark button:focus-visible,
+.dark a:focus-visible,
+.dark select:focus-visible,
+.dark input:focus-visible,
+.dark textarea:focus-visible {
+  outline: 2px solid #38BDF8;
+}
+
+/* Glassmorphic & 3D Lighting utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.dark .glass-panel {
+  background: rgba(11, 19, 36, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.glow-blue-card {
+  box-shadow: 0 10px 30px -10px rgba(30, 79, 216, 0.12), 0 4px 12px -4px rgba(30, 79, 216, 0.08);
+}
+
+.dark .glow-blue-card {
+  box-shadow: 0 14px 40px -10px rgba(0, 0, 0, 0.6), 0 0 25px -4px rgba(56, 189, 248, 0.12);
+}
+
+/* Ambient Subtle Background Grid */
+.bg-ambient-grid {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(226, 234, 244, 0.6) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(226, 234, 244, 0.6) 1px, transparent 1px);
+}
+
+.dark .bg-ambient-grid {
+  background-image: 
+    linear-gradient(to right, rgba(24, 39, 68, 0.4) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(24, 39, 68, 0.4) 1px, transparent 1px);
+}
+
+/* 3D tilt perspective wrapper */
+.perspective-container {
+  perspective: 1200px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
