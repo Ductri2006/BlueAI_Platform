@@ -37,7 +37,7 @@ public class ConversationMessage {
     private MessageRole role;
 
     @Lob
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false, updatable = false, columnDefinition = "LONGTEXT")
     private String content;
 
     @Column(name = "created_at", nullable = false, updatable = false)

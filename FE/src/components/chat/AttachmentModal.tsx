@@ -39,10 +39,10 @@ export const AttachmentModal: React.FC<AttachmentModalProps> = ({ isOpen, onClos
         <div className="flex justify-between"><h3 className="font-bold">Tải tài liệu vào kho RAG</h3><button onClick={onClose}><X className="w-4 h-4" /></button></div>
         <button onClick={() => input.current?.click()} className="w-full rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 p-10 text-center hover:border-cobalt-500">
           <UploadCloud className="w-10 h-10 mx-auto text-cobalt-600 mb-3" />
-          <p className="font-semibold text-sm">Chọn PDF, DOCX, TXT hoặc Markdown</p>
+          <p className="font-semibold text-sm">Chọn PDF, DOCX, CSV, TXT hoặc Markdown</p>
           <p className="text-xs text-slate-500 mt-1">Tệp sẽ được gửi thật đến Document API.</p>
         </button>
-        <input ref={input} type="file" accept=".pdf,.docx,.txt,.md" className="hidden" onChange={event => select(event.target.files?.[0])} />
+        <input ref={input} type="file" accept=".pdf,.docx,.csv,.txt,.md" className="hidden" onChange={event => select(event.target.files?.[0])} />
         <Button variant="outline" className="w-full" onClick={onClose}>Đóng</Button>
       </div>
     </div>

@@ -36,7 +36,7 @@ public class UserMemory {
     private String memoryKey;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String content;
 
     @Column(name = "created_at", nullable = false, updatable = false)

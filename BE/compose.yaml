@@ -61,7 +61,7 @@ services:
       APP_DOCUMENT_STORAGE_DIR: /app/storage/documents
       APP_RAG_RETRIEVAL_BASE_URL: ${APP_RAG_RETRIEVAL_BASE_URL:-http://rag-ai:8000}
       APP_RAG_RETRIEVAL_SEARCH_PATH: ${APP_RAG_RETRIEVAL_SEARCH_PATH:-/v1/retrieval/search}
-      APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE: "false"
+      APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE: "${APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE:-false}"
       APP_LLM_BASE_URL: ${APP_LLM_BASE_URL:-http://rag-ai:8000}
       APP_LLM_CHAT_PATH: ${APP_LLM_CHAT_PATH:-/v1/chat/completions}
       APP_LLM_API_KEY: ${APP_LLM_API_KEY:-internal-rag-service}

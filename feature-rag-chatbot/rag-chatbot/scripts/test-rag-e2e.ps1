@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$BaseUrl = "http://127.0.0.1:8080",
     [string]$AdminEmail = "admin@blueai.local",
     [string]$AdminPassword = "BlueAiAdmin123!",
@@ -49,7 +49,20 @@ $customerLogin = Invoke-RestMethod -Uri "$BaseUrl/api/v1/auth/login" -Method Pos
 } | ConvertTo-Json)
 $customerHeaders = @{ Authorization = "Bearer $($customerLogin.accessToken)" }
 
-$uploaded = Invoke-RestMethod -Uri "$BaseUrl/api/v1/documents" -Method Post -Headers $adminHeaders -Form @{ file = $sample }
+if ($PSVersionTable.PSVersion.Major -ge 6) {
+    $uploaded = Invoke-RestMethod -Uri "$BaseUrl/api/v1/documents" -Method Post -Headers $adminHeaders -Form @{ file = $sample }
+} else {
+    $curl = Get-Command curl.exe -ErrorAction Stop
+    $uploadJson = & $curl.Source --silent --show-error --fail `
+        -X POST `
+        -H "Authorization: Bearer $($login.accessToken)" `
+        -F "file=@$($sample.FullName)" `
+        "$BaseUrl/api/v1/documents"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Document upload failed with curl exit code $LASTEXITCODE."
+    }
+    $uploaded = $uploadJson | ConvertFrom-Json
+}
 Write-Host "Uploaded $($uploaded.originalFilename) as $($uploaded.id)"
 
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -70,11 +83,19 @@ $conversation = Invoke-RestMethod -Uri "$BaseUrl/api/v1/conversations" -Method P
     title = "RAG E2E SAO-BANG-47"
 } | ConvertTo-Json)
 $question = "Tôi chưa quét QR, chưa dùng dữ liệu và mua gói SAO-BANG-47 cách đây 12 giờ. Tôi có đủ điều kiện hoàn tiền không, tiền về khi nào?"
-$answer = Invoke-RestMethod -Uri "$BaseUrl/api/v1/conversations/$($conversation.id)/ask" -Method Post -Headers $customerHeaders -ContentType "application/json" -Body (@{
+$questionBody = [System.Text.Encoding]::UTF8.GetBytes((@{
     question = $question
-} | ConvertTo-Json)
+} | ConvertTo-Json))
+$answer = Invoke-RestMethod -Uri "$BaseUrl/api/v1/conversations/$($conversation.id)/ask" -Method Post -Headers $customerHeaders -ContentType "application/json; charset=utf-8" -Body $questionBody
 
 $content = [string]$answer.assistantMessage.content
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+    # Windows PowerShell 5.1 treats JSON without an explicit charset as Latin-1.
+    # Recover the UTF-8 text before validating Vietnamese facts.
+    $content = [System.Text.Encoding]::UTF8.GetString(
+        [System.Text.Encoding]::GetEncoding(28591).GetBytes($content)
+    )
+}
 $requiredFacts = @("24 giờ", "3 ngày làm việc", "phương thức thanh toán ban đầu")
 foreach ($fact in $requiredFacts) {
     if ($content -notlike "*$fact*") {

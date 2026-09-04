@@ -55,7 +55,7 @@ export const KnowledgeDashboard: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => void loadDocuments()}><RefreshCw className="w-4 h-4 mr-1" />Làm mới</Button>
-          <input ref={fileInput} type="file" accept=".pdf,.docx,.txt,.md" className="hidden" onChange={event => void upload(event.target.files?.[0])} />
+          <input ref={fileInput} type="file" accept=".pdf,.docx,.csv,.txt,.md" className="hidden" onChange={event => void upload(event.target.files?.[0])} />
           <Button variant="primary" size="sm" onClick={() => fileInput.current?.click()}><UploadCloud className="w-4 h-4 mr-1" />Tải tài liệu</Button>
         </div>
       </div>

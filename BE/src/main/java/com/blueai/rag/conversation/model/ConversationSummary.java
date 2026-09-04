@@ -33,7 +33,7 @@ public class ConversationSummary {
     private Conversation conversation;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String content;
 
     @Column(name = "covered_message_count", nullable = false)

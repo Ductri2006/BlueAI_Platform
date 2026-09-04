@@ -40,6 +40,20 @@ class IngestionTest(unittest.IsolatedAsyncioTestCase):
     def test_extracts_utf8_text(self):
         self.assertEqual("Xin chào", ingestion.extract_text("Xin chào".encode(), "text/plain", "note.txt"))
 
+    def test_extracts_csv_rows_with_column_labels(self):
+        content = "\ufeffsku,name,refund_hours\nSB47,\"Sao Băng, 47\",24\n".encode("utf-8")
+
+        text = ingestion.extract_text(content, "text/csv", "products.csv")
+
+        self.assertIn("CSV row 1", text)
+        self.assertIn("sku: SB47", text)
+        self.assertIn("name: Sao Băng, 47", text)
+        self.assertIn("refund_hours: 24", text)
+
+    def test_rejects_csv_without_data_rows(self):
+        with self.assertRaisesRegex(ValueError, "at least one data row"):
+            ingestion.extract_text(b"sku,name\n", "text/csv", "products.csv")
+
     async def test_worker_passes_owner_and_marks_document_ready(self):
         client = FakeClient()
         indexed = []

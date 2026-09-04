@@ -8,7 +8,9 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --create-home --uid 10001 blueai
+    && useradd --create-home --uid 10001 blueai \
+    && mkdir -p /app/.rag-index \
+    && chown blueai:blueai /app/.rag-index
 
 COPY requirements.txt ./requirements.txt
 RUN python -m pip install --no-cache-dir --requirement requirements.txt

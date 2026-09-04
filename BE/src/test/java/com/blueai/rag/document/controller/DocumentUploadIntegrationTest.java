@@ -114,6 +114,29 @@ class DocumentUploadIntegrationTest {
     }
 
     @Test
+    void authenticatedUserCanUploadCsvKnowledgeBase() throws Exception {
+        String accessToken = registerAndGetAccessToken();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "products.csv",
+                "text/csv",
+                "sku,name,refund_hours\nSB47,Sao Bang 47,24\n".getBytes()
+        );
+
+        mockMvc.perform(multipart("/api/v1/documents")
+                        .file(file)
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.originalFilename").value("products.csv"))
+                .andExpect(jsonPath("$.contentType").value("text/csv"))
+                .andExpect(jsonPath("$.status").value("PENDING_CHUNKING"));
+
+        RagDocument saved = documentRepository.findAll().getFirst();
+        assertThat(Files.readString(TEST_STORAGE.resolve(saved.getStorageKey())))
+                .contains("SB47,Sao Bang 47,24");
+    }
+
+    @Test
     void ownerCanListAndReadOnlyTheirOwnDocuments() throws Exception {
         String ownerToken = registerAndGetAccessToken("owner@example.com");
         String otherUserToken = registerAndGetAccessToken("other@example.com");

@@ -43,6 +43,7 @@ public class DocumentService {
     private static final Map<String, String> SUPPORTED_CONTENT_TYPES = Map.of(
             ".pdf", "application/pdf",
             ".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".csv", "text/csv",
             ".txt", "text/plain",
             ".md", "text/markdown"
     );
@@ -232,7 +233,7 @@ public class DocumentService {
             throw new ApiException(
                     HttpStatus.BAD_REQUEST,
                     "UNSUPPORTED_FILE_TYPE",
-                    "Supported file types are PDF, DOCX, TXT, and Markdown."
+                    "Supported file types are PDF, DOCX, CSV, TXT, and Markdown."
             );
         }
 

@@ -92,7 +92,7 @@ Mặc định chat vẫn trả lời nhưng **không có nguồn nào** và UI t
 
 Hai cách để có nguồn:
 
-1. **Upload tài liệu (đúng chuẩn)** — đăng nhập ADMIN, vào **Tài liệu & Tri thức RAG**, tải lên PDF/DOCX/TXT/MD. Worker Python tự claim sau khoảng 5 giây, chunk, embed rồi báo `READY` về BE. Hỏi lại sẽ thấy nhãn `[S1]`.
+1. **Upload tài liệu (đúng chuẩn)** — đăng nhập ADMIN, vào **Tài liệu & Tri thức RAG**, tải lên PDF/DOCX/CSV/TXT/MD. Worker Python tự claim sau khoảng 5 giây, chunk, embed rồi báo `READY` về BE. Mỗi dòng CSV được chuyển thành một record có nhãn cột trước khi chunk. Hỏi lại sẽ thấy nhãn `[S1]`.
 2. **Bật dữ liệu demo** — thêm vào `BE/.env` rồi tạo lại container BE:
 
    ```dotenv
