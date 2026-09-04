@@ -117,6 +117,18 @@ public class RagDocument {
         this.failureReason = failureReason;
     }
 
+    /**
+     * Puts a document that was claimed but never reported back into the queue, so a worker
+     * that died mid-processing cannot strand the row in PROCESSING forever.
+     */
+    public void markPendingAgain(String reason) {
+        this.status = DocumentStatus.PENDING_CHUNKING;
+        this.processingStartedAt = null;
+        this.processedAt = null;
+        this.producedChunkCount = null;
+        this.failureReason = reason;
+    }
+
     public String getId() {
         return id;
     }

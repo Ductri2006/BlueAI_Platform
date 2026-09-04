@@ -1,11 +1,11 @@
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\auth\controller\AdminUserIntegrationTest.java
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\auth\controller\AuthFlowIntegrationTest.java
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\rag\chat\controller\RagChatConfiguredIntegrationTest.java
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\rag\chat\controller\RagChatIntegrationTest.java
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\rag\conversation\controller\ConversationIntegrationTest.java
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\rag\conversation\controller\ConversationMessageIntegrationTest.java
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\rag\document\controller\DocumentUploadIntegrationTest.java
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\rag\document\controller\WorkerDocumentIntegrationTest.java
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\rag\memory\controller\UserMemoryIntegrationTest.java
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\system\controller\SystemMetricsIntegrationTest.java
-C:\Users\QUANGMINH\Documents\ChatGPT\New project\backend\BE\src\test\java\com\blueai\system\service\SystemMetricsServiceTest.java
+/workspace/src/test/java/com/blueai/auth/controller/AdminUserIntegrationTest.java
+/workspace/src/test/java/com/blueai/auth/controller/AuthFlowIntegrationTest.java
+/workspace/src/test/java/com/blueai/rag/chat/controller/RagChatConfiguredIntegrationTest.java
+/workspace/src/test/java/com/blueai/rag/chat/controller/RagChatIntegrationTest.java
+/workspace/src/test/java/com/blueai/rag/conversation/controller/ConversationIntegrationTest.java
+/workspace/src/test/java/com/blueai/rag/conversation/controller/ConversationMessageIntegrationTest.java
+/workspace/src/test/java/com/blueai/rag/document/controller/DocumentUploadIntegrationTest.java
+/workspace/src/test/java/com/blueai/rag/document/controller/WorkerDocumentIntegrationTest.java
+/workspace/src/test/java/com/blueai/rag/memory/controller/UserMemoryIntegrationTest.java
+/workspace/src/test/java/com/blueai/system/controller/SystemMetricsIntegrationTest.java
+/workspace/src/test/java/com/blueai/system/service/SystemMetricsServiceTest.java

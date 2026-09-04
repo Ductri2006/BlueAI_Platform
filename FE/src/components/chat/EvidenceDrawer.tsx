@@ -99,16 +99,30 @@ export const EvidenceDrawer: React.FC = () => {
           </div>
         </div>
 
-        {/* Validity Status Alert */}
-        <div className="flex items-start gap-2.5 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 text-xs">
-          <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold">Nguồn đã được backend xác minh</p>
-            <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
-              Tài liệu thuộc phạm vi truy cập của tài khoản và ở trạng thái READY tại thời điểm truy xuất.
-            </p>
+        {/* Validity Status Alert — must reflect the citation, never assert blanket trust */}
+        {selectedCitation.status === 'valid' ? (
+          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 text-xs">
+            <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Nguồn đã được backend xác minh</p>
+              <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
+                Tài liệu thuộc phạm vi truy cập của tài khoản và ở trạng thái READY tại thời điểm truy xuất.
+                {' '}Trạng thái: {selectedCitation.effectiveDate}.
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-amber-900 dark:text-amber-300 text-xs">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Nguồn chưa được phê duyệt</p>
+              <p className="text-[11px] text-amber-800/80 dark:text-amber-400/80 mt-0.5">
+                {selectedCitation.effectiveDate}. Đây là dữ liệu mẫu hoặc ngoài phạm vi đã duyệt, không phải chính
+                sách chính thức của Bluecom — hãy đối chiếu với tài liệu do admin phê duyệt trước khi sử dụng.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer Actions */}

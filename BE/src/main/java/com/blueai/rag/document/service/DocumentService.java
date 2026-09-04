@@ -11,6 +11,8 @@ import com.blueai.rag.document.dto.WorkerDocumentResponse;
 import com.blueai.rag.document.model.DocumentStatus;
 import com.blueai.rag.document.model.RagDocument;
 import com.blueai.rag.document.repository.RagDocumentRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -23,6 +25,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +35,7 @@ import java.util.UUID;
 @Service
 public class DocumentService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DocumentService.class);
     private static final int DEFAULT_CHUNK_SIZE = 1_000;
     private static final int DEFAULT_CHUNK_OVERLAP = 150;
     private static final int MIN_CHUNK_SIZE = 200;
@@ -46,17 +51,20 @@ public class DocumentService {
     private final RagDocumentRepository documentRepository;
     private final Path storageRoot;
     private final long maxSizeBytes;
+    private final Duration processingTimeout;
 
     public DocumentService(
             UserRepository userRepository,
             RagDocumentRepository documentRepository,
             @Value("${app.documents.storage-dir}") String storageDirectory,
-            @Value("${app.documents.max-size-bytes}") long maxSizeBytes
+            @Value("${app.documents.max-size-bytes}") long maxSizeBytes,
+            @Value("${app.documents.processing-timeout:10m}") Duration processingTimeout
     ) {
         this.userRepository = userRepository;
         this.documentRepository = documentRepository;
         this.storageRoot = Path.of(storageDirectory).toAbsolutePath().normalize();
         this.maxSizeBytes = maxSizeBytes;
+        this.processingTimeout = processingTimeout;
     }
 
     @Transactional
@@ -112,12 +120,30 @@ public class DocumentService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_CLAIM_LIMIT", "limit must be between 1 and 50.");
         }
 
+        requeueStaleProcessingDocuments();
         List<RagDocument> documents = documentRepository.findForClaim(
                 DocumentStatus.PENDING_CHUNKING,
                 PageRequest.of(0, limit)
         );
         documents.forEach(RagDocument::markProcessing);
         return documents.stream().map(WorkerDocumentResponse::from).toList();
+    }
+
+    /**
+     * A worker that crashes between claiming a document and reporting its result would
+     * otherwise leave the row in PROCESSING forever, invisible to both the queue and the
+     * uploader.
+     */
+    private void requeueStaleProcessingDocuments() {
+        List<RagDocument> stale = documentRepository.findByStatusAndProcessingStartedAtBefore(
+                DocumentStatus.PROCESSING,
+                Instant.now().minus(processingTimeout)
+        );
+        for (RagDocument document : stale) {
+            LOG.warn("Document {} has been PROCESSING since {}; requeueing it for chunking.",
+                    document.getId(), document.getProcessingStartedAt());
+            document.markPendingAgain("Quá thời gian xử lý, đã đưa lại vào hàng đợi.");
+        }
     }
 
     @Transactional(readOnly = true)

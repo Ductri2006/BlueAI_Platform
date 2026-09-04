@@ -29,8 +29,12 @@ export const KnowledgeDashboard: React.FC = () => {
   const upload = async (file?: File) => {
     if (!file) return;
     try {
-      await blueAiApi.uploadDocument(file);
-      showToast('Đã tải tài liệu lên. Worker sẽ xử lý chunks ở hàng đợi.', 'success');
+      const uploaded = await blueAiApi.uploadDocument(file);
+      if (uploaded.ingestionTriggered === false) {
+        showToast('Đã tải lên nhưng chưa gọi được RAG service để chunk ngay. Tài liệu sẽ chờ worker quét lại.', 'warning');
+      } else {
+        showToast('Đã tải tài liệu lên, RAG service đang chunk ngay.', 'success');
+      }
       await loadDocuments();
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Tải tài liệu thất bại.', 'warning');

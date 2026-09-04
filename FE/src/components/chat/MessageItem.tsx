@@ -3,7 +3,7 @@ import { ChatMessage } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { GroundedStatusBadge } from './GroundedStatusBadge';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
-import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles, Info } from 'lucide-react';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -71,6 +71,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
         <div className="text-slate-800 dark:text-slate-200">
           <RichMarkdownRenderer content={message.content} citations={message.citations} />
         </div>
+
+        {/* Out-of-scope notice: the answer is honest, not broken */}
+        {message.confidence === 'ungrounded' && (
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 text-[12.5px] text-slate-600 dark:text-slate-300">
+            <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400 dark:text-slate-500" />
+            <span>
+              Câu trả lời này không dựa trên tài liệu nào trong kho tri thức nội bộ. Nếu bạn cần câu trả lời có
+              căn cứ, hãy đề nghị admin tải tài liệu liên quan lên mục <strong className="font-semibold">Tài liệu &amp; Tri thức RAG</strong>.
+            </span>
+          </div>
+        )}
 
         {/* Citations list pills */}
         {message.citations && message.citations.length > 0 && (

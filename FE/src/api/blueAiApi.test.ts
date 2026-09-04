@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   BlueAiApi,
+  normalizeAssistantContent,
   ragAnswerToChatMessage,
   type RagAnswerResponse,
 } from './blueAiApi';
@@ -132,6 +133,38 @@ describe('BlueAiApi', () => {
   });
 });
 
+describe('normalizeAssistantContent', () => {
+  it('unwraps a leaked Gemini content-block list', () => {
+    const leaked = "[{'type': 'text', 'text': 'Hello! How can I help you today?', 'extras': {'signature': 'El4KXAERTTIPg7Ky4JYCNKlNmux3MAYkzxImW74tpxWCcEyd9w74'}}]";
+    expect(normalizeAssistantContent(leaked)).toBe('Hello! How can I help you today?');
+  });
+
+  it('joins several text blocks and drops reasoning blocks', () => {
+    const leaked = "[{'type': 'reasoning', 'reasoning': 'noi bo'}, {'type': 'text', 'text': 'Chính sách hoàn tiền '}, {'type': 'text', 'text': 'là 7 ngày. [S1]'}]";
+    expect(normalizeAssistantContent(leaked)).toBe('Chính sách hoàn tiền là 7 ngày. [S1]');
+  });
+
+  it('decodes escaped quotes and newlines inside a leaked block', () => {
+    const leaked = '[{"type": "text", "text": "Dòng 1\\nDòng 2 \\"trích dẫn\\""}]';
+    expect(normalizeAssistantContent(leaked)).toBe('Dòng 1\nDòng 2 "trích dẫn"');
+  });
+
+  it('leaves a normal answer untouched', () => {
+    const answer = 'Gói Sao Băng 47 gồm 15GB. [S1]\n\n- Điều kiện: chưa kích hoạt';
+    expect(normalizeAssistantContent(answer)).toBe(answer);
+  });
+
+  it('leaves an answer that merely contains JSON untouched', () => {
+    const answer = 'Ví dụ payload:\n\n```json\n[{"type": "text", "text": "abc"}]\n```';
+    expect(normalizeAssistantContent(answer)).toBe(answer);
+  });
+
+  it('keeps the raw string when no text field can be recovered', () => {
+    const broken = "[{'type': 'text', 'extras': {'signature': 'abc'}}]";
+    expect(normalizeAssistantContent(broken)).toBe(broken);
+  });
+});
+
 describe('ragAnswerToChatMessage', () => {
   it('maps verified backend sources into evidence drawer citations', () => {
     const response: RagAnswerResponse = {
@@ -176,5 +209,41 @@ describe('ragAnswerToChatMessage', () => {
     }).citations?.[0];
 
     expect(citation).toMatchObject({ version: 'Dữ liệu demo', effectiveDate: 'Chưa được phê duyệt', status: 'scope_mismatch' });
+  });
+
+  it('marks an answer with an unapproved source as inferred, not confirmed', () => {
+    const message = ragAnswerToChatMessage({
+      userMessage: { id: 'u', role: 'USER', content: 'q', createdAt: '2026-09-04T10:00:00Z' },
+      assistantMessage: { id: 'a', role: 'ASSISTANT', content: 'a', createdAt: '2026-09-04T10:00:01Z' },
+      sources: [{ documentId: 'demo', filename: 'Demo source', chunkId: '1', excerpt: 'sample', sourceType: 'SYNTHETIC_DEMO', approvalStatus: 'PENDING_OWNER_REVIEW' }],
+    });
+
+    expect(message.confidence).toBe('inferred');
+  });
+
+  it('marks an answer without any verified source as ungrounded rather than danger', () => {
+    const message = ragAnswerToChatMessage({
+      userMessage: { id: 'u', role: 'USER', content: 'hello', createdAt: '2026-09-04T10:00:00Z' },
+      assistantMessage: { id: 'a', role: 'ASSISTANT', content: 'Chào bạn, tôi có thể giúp gì?', createdAt: '2026-09-04T10:00:01Z' },
+      sources: [],
+    });
+
+    expect(message.confidence).toBe('ungrounded');
+    expect(message.citations).toHaveLength(0);
+  });
+
+  it('cleans a leaked content-block payload before it reaches the UI', () => {
+    const message = ragAnswerToChatMessage({
+      userMessage: { id: 'u', role: 'USER', content: 'hello', createdAt: '2026-09-04T10:00:00Z' },
+      assistantMessage: {
+        id: 'a',
+        role: 'ASSISTANT',
+        content: "[{'type': 'text', 'text': 'Hello! How can I help you today?', 'extras': {'signature': 'El4KXAER'}}]",
+        createdAt: '2026-09-04T10:00:01Z',
+      },
+      sources: [],
+    });
+
+    expect(message.content).toBe('Hello! How can I help you today?');
   });
 });

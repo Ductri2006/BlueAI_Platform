@@ -1,4 +1,4 @@
 -------------------------------------------------------------------------------
 Test set: com.blueai.rag.chat.controller.RagChatConfiguredIntegrationTest
 -------------------------------------------------------------------------------
-Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.159 s -- in com.blueai.rag.chat.controller.RagChatConfiguredIntegrationTest
+Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 7.267 s -- in com.blueai.rag.chat.controller.RagChatConfiguredIntegrationTest

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ConfidenceLevel } from '../../types';
-import { CheckCircle2, GitFork, Lightbulb, AlertOctagon } from 'lucide-react';
+import { CheckCircle2, GitFork, Lightbulb, AlertOctagon, HelpCircle } from 'lucide-react';
 
 interface GroundedStatusBadgeProps {
   confidence?: ConfidenceLevel;
@@ -28,6 +28,11 @@ export const GroundedStatusBadge: React.FC<GroundedStatusBadgeProps> = ({
       icon: Lightbulb,
       label: 'Đề xuất tham khảo cho nhân viên',
       classes: 'bg-indigo-50 text-indigo-700 border-indigo-200/80 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60',
+    },
+    ungrounded: {
+      icon: HelpCircle,
+      label: 'Ngoài phạm vi kho tri thức nội bộ',
+      classes: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/70 dark:text-slate-300 dark:border-slate-700',
     },
     danger: {
       icon: AlertOctagon,

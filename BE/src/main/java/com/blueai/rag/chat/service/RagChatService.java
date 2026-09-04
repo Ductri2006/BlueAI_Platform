@@ -314,7 +314,13 @@ public class RagChatService {
         }
 
         if (sources.isEmpty()) {
-            prompt.append("\nNo document sources were found for this question.\n");
+            prompt.append("""
+
+                    No document sources were found for this question. Pick the matching case:
+                    1. Greeting, small talk, or a question about what you can do: answer in one or two short sentences, state no company facts, and offer to answer questions the internal knowledge base covers.
+                    2. Anything asking for a fact, policy, price, procedure, or customer detail: do not answer it from your own general knowledge. Say plainly that the internal knowledge base has no document covering it, then suggest asking an administrator to upload the relevant document.
+                    Never write a source label such as [S1] when no source is listed.
+                    """);
         } else {
             prompt.append("\nRetrieved document sources:\n");
             for (int index = 0; index < sources.size(); index++) {

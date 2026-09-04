@@ -172,6 +172,34 @@ class RagChatConfiguredIntegrationTest {
         ragStub.verify();
     }
 
+    @Test
+    void answerWithoutVerifiedSourceForbidsGeneralKnowledge() throws Exception {
+        String accessToken = registerAndGetAccessToken();
+        String conversationId = createConversation(accessToken);
+
+        ragStub.expect(once(), requestTo("http://rag-stub.test/v1/retrieval/search"))
+                .andRespond(withSuccess("""
+                        {"matches":[{"documentId":"UNKNOWN-DOC","chunkId":"chunk-1","content":"Chunk khong xac minh duoc trong MySQL.","score":0.7,"sourceType":"USER_DOCUMENT","approvalStatus":"READY"}]}
+                        """, MediaType.APPLICATION_JSON));
+        ragStub.expect(once(), requestTo("http://rag-stub.test/v1/chat/completions"))
+                .andExpect(jsonPath("$.messages[0].content").value(org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.containsString("No document sources were found"),
+                        org.hamcrest.Matchers.containsString("do not answer it from your own general knowledge"),
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Chunk khong xac minh duoc")))))
+                .andRespond(withSuccess("""
+                        {"choices":[{"message":{"role":"assistant","content":"Kho tri thức nội bộ chưa có tài liệu về nội dung này."}}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        mockMvc.perform(post("/api/v1/conversations/{conversationId}/ask", conversationId)
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"Giá gói eSIM Nhật Bản là bao nhiêu?\"}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources").isEmpty());
+
+        ragStub.verify();
+    }
+
     private String createConversation(String accessToken) throws Exception {
         String response = mockMvc.perform(post("/api/v1/conversations")
                         .header("Authorization", "Bearer " + accessToken)

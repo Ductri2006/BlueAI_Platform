@@ -26,6 +26,8 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, String
 
     List<RagDocument> findByOwner_IdOrderByCreatedAtDesc(String ownerId);
 
+    List<RagDocument> findByStatusAndProcessingStartedAtBefore(DocumentStatus status, java.time.Instant cutoff);
+
     List<RagDocument> findByOwner_IdAndStatusOrderByCreatedAtDesc(String ownerId, DocumentStatus status);
 
     Optional<RagDocument> findByIdAndOwner_Id(String documentId, String ownerId);

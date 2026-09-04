@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import api
 from langchain_core.documents import Document
+from langchain_core.messages import AIMessage
 
 
 def _document(document_id, content, owner=None, source_type="USER_DOCUMENT", filename=None):
@@ -35,6 +36,38 @@ class RagApiTest(unittest.TestCase):
         self.assertEqual("gemini", response["provider"])
         self.assertIn("geminiConfigured", response)
         self.assertIn("retrievalTuning", response)
+
+    def test_health_reports_worker_target_so_a_misconfigured_worker_is_visible(self):
+        with patch.dict("os.environ", {
+            "JAVA_API_BASE_URL": "http://auth-api:8080",
+            "JAVA_WORKER_API_KEY": "k",
+        }):
+            response = api.health()
+        self.assertEqual("http://auth-api:8080", response["documentWorker"]["javaApiBaseUrl"])
+        self.assertIn("lastError", response["documentWorker"])
+
+    def test_ingest_trigger_requires_the_shared_worker_key(self):
+        with patch.dict("os.environ", {
+            "JAVA_API_BASE_URL": "http://127.0.0.1:8080",
+            "JAVA_WORKER_API_KEY": "worker-key",
+        }):
+            with patch.object(api, "request_run") as request_run:
+                with self.assertRaises(api.HTTPException) as wrong_key:
+                    api.trigger_ingest(x_worker_api_key="nope")
+                self.assertEqual(401, wrong_key.exception.status_code)
+                with self.assertRaises(api.HTTPException) as no_key:
+                    api.trigger_ingest(x_worker_api_key=None)
+                self.assertEqual(401, no_key.exception.status_code)
+                request_run.assert_not_called()
+
+                self.assertEqual({"status": "queued"}, api.trigger_ingest(x_worker_api_key="worker-key"))
+                request_run.assert_called_once_with()
+
+    def test_ingest_trigger_reports_an_unconfigured_worker(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaises(api.HTTPException) as error:
+                api.trigger_ingest(x_worker_api_key="anything")
+        self.assertEqual(503, error.exception.status_code)
 
     def test_readiness_rejects_missing_gemini_key(self):
         with patch.dict("os.environ", {}, clear=True):
@@ -135,6 +168,49 @@ class RagApiTest(unittest.TestCase):
     def test_index_metadata_is_absent_for_a_legacy_index(self):
         with tempfile.TemporaryDirectory() as directory:
             self.assertIsNone(api.RagRuntime._read_index_model(Path(directory)))
+
+    def test_extract_text_handles_every_content_shape(self):
+        self.assertEqual("plain", api._extract_text("plain"))
+        self.assertEqual("", api._extract_text([]))
+        self.assertEqual("", api._extract_text(None))
+        self.assertEqual("a b", api._extract_text(["a b"]))
+        self.assertEqual("cau tra loi", api._extract_text([{"text": "cau tra loi"}]))
+        self.assertEqual(
+            "Hello! How can I help you today?",
+            api._extract_text([{
+                "type": "text",
+                "text": "Hello! How can I help you today?",
+                "extras": {"signature": "El4KXAERTTIPWM4oUT1zee1BHK2xUEDa"},
+            }]),
+        )
+        self.assertEqual("Cau tra loi", api._extract_text([
+            {"type": "reasoning", "reasoning": "suy nghi noi bo"},
+            {"type": "text", "text": "Cau tra loi"},
+        ]))
+
+    def test_completion_flattens_gemini_content_blocks(self):
+        class FakeLlm:
+            def invoke(self, _messages):
+                return AIMessage(content=[
+                    {"type": "reasoning", "reasoning": "suy nghi noi bo"},
+                    {"type": "text", "text": "Chinh sach hoan tien la 7 ngay. [S1]",
+                     "extras": {"signature": "El4KXAERTTIPWM4oUT1zee1BHK2xUEDa"}},
+                ])
+
+        request = api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="hoan tien?")])
+        with patch.object(api, "ChatGoogleGenerativeAI", return_value=FakeLlm()):
+            response = api.RagRuntime().complete(request)
+        self.assertEqual("Chinh sach hoan tien la 7 ngay. [S1]", response.choices[0].message.content)
+
+    def test_completion_rejects_a_response_without_text_blocks(self):
+        class ThinkingOnlyLlm:
+            def invoke(self, _messages):
+                return AIMessage(content=[{"type": "reasoning", "reasoning": "chi suy nghi"}])
+
+        request = api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="hoan tien?")])
+        with patch.object(api, "ChatGoogleGenerativeAI", return_value=ThinkingOnlyLlm()):
+            with self.assertRaises(RuntimeError):
+                api.RagRuntime().complete(request)
 
     def test_openai_compatible_completion_contract(self):
         expected = api.ChatCompletionResponse(

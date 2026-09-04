@@ -1,4 +1,6 @@
+import asyncio
 import unittest
+from unittest.mock import patch
 
 import ingestion
 
@@ -51,3 +53,33 @@ class IngestionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("owner-1", indexed[0][1])
         self.assertEqual("ENTERPRISE_DOCUMENT", indexed[0][2])
         self.assertEqual({"status": "READY", "producedChunkCount": 2}, client.result)
+
+    async def test_trigger_wakes_the_loop_before_the_interval_elapses(self):
+        ingestion.request_run()
+        # A 60s delay would block the loop; the pending trigger must return at once.
+        await asyncio.wait_for(ingestion._sleep_or_trigger(60), timeout=1)
+        self.assertFalse(ingestion._run_requested.is_set(), "the trigger must be consumed")
+
+    async def test_sleep_returns_after_the_delay_when_no_trigger_arrives(self):
+        ingestion._run_requested.clear()
+        await asyncio.wait_for(ingestion._sleep_or_trigger(0.01), timeout=1)
+        self.assertFalse(ingestion._run_requested.is_set())
+
+    def test_worker_status_exposes_target_and_last_error_without_secrets(self):
+        with patch.dict("os.environ", {
+            "JAVA_API_BASE_URL": "http://127.0.0.1:8080",
+            "JAVA_WORKER_API_KEY": "super-secret-key",
+        }):
+            status = ingestion.worker_status()
+        self.assertTrue(status["configured"])
+        self.assertEqual("http://127.0.0.1:8080", status["javaApiBaseUrl"])
+        self.assertIn("lastError", status)
+        self.assertIn("claimedTotal", status)
+        self.assertNotIn("super-secret-key", str(status))
+
+    def test_failures_are_recorded_instead_of_being_swallowed(self):
+        ingestion._state["consecutiveFailures"] = 0
+        ingestion._state["lastError"] = None
+        ingestion._record_failure("POST http://auth-api:8080/claim -> HTTP 401")
+        self.assertEqual(1, ingestion._state["consecutiveFailures"])
+        self.assertIn("401", str(ingestion._state["lastError"]))

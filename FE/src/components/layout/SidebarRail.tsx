@@ -2,10 +2,10 @@ import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../auth/AuthContext';
 import { UserRole } from '../../types';
-import { 
-  MessageSquare, BookOpen, ShieldCheck, 
-  Plus, ChevronLeft, 
-  ChevronRight, Pin, Clock
+import {
+  MessageSquare, BookOpen, ShieldCheck,
+  Plus, ChevronLeft,
+  ChevronRight, Pin, Clock, Trash2, Check, X
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 
@@ -17,10 +17,12 @@ export const SidebarRail: React.FC = () => {
     toggleSidebar, 
     sessions, 
     activeSessionId, 
-    setActiveSessionId, 
-    createNewSession
+    setActiveSessionId,
+    createNewSession,
+    deleteSession
   } = useAppStore();
   const { user } = useAuth();
+  const [pendingDeleteId, setPendingDeleteId] = React.useState<string | null>(null);
 
   const allRoleNavItems: { role: UserRole; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { role: 'employee', label: 'Hỏi BlueAI', icon: MessageSquare },
@@ -117,23 +119,66 @@ export const SidebarRail: React.FC = () => {
 
             {sessions.map((sess) => {
               const isSelected = activeSessionId === sess.id;
+              const isConfirming = pendingDeleteId === sess.id;
               return (
-                <button
+                <div
                   key={sess.id}
-                  onClick={() => {
-                    setActiveSessionId(sess.id);
-                    setActiveRole('employee');
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-colors flex items-center gap-2 ${
+                  className={`group w-full px-3 py-2 rounded-xl text-xs transition-colors flex items-center gap-2 ${
                     isSelected
                       ? 'bg-slate-100 dark:bg-slate-800/90 text-slate-900 dark:text-slate-100 font-bold border border-slate-200 dark:border-slate-700'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40'
                   }`}
                 >
-                  <MessageSquare className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                  <span className="truncate flex-1">{sess.title}</span>
-                  {sess.isPinned && <Pin className="w-3 h-3 text-cobalt-500 shrink-0" />}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSessionId(sess.id);
+                      setActiveRole('employee');
+                    }}
+                    className="flex items-center gap-2 min-w-0 flex-1 text-left"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                    <span className="truncate flex-1">{sess.title}</span>
+                  </button>
+
+                  {sess.isPinned && !isConfirming && <Pin className="w-3 h-3 text-cobalt-500 shrink-0" />}
+
+                  {isConfirming ? (
+                    <span className="flex items-center gap-0.5 shrink-0">
+                      <button
+                        type="button"
+                        title="Xác nhận xoá"
+                        aria-label={`Xác nhận xoá cuộc trò chuyện ${sess.title}`}
+                        onClick={() => {
+                          setPendingDeleteId(null);
+                          deleteSession(sess.id);
+                        }}
+                        className="p-1 rounded-md text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/50 transition-colors"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Huỷ"
+                        aria-label="Huỷ xoá cuộc trò chuyện"
+                        onClick={() => setPendingDeleteId(null)}
+                        className="p-1 rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      title="Xoá cuộc trò chuyện"
+                      aria-label={`Xoá cuộc trò chuyện ${sess.title}`}
+                      onClick={() => setPendingDeleteId(sess.id)}
+                      className="p-1 rounded-md shrink-0 text-slate-400 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/50 dark:hover:text-rose-400 transition-opacity"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>

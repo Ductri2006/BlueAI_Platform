@@ -3,6 +3,7 @@ package com.blueai.rag.document.controller;
 import com.blueai.rag.document.dto.DocumentUploadResponse;
 import com.blueai.rag.document.dto.DocumentResponse;
 import com.blueai.rag.document.model.DocumentStatus;
+import com.blueai.rag.document.service.DocumentIngestionTrigger;
 import com.blueai.rag.document.service.DocumentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,9 +24,11 @@ import java.util.List;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final DocumentIngestionTrigger ingestionTrigger;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(DocumentService documentService, DocumentIngestionTrigger ingestionTrigger) {
         this.documentService = documentService;
+        this.ingestionTrigger = ingestionTrigger;
     }
 
     @PostMapping(consumes = "multipart/form-data")
@@ -36,7 +39,9 @@ public class DocumentController {
             @RequestParam(required = false) Integer chunkOverlap
     ) {
         DocumentUploadResponse response = documentService.upload(jwt.getSubject(), file, chunkSize, chunkOverlap);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        // The upload transaction has committed, so the worker can already claim the row.
+        boolean triggered = ingestionTrigger.requestIngestion();
+        return ResponseEntity.status(HttpStatus.CREATED).body(response.withIngestionTriggered(triggered));
     }
 
     @GetMapping

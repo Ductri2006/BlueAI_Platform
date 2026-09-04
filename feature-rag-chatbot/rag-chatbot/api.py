@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -9,7 +10,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from langchain_community.vectorstores import FAISS
 from langchain_community.vectorstores.utils import DistanceStrategy
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -19,7 +20,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, Field
 
 from chatbot import load_documents
-from ingestion import start_worker
+from ingestion import request_run, start_worker, worker_status
 
 LOGGER = logging.getLogger("blueai.rag")
 
@@ -70,6 +71,29 @@ def _relevance_from_distance(distance: float) -> float:
 
 def _content_fingerprint(content: str) -> str:
     return hashlib.sha256(_normalize_query(content).encode("utf-8")).hexdigest()
+
+
+def _extract_text(content: object) -> str:
+    """Flatten a chat message body into plain text.
+
+    Gemini 3 models answer with a list of content blocks, for example
+    `[{"type": "text", "text": "...", "extras": {"signature": "..."}}]`, and may add
+    reasoning blocks. Only text blocks belong in the answer; stringifying the list
+    would leak its Python repr into the chat UI.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type", "text") == "text":
+                text = block.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "".join(parts)
+    return ""
 
 
 
@@ -317,7 +341,7 @@ class RagRuntime:
             message_types[message.role](content=message.content)
             for message in request.messages
         ])
-        content = response.content if isinstance(response.content, str) else str(response.content)
+        content = _extract_text(response.content)
         if not content.strip():
             raise RuntimeError("Gemini returned an empty response.")
         return ChatCompletionResponse(
@@ -344,7 +368,7 @@ app = FastAPI(title="BlueAI RAG Service", version="1.0.0", lifespan=lifespan)
 
 
 @app.get("/health")
-def health() -> dict[str, str | bool | dict[str, float | int]]:
+def health() -> dict:
     index_dir = _index_dir()
     return {
         "status": "ok",
@@ -355,12 +379,26 @@ def health() -> dict[str, str | bool | dict[str, float | int]]:
         "indexPresent": index_dir.joinpath("index.faiss").exists(),
         "indexEmbeddingModel": RagRuntime._read_index_model(index_dir) or "unknown",
         "documentWorkerConfigured": bool(os.getenv("JAVA_API_BASE_URL") and os.getenv("JAVA_WORKER_API_KEY")),
+        "documentWorker": worker_status(),
         "retrievalTuning": {
             "minRelevance": _float_env("RAG_MIN_RELEVANCE", 0.0, 0.0, 1.0),
             "maxChunksPerDocument": _int_env("RAG_MAX_CHUNKS_PER_DOCUMENT", 3, 1, 20),
             "candidateMultiplier": _int_env("RAG_CANDIDATE_MULTIPLIER", 8, 1, 40),
         },
     }
+
+
+@app.post("/v1/internal/ingest/run", status_code=202)
+def trigger_ingest(x_worker_api_key: str | None = Header(default=None)) -> dict[str, str]:
+    """Woken by the web app right after an upload. Authenticated with the shared worker
+    key, exactly like the Java side authenticates the worker's own calls."""
+    expected_key = os.getenv("JAVA_WORKER_API_KEY", "")
+    if not expected_key or not os.getenv("JAVA_API_BASE_URL"):
+        raise HTTPException(status_code=503, detail="Document worker is not configured.")
+    if not hmac.compare_digest(x_worker_api_key or "", expected_key):
+        raise HTTPException(status_code=401, detail="Worker API key is invalid.")
+    request_run()
+    return {"status": "queued"}
 
 
 @app.get("/ready")

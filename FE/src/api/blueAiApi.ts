@@ -80,6 +80,8 @@ export interface DocumentResponse {
   processedAt?: string;
   failureReason?: string;
   createdAt: string;
+  /** Only present on the upload response: false means the RAG worker could not be woken. */
+  ingestionTriggered?: boolean;
 }
 
 export interface SystemMetricsResponse {
@@ -348,6 +350,33 @@ export class BlueAiApi {
   }
 }
 
+const LEAKED_CONTENT_BLOCKS = /^\s*\[?\s*\{\s*(['"])(?:type|text)\1\s*:/;
+const TEXT_BLOCK_FIELD = /(['"])text\1\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g;
+
+function unquoteBlockText(value: string): string {
+  return value
+    .slice(1, -1)
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\r/g, '')
+    .replace(/\\(['"\\])/g, '$1');
+}
+
+/**
+ * Gemini answers with a list of content blocks. An older RAG build stringified that
+ * list, so some stored answers look like
+ * `[{'type': 'text', 'text': 'Xin chào', 'extras': {'signature': '...'}}]`.
+ * Those rows stay in MySQL forever, so the UI unwraps them at render time instead of
+ * showing raw JSON. Anything that is not such a payload is returned untouched.
+ */
+export function normalizeAssistantContent(raw: string): string {
+  if (!raw || !LEAKED_CONTENT_BLOCKS.test(raw)) return raw;
+  const matches = Array.from(raw.matchAll(TEXT_BLOCK_FIELD));
+  if (matches.length === 0) return raw;
+  const text = matches.map(match => unquoteBlockText(match[2])).join('').trim();
+  return text || raw;
+}
+
 export function ragSourceToCitation(source: RagSourceResponse): Citation {
   const score = typeof source.score === 'number' ? ` • độ liên quan ${(source.score * 100).toFixed(1)}%` : '';
   const isEnterpriseSource = source.sourceType === 'ENTERPRISE_DOCUMENT';
@@ -371,15 +400,20 @@ export function ragSourceToCitation(source: RagSourceResponse): Citation {
 
 export function ragAnswerToChatMessage(response: RagAnswerResponse): ChatMessage {
   const citations = (response.sources || []).map(ragSourceToCitation);
+  const hasUnapprovedSource = citations.some(citation => citation.status === 'scope_mismatch');
   const createdAt = new Date(response.assistantMessage.createdAt);
   return {
     id: response.assistantMessage.id,
     sender: 'assistant',
-    content: response.assistantMessage.content,
+    content: normalizeAssistantContent(response.assistantMessage.content),
     timestamp: Number.isNaN(createdAt.getTime())
       ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    confidence: citations.length > 0 ? 'confirmed' : 'danger',
+    // No verified source is not an error: the assistant is expected to say the
+    // knowledge base does not cover the question. Red is reserved for real failures.
+    confidence: citations.length === 0
+      ? 'ungrounded'
+      : hasUnapprovedSource ? 'inferred' : 'confirmed',
     citations,
     toolsUsed: ['RAG_Retrieval_API', 'LLM_Chat_API'],
   };

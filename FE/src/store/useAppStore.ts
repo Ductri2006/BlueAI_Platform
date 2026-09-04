@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AIStreamStatus, ChatMessage, ChatSession, Citation, CustomerQueueItem, UserRole } from '../types';
-import { blueAiApi, BlueAiApiError, ragAnswerToChatMessage } from '../api/blueAiApi';
+import { blueAiApi, BlueAiApiError, normalizeAssistantContent, ragAnswerToChatMessage } from '../api/blueAiApi';
 
 export interface AppState {
   activeRole: UserRole;
@@ -80,7 +80,7 @@ function toChatMessage(message: { id: string; role: 'USER' | 'ASSISTANT'; conten
   return {
     id: message.id,
     sender: message.role === 'USER' ? 'user' : 'assistant',
-    content: message.content,
+    content: normalizeAssistantContent(message.content),
     timestamp: Number.isNaN(createdAt.getTime()) ? '' : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };
 }
@@ -154,7 +154,11 @@ export function useAppStore(): AppState {
     if (state.activeSessionId === id) state.activeSessionId = state.sessions[0]?.id || '';
     notify();
     if (backendId) {
-      void blueAiApi.deleteConversation(backendId).catch(() => showToast('Không thể xoá hội thoại trên máy chủ.', 'warning'));
+      void blueAiApi.deleteConversation(backendId)
+        .then(() => showToast('Đã xoá cuộc trò chuyện.', 'success'))
+        .catch(() => showToast('Không thể xoá hội thoại trên máy chủ.', 'warning'));
+    } else {
+      showToast('Đã xoá cuộc trò chuyện.', 'success');
     }
   };
 
