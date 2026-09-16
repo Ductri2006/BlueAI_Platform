@@ -100,6 +100,89 @@ export interface SystemMetricsResponse {
   generatedAt: string;
 }
 
+export type StudioBotStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export type StudioDialogNodeType = 'WELCOME' | 'ROUTE' | 'FALLBACK' | 'FOLDER';
+export type StudioDialogNextStep = 'WAIT_FOR_REPLY' | 'SKIP_USER_INPUT' | 'JUMP_TO';
+
+export interface StudioBotSummary {
+  id: string;
+  name: string;
+  description: string;
+  locale: string;
+  timezone: string;
+  blueAiCoreEnabled?: boolean;
+  customInstructions?: string;
+  status: StudioBotStatus;
+  publicKey: string;
+  draftRevision: number;
+  publishedReleaseId?: string;
+  updatedAt: string;
+}
+
+export interface StudioIntent {
+  name: string;
+  description: string;
+  examples: string[];
+}
+
+export interface StudioEntityValue {
+  value: string;
+  synonyms: string[];
+}
+
+export interface StudioEntity {
+  name: string;
+  description: string;
+  values: StudioEntityValue[];
+}
+
+export interface StudioDialogNode {
+  name: string;
+  type: StudioDialogNodeType;
+  parentNode?: string;
+  matchIntent: string;
+  matchEntityName: string;
+  matchEntityValue: string;
+  requiredEntityName: string;
+  responseText: string;
+  missingEntityPrompt: string;
+  nextStep?: StudioDialogNextStep;
+  jumpToNode?: string;
+  irrelevantResponseText?: string;
+  priority: number;
+}
+
+export interface StudioBotConfiguration {
+  bot: StudioBotSummary;
+  intents: StudioIntent[];
+  entities: StudioEntity[];
+  dialogNodes: StudioDialogNode[];
+}
+
+export interface StudioPreviewContext {
+  pendingIntent?: string;
+  pendingEntity?: string;
+  lastIntent?: string;
+  variables: Record<string, string>;
+  waitingNode?: string;
+}
+
+export interface StudioRuntimeResponse {
+  message: string;
+  matchedIntent?: string;
+  recognizedEntities: Record<string, string>;
+  matchedNode?: string;
+  context: StudioPreviewContext;
+  fallback: boolean;
+}
+
+export interface StudioPublishResponse {
+  releaseId: string;
+  revision: number;
+  publicKey: string;
+  publishedAt: string;
+}
+
 export interface BlueAiApiOptions {
   baseUrl?: string;
   accessToken?: string;
@@ -248,6 +331,66 @@ export class BlueAiApi {
 
   async getSystemMetrics(): Promise<SystemMetricsResponse> {
     return this.authorizedRequest<SystemMetricsResponse>('/api/v1/system/metrics', { method: 'GET' });
+  }
+
+  async listStudioBots(): Promise<StudioBotSummary[]> {
+    return this.authorizedRequest<StudioBotSummary[]>('/api/v1/studio/bots', { method: 'GET' });
+  }
+
+  async createStudioBot(details: {
+    name: string;
+    description?: string;
+    locale?: string;
+    timezone?: string;
+    includeStarterTemplate?: boolean;
+  }): Promise<StudioBotConfiguration> {
+    return this.authorizedRequest<StudioBotConfiguration>('/api/v1/studio/bots', {
+      method: 'POST',
+      body: JSON.stringify(details),
+    });
+  }
+
+  async getStudioBot(botId: string): Promise<StudioBotConfiguration> {
+    return this.authorizedRequest<StudioBotConfiguration>(
+      `/api/v1/studio/bots/${encodeURIComponent(botId)}`,
+      { method: 'GET' },
+    );
+  }
+
+  async saveStudioBotConfiguration(
+    botId: string,
+    configuration: Omit<StudioBotConfiguration, 'bot'> & {
+      expectedRevision: number;
+      name: string;
+      description: string;
+      locale: string;
+      timezone: string;
+      blueAiCoreEnabled?: boolean;
+      customInstructions?: string;
+    },
+  ): Promise<StudioBotConfiguration> {
+    return this.authorizedRequest<StudioBotConfiguration>(
+      `/api/v1/studio/bots/${encodeURIComponent(botId)}/configuration`,
+      { method: 'PUT', body: JSON.stringify(configuration) },
+    );
+  }
+
+  async previewStudioBot(
+    botId: string,
+    message: string,
+    context?: StudioPreviewContext,
+  ): Promise<StudioRuntimeResponse> {
+    return this.authorizedRequest<StudioRuntimeResponse>(
+      `/api/v1/studio/bots/${encodeURIComponent(botId)}/preview`,
+      { method: 'POST', body: JSON.stringify({ message, context }) },
+    );
+  }
+
+  async publishStudioBot(botId: string): Promise<StudioPublishResponse> {
+    return this.authorizedRequest<StudioPublishResponse>(
+      `/api/v1/studio/bots/${encodeURIComponent(botId)}/publish`,
+      { method: 'POST' },
+    );
   }
 
   async listManagedUsers(): Promise<UserResponse[]> {

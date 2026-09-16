@@ -2,6 +2,7 @@ export type UserRole =
   | 'employee'        // Người dùng nội bộ (Hỏi BlueAI)
   | 'sales_copilot'   // Sales / CSKH Copilot (Trợ lý bán hàng)
   | 'knowledge_owner' // Quản lý tài liệu (Tài liệu nội bộ / RAG Admin)
+  | 'studio'          // Thiết kế và phát hành chatbot
   | 'admin'           // Quản trị viên hệ thống (System & Security Admin)
   | 'reseller'        // Đại lý B2B (Cổng đại lý)
   | 'b2c_customer';   // Khách hàng B2C (Cổng hỗ trợ khách hàng)

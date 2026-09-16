@@ -54,9 +54,16 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/logout",
                                 "/api/v1/internal/documents/**",
+                                "/api/v1/widget/**",
+                                "/api/v1/runtime/**",
                                 "/actuator/health"
                         ).permitAll()
-                        .requestMatchers("/api/v1/admin/**", "/api/v1/documents/**", "/api/v1/system/**").hasRole("ADMIN")
+                        .requestMatchers(
+                                "/api/v1/admin/**",
+                                "/api/v1/documents/**",
+                                "/api/v1/system/**",
+                                "/api/v1/studio/**"
+                        ).hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
@@ -120,16 +127,25 @@ public class SecurityConfig {
 
     @Bean
     CorsConfigurationSource corsConfigurationSource(CorsProperties properties) {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(properties.getAllowedOrigins());
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
-        configuration.setExposedHeaders(List.of("X-Request-ID"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
+        CorsConfiguration applicationConfiguration = new CorsConfiguration();
+        applicationConfiguration.setAllowedOrigins(properties.getAllowedOrigins());
+        applicationConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        applicationConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
+        applicationConfiguration.setExposedHeaders(List.of("X-Request-ID"));
+        applicationConfiguration.setAllowCredentials(true);
+        applicationConfiguration.setMaxAge(3600L);
+
+        CorsConfiguration widgetConfiguration = new CorsConfiguration();
+        widgetConfiguration.setAllowedOriginPatterns(properties.getWidgetAllowedOrigins());
+        widgetConfiguration.setAllowedMethods(List.of("POST", "OPTIONS"));
+        widgetConfiguration.setAllowedHeaders(List.of("Content-Type", "X-Widget-Token"));
+        widgetConfiguration.setAllowCredentials(false);
+        widgetConfiguration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/api/v1/widget/**", widgetConfiguration);
+        source.registerCorsConfiguration("/api/v1/runtime/**", widgetConfiguration);
+        source.registerCorsConfiguration("/**", applicationConfiguration);
         return source;
     }
 

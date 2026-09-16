@@ -82,9 +82,38 @@ Email:    admin@blueai.local
 Mật khẩu: BlueAiAdmin123!
 ```
 
-Menu bên trái: **Hỏi BlueAI** (chat RAG) cho mọi tài khoản; **Tài liệu & Tri thức RAG** và **Quản trị Hệ thống** chỉ hiện với ADMIN.
+Menu bên trái: **Hỏi BlueAI** (chat RAG) cho mọi tài khoản; **Tài liệu & Tri thức RAG**, **Chatbot Studio** và **Quản trị Hệ thống** chỉ hiện với ADMIN.
 
-## 6. Để câu trả lời có citation
+## 6. Tạo và nhúng chatbot
+
+Đăng nhập bằng tài khoản ADMIN rồi mở **Chatbot Studio**. Luồng demo hoàn chỉnh:
+
+1. Tạo bot từ template tiếng Việt.
+2. Sửa intents và các câu mẫu trong tab **Intents**.
+3. Khai báo entity cùng từ đồng nghĩa trong tab **Entities**.
+4. Ghép intent/entity, slot bắt buộc và phản hồi trong tab **Dialog**.
+5. Bấm **Lưu nháp**, sau đó **Thử bot** để xem intent, entity, node và context được nhận diện qua nhiều lượt.
+6. Bấm **Phát hành**. Tab **Tích hợp** cung cấp script nhúng có `publicKey` của bot.
+
+Widget được phục vụ tại `/widget.js`. Nó tạo phiên 30 phút khi khách mở hộp chat, giữ token trong bộ nhớ trang và gửi `requestId` cho mỗi lượt. Backend ghim phiên vào release đang hoạt động; phát hành bản mới không làm đổi release của phiên cũ. API công khai chỉ trả nội dung cần render và không trả intent, entity, node hay context nội bộ.
+
+API widget/runtime là public nhưng không phải không giới hạn: mỗi IP chỉ được tạo tối đa 20 phiên/phút, gửi tối đa 60 tin nhắn/phút; mỗi phiên tối đa 30 tin nhắn/phút và 200 lượt tổng cộng. Session và idempotency record hết hạn được dọn tự động. Các giới hạn này là lớp bảo vệ cơ bản trong từng instance; production nên đặt thêm rate limit ở reverse proxy/WAF nếu chạy nhiều instance.
+
+CORS của API đăng nhập dùng `APP_CORS_ALLOWED_ORIGINS`. CORS của widget dùng `APP_WIDGET_ALLOWED_ORIGINS` (mặc định `*` vì widget public, không dùng browser credentials); khi nhúng trên production nên đặt thành danh sách domain cụ thể, phân tách bằng dấu phẩy.
+
+Các API chính:
+
+| API | Quyền | Mục đích |
+|---|---|---|
+| `GET/POST /api/v1/studio/bots` | ADMIN | Danh sách/tạo bot thuộc chính chủ sở hữu |
+| `GET /api/v1/studio/bots/{id}` | ADMIN | Tải cấu hình bản nháp |
+| `PUT /api/v1/studio/bots/{id}/configuration` | ADMIN | Lưu nguyên tử với `expectedRevision` |
+| `POST /api/v1/studio/bots/{id}/preview` | ADMIN | Chạy thử bản nháp và trả trace |
+| `POST /api/v1/studio/bots/{id}/publish` | ADMIN | Tạo snapshot release bất biến |
+| `POST /api/v1/widget/{publicKey}/sessions` | Công khai | Tạo phiên cho bot đã phát hành |
+| `POST /api/v1/runtime/sessions/{id}/messages` | Widget token | Gửi lượt chat idempotent |
+
+## 7. Để câu trả lời có citation
 
 Câu hỏi đầu tiên mất 30–60 giây: RAG service chưa có FAISS index nên phải embed knowledge base mẫu trước. Đó không phải treo.
 
@@ -105,7 +134,7 @@ Hai cách để có nguồn:
 
    Dữ liệu này là tổng hợp để demo, UI đánh dấu "Chưa được phê duyệt" — không được dùng như chính sách thật của Bluecom.
 
-## 7. Biến môi trường
+## 8. Biến môi trường
 
 Chỉ `GOOGLE_API_KEY` là bắt buộc, còn lại đều có giá trị mặc định cho local trong `compose.yaml`.
 
@@ -126,7 +155,7 @@ Chỉ `GOOGLE_API_KEY` là bắt buộc, còn lại đều có giá trị mặc 
 
 Toàn bộ mặc định trên là credential local-dev. Phải đổi hết trước khi chạy ở bất cứ đâu ngoài máy cá nhân.
 
-## 8. Lệnh hay dùng
+## 9. Lệnh hay dùng
 
 ```powershell
 docker compose ps                      # trạng thái và healthcheck
@@ -139,7 +168,7 @@ docker compose down -v                 # dừng và XOÁ MySQL cùng FAISS index
 
 `down -v` xoá volume `blueai-auth_blueai-auth-mysql` (toàn bộ user, hội thoại, tài liệu) và `blueai-auth_blueai-rag-index`. Chỉ dùng khi muốn về trạng thái sạch.
 
-## 9. Sự cố thường gặp
+## 10. Sự cố thường gặp
 
 **`rag-ai` mãi không healthy, `auth-api` không khởi động**
 Thiếu Gemini key. `/ready` trả 503 nên Compose không đánh dấu healthy, và `auth-api` chờ vô hạn vì `depends_on: service_healthy`. Kiểm tra `curl.exe http://localhost:8000/health` xem `geminiConfigured`. Nhớ chạy `docker compose` từ trong thư mục `BE` để `.env` được đọc.
@@ -159,7 +188,7 @@ Index cũ không dùng lại được. Chạy `docker compose down -v`, hoặc x
 **Cổng đã bị chiếm**
 `netstat -ano | findstr ":3000 :8080 :8000 :33069"` rồi tắt tiến trình đang giữ cổng, hoặc sửa mục `ports` trong `compose.yaml`.
 
-## 10. Lưu ý bảo mật
+## 11. Lưu ý bảo mật
 
 - Không commit `.env`. Root `.gitignore` đã chặn `.env` và `.env.*` nhưng vẫn giữ `.env.example`.
 - FAISS index được nạp với `allow_dangerous_deserialization=True`, tức là pickle — chỉ nạp index do chính project này sinh ra.

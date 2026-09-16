@@ -131,6 +131,54 @@ describe('BlueAiApi', () => {
     expect(uploadInit.body).toBeInstanceOf(FormData);
     expect((uploadInit.headers as Headers).has('Content-Type')).toBe(false);
   });
+
+  it('saves, previews, and publishes a Bot Studio draft through authenticated routes', async () => {
+    const requests: Array<{ path: string; method?: string; body?: string }> = [];
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const path = new URL(String(input)).pathname;
+      requests.push({ path, method: init?.method, body: init?.body as string | undefined });
+      if (path.endsWith('/preview')) {
+        return jsonResponse({
+          message: 'Chi nhánh HCM mở cửa đến 22:00.',
+          matchedIntent: 'store_hours',
+          recognizedEntities: { location: 'HCM' },
+          matchedNode: 'Giờ mở cửa HCM',
+          context: { lastIntent: 'store_hours', variables: { location: 'HCM' } },
+          fallback: false,
+        });
+      }
+      if (path.endsWith('/publish')) {
+        return jsonResponse({ releaseId: 'release-2', revision: 2, publicKey: 'bot-public', publishedAt: '2026-09-13T10:00:00Z' });
+      }
+      return jsonResponse({
+        bot: { id: 'bot-1', name: 'BlueAI Bot', description: '', locale: 'vi-VN', timezone: 'Asia/Ho_Chi_Minh', status: 'DRAFT', publicKey: 'bot-public', draftRevision: 2, updatedAt: '2026-09-13T10:00:00Z' },
+        intents: [{ name: 'store_hours', description: '', examples: ['Mấy giờ đóng cửa?'] }],
+        entities: [{ name: 'location', description: '', values: [{ value: 'HCM', synonyms: ['Sài Gòn'] }] }],
+        dialogNodes: [{ name: 'Giờ mở cửa HCM', type: 'ROUTE', matchIntent: 'store_hours', matchEntityName: 'location', matchEntityValue: 'HCM', requiredEntityName: 'location', responseText: '22:00', missingEntityPrompt: 'Chi nhánh nào?', priority: 10 }],
+      });
+    });
+    const api = new BlueAiApi({ baseUrl: 'http://api.test', accessToken: 'studio-token', fetchImpl: fetchImpl as typeof fetch });
+
+    await api.saveStudioBotConfiguration('bot-1', {
+      expectedRevision: 1,
+      name: 'BlueAI Bot', description: '', locale: 'vi-VN', timezone: 'Asia/Ho_Chi_Minh',
+      intents: [{ name: 'store_hours', description: '', examples: ['Mấy giờ đóng cửa?'] }],
+      entities: [{ name: 'location', description: '', values: [{ value: 'HCM', synonyms: ['Sài Gòn'] }] }],
+      dialogNodes: [{ name: 'Giờ mở cửa HCM', type: 'ROUTE', matchIntent: 'store_hours', matchEntityName: 'location', matchEntityValue: 'HCM', requiredEntityName: 'location', responseText: '22:00', missingEntityPrompt: 'Chi nhánh nào?', priority: 10 }],
+    });
+    const preview = await api.previewStudioBot('bot-1', 'Sài Gòn', { pendingIntent: 'store_hours', pendingEntity: 'location', variables: {} });
+    await api.publishStudioBot('bot-1');
+
+    expect(requests.map(request => [request.method, request.path])).toEqual([
+      ['PUT', '/api/v1/studio/bots/bot-1/configuration'],
+      ['POST', '/api/v1/studio/bots/bot-1/preview'],
+      ['POST', '/api/v1/studio/bots/bot-1/publish'],
+    ]);
+    expect(JSON.parse(requests[0].body || '{}')).toMatchObject({ expectedRevision: 1, locale: 'vi-VN' });
+    expect(JSON.parse(requests[1].body || '{}')).toMatchObject({ message: 'Sài Gòn', context: { pendingEntity: 'location' } });
+    expect(preview.recognizedEntities).toEqual({ location: 'HCM' });
+    for (const call of fetchImpl.mock.calls) expect((call[1]?.headers as Headers).get('Authorization')).toBe('Bearer studio-token');
+  });
 });
 
 describe('normalizeAssistantContent', () => {

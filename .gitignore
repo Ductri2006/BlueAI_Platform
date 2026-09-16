@@ -1,5 +1,13 @@
 .gitnexus
 
+# Generated build and local runtime output
+target/
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+.rag-index/
+
 # Secrets and local environment files
 .env
 .env.*

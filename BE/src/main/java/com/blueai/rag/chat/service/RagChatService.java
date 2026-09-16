@@ -110,6 +110,30 @@ public class RagChatService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public String answerForCustomAssistant(
+            String ownerId,
+            String assistantName,
+            String customInstructions,
+            String question
+    ) {
+        requireActiveUser(ownerId);
+        List<RetrievedChunk> chunks = retrieve(ownerId, question);
+        List<RagSourceResponse> sources = toVerifiedSources(ownerId, chunks);
+        StringBuilder systemPrompt = new StringBuilder(buildSystemPrompt(List.of(), null, sources));
+        systemPrompt.append("\nYou are the BlueAI custom experience named ‘")
+                .append(shorten(assistantName, 100))
+                .append("’. Keep the BlueAI identity and capabilities; do not present yourself as a separate AI product.\n");
+        if (customInstructions != null && !customInstructions.isBlank()) {
+            systemPrompt.append("Customization instructions set by the BlueAI administrator:\n")
+                    .append(shorten(customInstructions, 2_000));
+        }
+        return complete(List.of(
+                new LlmMessage("system", systemPrompt.toString()),
+                new LlmMessage("user", question)
+        ));
+    }
+
     private List<RetrievedChunk> retrieve(String ownerId, String question) {
         if (!properties.isRetrieverConfigured()) {
             throw new ApiException(

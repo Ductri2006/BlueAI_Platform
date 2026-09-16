@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException
+from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_community.vectorstores.utils import DistanceStrategy
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -20,6 +21,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pydantic import BaseModel, Field
 
 from chatbot import load_documents
+
+# Load the RAG service's local configuration before reading model settings.
+load_dotenv(Path(__file__).with_name(".env"), override=True)
 from ingestion import request_run, start_worker, worker_status
 
 LOGGER = logging.getLogger("blueai.rag")
@@ -324,7 +328,9 @@ class RagRuntime:
 
     def complete(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         configured_model = os.getenv("GEMINI_CHAT_MODEL", DEFAULT_CHAT_MODEL)
-        model_name = request.model or configured_model
+        # The Java client sends an OpenAI-compatible model name, which may not
+        # be a valid Gemini model. The RAG service owns the Gemini model choice.
+        model_name = configured_model
         llm = ChatGoogleGenerativeAI(
             model=model_name,
             temperature=request.temperature,

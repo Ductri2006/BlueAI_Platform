@@ -6,6 +6,7 @@ import { TopHeader } from './TopHeader';
 import { ChatWorkspace } from '../chat/ChatWorkspace';
 import { KnowledgeDashboard } from '../dashboards/KnowledgeDashboard';
 import { AdminDashboard } from '../dashboards/AdminDashboard';
+import { ChatbotStudio } from '../studio/ChatbotStudio';
 import { EvidenceDrawer } from '../chat/EvidenceDrawer';
 import { CheckCircle2, Info, AlertTriangle } from 'lucide-react';
 
@@ -22,6 +23,8 @@ export const AppShell: React.FC = () => {
         return isAdmin ? <KnowledgeDashboard /> : <ChatWorkspace />;
       case 'admin':
         return isAdmin ? <AdminDashboard /> : <ChatWorkspace />;
+      case 'studio':
+        return isAdmin ? <ChatbotStudio /> : <ChatWorkspace />;
       default:
         return <ChatWorkspace />;
     }

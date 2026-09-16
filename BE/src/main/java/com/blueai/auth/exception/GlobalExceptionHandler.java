@@ -3,6 +3,7 @@ package com.blueai.auth.exception;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -25,7 +26,11 @@ public class GlobalExceptionHandler {
                 request,
                 Map.of()
         );
-        return ResponseEntity.status(exception.getStatus()).body(body);
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(exception.getStatus());
+        if (exception.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
+            response.header(HttpHeaders.RETRY_AFTER, "60");
+        }
+        return response.body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
