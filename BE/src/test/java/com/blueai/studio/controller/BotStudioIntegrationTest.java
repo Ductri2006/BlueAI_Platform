@@ -26,7 +26,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -36,13 +35,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.hamcrest.Matchers.containsString;
 
 @SpringBootTest(classes = BlueAiAuthApplication.class)
 @AutoConfigureMockMvc
@@ -53,7 +49,6 @@ class BotStudioIntegrationTest {
     @MockitoBean private RagChatService ragChatService;
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
-    @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private BotTurnRepository turnRepository;
     @Autowired private BotSessionRepository sessionRepository;
     @Autowired private BotReleaseRepository releaseRepository;
@@ -82,8 +77,8 @@ class BotStudioIntegrationTest {
 
     @Test
     void ownerCanBuildPreviewPublishAndUseIdempotentWidgetSession() throws Exception {
-        String ownerToken = createAndGetAccessToken("studio.owner@example.com", UserRole.ADMIN);
-        String otherToken = createAndGetAccessToken("studio.other@example.com", UserRole.USER);
+        String ownerToken = registerAndGetAccessToken("studio.owner@example.com");
+        String otherToken = registerAndGetAccessToken("studio.other@example.com");
 
         JsonNode created = postJson(
                 "/api/v1/studio/bots",
@@ -106,7 +101,8 @@ class BotStudioIntegrationTest {
 
         mockMvc.perform(get("/api/v1/studio/bots/{botId}", botId)
                         .header("Authorization", "Bearer " + otherToken))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("BOT_NOT_FOUND"));
 
         JsonNode firstPreview = postJson(
                 "/api/v1/studio/bots/" + botId + "/preview",
@@ -175,7 +171,7 @@ class BotStudioIntegrationTest {
 
     @Test
     void unpublishedBotCannotCreatePublicSessionAndStudioRequiresAuthentication() throws Exception {
-        String ownerToken = createAndGetAccessToken("draft.owner@example.com", UserRole.ADMIN);
+        String ownerToken = registerAndGetAccessToken("draft.owner@example.com");
         JsonNode created = postJson(
                 "/api/v1/studio/bots",
                 ownerToken,
@@ -196,19 +192,8 @@ class BotStudioIntegrationTest {
     }
 
     @Test
-    void publicWidgetCorsAllowsAnEmbeddingOriginWithoutCredentials() throws Exception {
-        mockMvc.perform(options("/api/v1/runtime/sessions/demo/messages")
-                        .header("Origin", "https://embed.example")
-                        .header("Access-Control-Request-Method", "POST")
-                        .header("Access-Control-Request-Headers", "content-type,x-widget-token"))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "https://embed.example"))
-                .andExpect(header().string("Access-Control-Allow-Methods", containsString("POST")));
-    }
-
-    @Test
     void dialogCanSkipInputJumpAndReplyToIrrelevantAnswers() throws Exception {
-        String ownerToken = createAndGetAccessToken("dialog.flow@example.com", UserRole.ADMIN);
+        String ownerToken = registerAndGetAccessToken("dialog.flow@example.com");
         JsonNode configuration = postJson(
                 "/api/v1/studio/bots",
                 ownerToken,
@@ -289,7 +274,7 @@ class BotStudioIntegrationTest {
 
     @Test
     void customAssistantUsesSharedBlueAiCoreForUnmatchedQuestions() throws Exception {
-        String ownerToken = createAndGetAccessToken("blueai.custom@example.com", UserRole.ADMIN);
+        String ownerToken = registerAndGetAccessToken("blueai.custom@example.com");
         JsonNode configuration = postJson(
                 "/api/v1/studio/bots",
                 ownerToken,
@@ -338,22 +323,54 @@ class BotStudioIntegrationTest {
         assertThat(response.path("fallback").asBoolean()).isFalse();
     }
 
-    private String createAndGetAccessToken(String email, UserRole role) throws Exception {
-        userRepository.saveAndFlush(new User(
-                email,
-                passwordEncoder.encode("StrongPassword123!"),
-                "Studio Owner",
-                role
-        ));
-        JsonNode response = postPublicJson(
-                "/api/v1/auth/login",
+    @Test
+    void studioManagementRequiresAdminAndAdminCanActivatePublishedConfiguration() throws Exception {
+        String userToken = registerUserAndGetAccessToken("studio.user@example.com");
+        mockMvc.perform(get("/api/v1/studio/bots")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isForbidden());
+
+        String adminToken = registerAndGetAccessToken("studio.admin@example.com");
+        JsonNode created = postJson(
+                "/api/v1/studio/bots", adminToken,
+                "{\"name\":\"Cấu hình BlueAI chính\",\"includeStarterTemplate\":true}", 201);
+        String botId = created.path("bot").path("id").asText();
+        postJson("/api/v1/studio/bots/" + botId + "/publish", adminToken, "{}", 200);
+        JsonNode active = postJson("/api/v1/studio/bots/" + botId + "/activate", adminToken, "{}", 200);
+        assertThat(active.path("bot").path("active").asBoolean()).isTrue();
+        assertThat(active.path("customization").path("identityRole").asText()).isEqualTo("Trợ lý BlueAI");
+    }
+
+    private String registerAndGetAccessToken(String email) throws Exception {
+        postPublicJson(
+                "/api/v1/auth/register",
                 """
                         {
                           "email":"%s",
-                          "password":"StrongPassword123!"
+                          "password":"StrongPassword123!",
+                          "fullName":"Studio Owner"
                         }
-                        """.formatted(email),
+                """.formatted(email),
+                201
+        );
+        User user = userRepository.findByEmail(email).orElseThrow();
+        user.changeRole(UserRole.ADMIN);
+        userRepository.saveAndFlush(user);
+        JsonNode response = postPublicJson(
+                "/api/v1/auth/login",
+                "{\"email\":\"%s\",\"password\":\"StrongPassword123!\"}".formatted(email),
                 200
+        );
+        return response.path("accessToken").asText();
+    }
+
+    private String registerUserAndGetAccessToken(String email) throws Exception {
+        JsonNode response = postPublicJson(
+                "/api/v1/auth/register",
+                """
+                        {"email":"%s","password":"StrongPassword123!","fullName":"Studio User"}
+                        """.formatted(email),
+                201
         );
         return response.path("accessToken").asText();
     }

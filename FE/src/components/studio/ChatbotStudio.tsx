@@ -8,6 +8,7 @@ import {
 import {
   blueAiApi,
   type StudioBotConfiguration,
+  type StudioCustomization,
   type StudioDialogNode,
   type StudioEntity,
   type StudioIntent,
@@ -32,10 +33,11 @@ export const ChatbotStudio: React.FC = () => {
   const { showToast } = useAppStore();
   const [bots, setBots] = React.useState<StudioBotConfiguration['bot'][]>([]);
   const [configuration, setConfiguration] = React.useState<StudioBotConfiguration>();
-  const [activeTab, setActiveTab] = React.useState<StudioTab>('intents');
+  const [activeTab, setActiveTab] = React.useState<StudioTab>('blueai');
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
   const [isPublishing, setIsPublishing] = React.useState(false);
+  const [isActivating, setIsActivating] = React.useState(false);
   const [isDirty, setIsDirty] = React.useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
@@ -95,7 +97,7 @@ export const ChatbotStudio: React.FC = () => {
       setConfiguration(copyConfiguration(result));
       setIsCreateOpen(false);
       setIsDirty(false);
-      showToast('Đã tạo một cấu hình BlueAI Custom với bộ intent và luồng mẫu.', 'success');
+        showToast('Đã tạo cấu hình BlueAI với bộ intent và luồng mẫu.', 'success');
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -116,6 +118,7 @@ export const ChatbotStudio: React.FC = () => {
         timezone: configuration.bot.timezone,
         blueAiCoreEnabled: configuration.bot.blueAiCoreEnabled !== false,
         customInstructions: configuration.bot.customInstructions || '',
+        customization: configuration.customization || configuration.bot.customization || {},
         intents: configuration.intents,
         entities: configuration.entities,
         dialogNodes: configuration.dialogNodes,
@@ -157,6 +160,22 @@ export const ChatbotStudio: React.FC = () => {
     }
   };
 
+  const activate = async () => {
+    if (!configuration || configuration.bot.status !== 'PUBLISHED') return;
+    setIsActivating(true);
+    setError('');
+    try {
+      const activated = await blueAiApi.activateStudioBot(configuration.bot.id);
+      setConfiguration(copyConfiguration(activated));
+      setBots(current => current.map(bot => ({ ...bot, active: bot.id === activated.bot.id })));
+      showToast('Đã áp dụng cấu hình cho màn Hỏi BlueAI.', 'success');
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
   if (isLoading && !configuration) {
     return <div className="flex flex-1 items-center justify-center"><LoaderCircle className="h-7 w-7 animate-spin text-cobalt-600" aria-label="Đang tải BlueAI Custom" /></div>;
   }
@@ -166,7 +185,7 @@ export const ChatbotStudio: React.FC = () => {
       <div className="flex flex-1 items-center justify-center overflow-y-auto bg-ambient-grid p-6">
         <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl dark:border-slate-800 dark:bg-slate-950">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-cobalt-50 text-cobalt-600 dark:bg-cobalt-950 dark:text-cobalt-300"><Bot className="h-7 w-7" /></div>
-          <h1 className="mt-5 text-2xl font-black text-slate-900 dark:text-white">Tạo cấu hình BlueAI Custom đầu tiên</h1>
+          <h1 className="mt-5 text-2xl font-black text-slate-900 dark:text-white">Tạo cấu hình BlueAI đầu tiên</h1>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">BlueAI sẽ tạo sẵn intent chào hỏi, giờ làm việc, entity chi nhánh và luồng fallback để bạn có thể thử ngay.</p>
           {error && <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>}
           <form onSubmit={createBot} className="mt-6 flex gap-2">
@@ -179,9 +198,9 @@ export const ChatbotStudio: React.FC = () => {
   }
 
   const tabs: { id: StudioTab; label: string; icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
-    { id: 'blueai', label: 'BlueAI Core', icon: BrainCircuit },
-    { id: 'intents', label: 'Intents', icon: MessageSquareText, count: configuration.intents.length },
-    { id: 'entities', label: 'Entities', icon: Braces, count: configuration.entities.length },
+    { id: 'blueai', label: 'BlueAI chính', icon: BrainCircuit },
+    { id: 'intents', label: 'Mục đích', icon: MessageSquareText, count: configuration.intents.length },
+    { id: 'entities', label: 'Dữ liệu', icon: Braces, count: configuration.entities.length },
     { id: 'dialog', label: 'Dialog', icon: GitBranch, count: configuration.dialogNodes.length },
     { id: 'integrate', label: 'Tích hợp', icon: Code2 },
   ];
@@ -198,20 +217,22 @@ export const ChatbotStudio: React.FC = () => {
                   value={configuration.bot.id}
                   onChange={event => void loadBot(event.target.value)}
                   className="max-w-64 truncate bg-transparent text-base font-black text-slate-900 outline-none dark:text-white"
-                  aria-label="Chọn chatbot"
+                  aria-label="Chọn cấu hình BlueAI"
                 >
                   {bots.map(botItem => <option key={botItem.id} value={botItem.id}>{botItem.name}</option>)}
                 </select>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${configuration.bot.status === 'PUBLISHED' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>{configuration.bot.status}</span>
+                {configuration.bot.active && <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-black text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300">Đang dùng cho Hỏi BlueAI</span>}
               </div>
               <p className="text-[11px] text-slate-500">Bản nháp r{configuration.bot.draftRevision}{isDirty ? ' • Có thay đổi chưa lưu' : ' • Đã đồng bộ'}</p>
             </div>
-            <button type="button" onClick={() => setIsCreateOpen(true)} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:border-cobalt-300 hover:text-cobalt-600 dark:border-slate-700" title="Tạo cấu hình BlueAI Custom khác" aria-label="Tạo cấu hình BlueAI Custom khác"><Plus className="h-4 w-4" /></button>
+            <button type="button" onClick={() => setIsCreateOpen(true)} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:border-cobalt-300 hover:text-cobalt-600 dark:border-slate-700" title="Tạo cấu hình BlueAI khác" aria-label="Tạo cấu hình BlueAI khác"><Plus className="h-4 w-4" /></button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => void openPreview()} disabled={isSaving} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:border-cobalt-300 hover:text-cobalt-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><FlaskConical className="h-4 w-4" />Thử BlueAI</button>
             <button type="button" onClick={() => void save()} disabled={!isDirty || isSaving} className="inline-flex items-center gap-2 rounded-xl border border-cobalt-200 bg-cobalt-50 px-3.5 py-2 text-xs font-bold text-cobalt-700 hover:bg-cobalt-100 disabled:cursor-not-allowed disabled:opacity-45 dark:border-cobalt-800 dark:bg-cobalt-950 dark:text-cobalt-200">{isSaving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Lưu nháp</button>
             <button type="button" onClick={() => void publish()} disabled={isPublishing || isSaving} className="inline-flex items-center gap-2 rounded-xl bg-cobalt-600 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-cobalt-500/20 hover:bg-cobalt-700 disabled:opacity-50">{isPublishing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}Phát hành</button>
+            {configuration.bot.status === 'PUBLISHED' && !configuration.bot.active && <button type="button" onClick={() => void activate()} disabled={isActivating || isSaving} className="inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3.5 py-2 text-xs font-bold text-cyan-800 hover:bg-cyan-100 disabled:opacity-50 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-200">{isActivating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Áp dụng cho Hỏi BlueAI</button>}
           </div>
         </div>
       </header>
@@ -226,7 +247,7 @@ export const ChatbotStudio: React.FC = () => {
       {error && <div className="mx-4 mt-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 sm:mx-6"><span>{error}</span><button type="button" onClick={() => setError('')} aria-label="Đóng lỗi"><X className="h-4 w-4" /></button></div>}
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-        {activeTab === 'blueai' && <BlueAiCorePanel configuration={configuration} onChange={bot => updateConfiguration(current => ({ ...current, bot }))} />}
+        {activeTab === 'blueai' && <BlueAiCorePanel configuration={configuration} onChange={bot => updateConfiguration(current => ({ ...current, bot }))} onCustomizationChange={customization => updateConfiguration(current => ({ ...current, customization }))} />}
         {activeTab === 'intents' && <IntentsEditor intents={configuration.intents} onChange={intents => updateConfiguration(current => ({ ...current, intents }))} />}
         {activeTab === 'entities' && <EntitiesEditor entities={configuration.entities} onChange={entities => updateConfiguration(current => ({ ...current, entities }))} />}
         {activeTab === 'dialog' && <DialogEditor nodes={configuration.dialogNodes} intents={configuration.intents} entities={configuration.entities} onChange={dialogNodes => updateConfiguration(current => ({ ...current, dialogNodes }))} />}
@@ -238,8 +259,8 @@ export const ChatbotStudio: React.FC = () => {
       {isCreateOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
           <form onSubmit={createBot} className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
-            <div className="flex items-center justify-between"><h2 className="text-lg font-black">Tạo cấu hình BlueAI Custom mới</h2><button type="button" onClick={() => setIsCreateOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button></div>
-            <p className="mt-1 text-sm text-slate-500">Khởi tạo một workspace độc lập với dữ liệu mẫu tiếng Việt.</p>
+            <div className="flex items-center justify-between"><h2 className="text-lg font-black">Tạo cấu hình BlueAI mới</h2><button type="button" onClick={() => setIsCreateOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button></div>
+            <p className="mt-1 text-sm text-slate-500">Khởi tạo bản cấu hình dùng chung cho BlueAI với dữ liệu mẫu tiếng Việt.</p>
             <label className="mt-5 block"><span className={labelClass}>Tên cấu hình</span><input value={newBotName} onChange={event => setNewBotName(event.target.value)} className={inputClass} autoFocus /></label>
             <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsCreateOpen(false)} className="rounded-xl px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Huỷ</button><button type="submit" className="rounded-xl bg-cobalt-600 px-4 py-2 text-sm font-bold text-white hover:bg-cobalt-700">Tạo với dữ liệu mẫu</button></div>
           </form>
@@ -398,14 +419,14 @@ function DialogEditor({ nodes, intents, entities, onChange }: { nodes: StudioDia
           </button>
           <button type="button" onClick={event => { event.stopPropagation(); setSelected(row.index); setOpenMenu(openMenu === row.index ? null : row.index); }} className="absolute right-2 top-2.5 rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-slate-700 dark:hover:bg-slate-800" aria-label={`Mở menu ${row.node.name}`}><MoreVertical className="h-4 w-4" /></button>
           {openMenu === row.index && <div className="absolute right-2 top-10 z-40 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-            <DialogMenuButton icon={ChevronRight} label="Add child node" onClick={() => add('ROUTE', row.node.name)} />
-            <DialogMenuButton icon={ArrowUp} label="Add node above" onClick={() => addRelative(0)} />
-            <DialogMenuButton icon={ArrowDown} label="Add node below" onClick={() => addRelative(1)} />
-            <DialogMenuButton icon={FolderPlus} label="Add folder" onClick={() => add('FOLDER', row.node.parentNode || '')} />
-            <DialogMenuButton icon={MoveRight} label="Move" disabled={row.node.type === 'WELCOME' || row.node.type === 'FALLBACK'} onClick={() => { setMoveParent(row.node.parentNode || ''); setIsMoveOpen(true); }} />
-            <DialogMenuButton icon={CopyPlus} label="Duplicate" disabled={row.node.type === 'WELCOME' || row.node.type === 'FALLBACK'} onClick={duplicate} />
-            <DialogMenuButton icon={GitBranch} label="Jump to" disabled={row.node.type === 'FOLDER'} onClick={() => { update({ nextStep: 'JUMP_TO' }); setOpenMenu(null); }} />
-            <DialogMenuButton icon={Trash2} label="Delete" danger disabled={row.node.type === 'WELCOME' || row.node.type === 'FALLBACK'} onClick={remove} />
+            <DialogMenuButton icon={ChevronRight} label="Thêm node con" onClick={() => add('ROUTE', row.node.name)} />
+            <DialogMenuButton icon={ArrowUp} label="Thêm node phía trên" onClick={() => addRelative(0)} />
+            <DialogMenuButton icon={ArrowDown} label="Thêm node phía dưới" onClick={() => addRelative(1)} />
+            <DialogMenuButton icon={FolderPlus} label="Thêm folder" onClick={() => add('FOLDER', row.node.parentNode || '')} />
+            <DialogMenuButton icon={MoveRight} label="Di chuyển" disabled={row.node.type === 'WELCOME' || row.node.type === 'FALLBACK'} onClick={() => { setMoveParent(row.node.parentNode || ''); setIsMoveOpen(true); }} />
+            <DialogMenuButton icon={CopyPlus} label="Nhân bản" disabled={row.node.type === 'WELCOME' || row.node.type === 'FALLBACK'} onClick={duplicate} />
+            <DialogMenuButton icon={GitBranch} label="Chuyển đến" disabled={row.node.type === 'FOLDER'} onClick={() => { update({ nextStep: 'JUMP_TO' }); setOpenMenu(null); }} />
+            <DialogMenuButton icon={Trash2} label="Xoá" danger disabled={row.node.type === 'WELCOME' || row.node.type === 'FALLBACK'} onClick={remove} />
           </div>}
         </div>)}
       </div>
@@ -421,12 +442,12 @@ function DialogEditor({ nodes, intents, entities, onChange }: { nodes: StudioDia
         <label><span className={labelClass}>Entity điều kiện</span><select value={current.matchEntityName || ''} onChange={event => update({ matchEntityName: event.target.value, matchEntityValue: '' })} className={inputClass}><option value="">Mọi entity</option>{entities.map(entity => <option key={entity.name} value={entity.name}>@{entity.name}</option>)}</select></label>
         <label><span className={labelClass}>Giá trị entity</span><select value={current.matchEntityValue || ''} onChange={event => update({ matchEntityValue: event.target.value })} className={inputClass} disabled={!current.matchEntityName}><option value="">Mọi giá trị</option>{entities.find(entity => entity.name === current.matchEntityName)?.values.map(value => <option key={value.value} value={value.value}>{value.value}</option>)}</select></label>
       </div></div>}
-      <label className="block"><span className={labelClass}>Assistant responds</span><textarea value={current.responseText} onChange={event => update({ responseText: event.target.value })} rows={5} className={`${inputClass} resize-y leading-6`} placeholder="Bạn có thể dùng {{location}} để chèn giá trị entity." /></label>
+      <label className="block"><span className={labelClass}>Nội dung BlueAI trả lời</span><textarea value={current.responseText} onChange={event => update({ responseText: event.target.value })} rows={5} className={`${inputClass} resize-y leading-6`} placeholder="Bạn có thể dùng {{location}} để chèn giá trị entity." /></label>
       {current.type === 'ROUTE' && current.requiredEntityName && <label className="block"><span className={labelClass}>Câu hỏi khi thiếu entity</span><textarea value={current.missingEntityPrompt || ''} onChange={event => update({ missingEntityPrompt: event.target.value })} rows={3} className={`${inputClass} resize-y`} placeholder={`Bạn muốn hỏi cho ${current.requiredEntityName} nào?`} /></label>}
       <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
-        <div className="flex items-center gap-2"><CircleDot className="h-4 w-4 text-emerald-500" /><p className="text-xs font-black text-slate-800 dark:text-slate-100">Then assistant should</p></div>
+        <div className="flex items-center gap-2"><CircleDot className="h-4 w-4 text-emerald-500" /><p className="text-xs font-black text-slate-800 dark:text-slate-100">Sau đó BlueAI sẽ</p></div>
         <div className="grid gap-3 md:grid-cols-2">
-          <label><span className={labelClass}>Hành động tiếp theo</span><select value={nextStep} onChange={event => update({ nextStep: event.target.value as StudioDialogNode['nextStep'], jumpToNode: event.target.value === 'JUMP_TO' ? current.jumpToNode || '' : '' })} className={inputClass}><option value="WAIT_FOR_REPLY">Wait for reply</option><option value="SKIP_USER_INPUT">Skip user input</option><option value="JUMP_TO">Jump to</option></select></label>
+          <label><span className={labelClass}>Hành động tiếp theo</span><select value={nextStep} onChange={event => update({ nextStep: event.target.value as StudioDialogNode['nextStep'], jumpToNode: event.target.value === 'JUMP_TO' ? current.jumpToNode || '' : '' })} className={inputClass}><option value="WAIT_FOR_REPLY">Chờ người dùng trả lời</option><option value="SKIP_USER_INPUT">Tự động tiếp tục</option><option value="JUMP_TO">Chuyển đến node</option></select></label>
           {nextStep === 'JUMP_TO' && <label><span className={labelClass}>Node đích</span><select value={current.jumpToNode || ''} onChange={event => update({ jumpToNode: event.target.value })} className={inputClass}><option value="">Chọn node đích</option>{nodes.filter(node => node !== current).map(node => <option key={node.name} value={node.name}>{node.name}</option>)}</select></label>}
         </div>
         <p className="text-xs leading-5 text-slate-500">{nextStep === 'WAIT_FOR_REPLY' ? 'Dừng tại node này và chờ người dùng gửi câu tiếp theo.' : nextStep === 'SKIP_USER_INPUT' ? 'Không chờ input; đánh giá node con trước, sau đó mới xét node kế tiếp cùng cấp.' : 'Không chờ input; chuyển thẳng đến node đã chọn.'}</p>
@@ -473,7 +494,11 @@ function collectDialogDescendants(nodes: StudioDialogNode[], parentName: string)
 
 function dialogNodeSubtitle(node: StudioDialogNode, nodes: StudioDialogNode[]): string {
   if (node.type === 'FOLDER') return `${nodes.filter(item => item.parentNode === node.name).length} node con`;
-  const action = node.nextStep === 'SKIP_USER_INPUT' ? 'Skip user input' : node.nextStep === 'JUMP_TO' ? `Jump to ${node.jumpToNode || '…'}` : 'Wait for reply';
+  const action = node.nextStep === 'SKIP_USER_INPUT'
+    ? 'Tự động tiếp tục'
+    : node.nextStep === 'JUMP_TO'
+      ? `Chuyển đến ${node.jumpToNode || '…'}`
+      : 'Chờ người dùng trả lời';
   return `${node.type === 'ROUTE' ? `#${node.matchIntent || 'chưa_chọn'}` : node.type} · ${action}`;
 }
 
@@ -487,30 +512,48 @@ function EditorLayout({ title, description, items, selected, onSelect, onAdd, ad
   </div>;
 }
 
-function BlueAiCorePanel({ configuration, onChange }: { configuration: StudioBotConfiguration; onChange: (bot: StudioBotConfiguration['bot']) => void }) {
+function BlueAiCorePanel({ configuration, onChange, onCustomizationChange }: { configuration: StudioBotConfiguration; onChange: (bot: StudioBotConfiguration['bot']) => void; onCustomizationChange: (customization: StudioCustomization) => void }) {
   const enabled = configuration.bot.blueAiCoreEnabled !== false;
   const update = (patch: Partial<StudioBotConfiguration['bot']>) => onChange({ ...configuration.bot, ...patch });
+  const customization = configuration.customization || configuration.bot.customization || {};
+  const updateCustomization = (patch: Partial<StudioCustomization>) => onCustomizationChange({ ...customization, ...patch });
 
-  return <div className="mx-auto max-w-5xl space-y-5">
-    <div className="overflow-hidden rounded-3xl border border-cobalt-200 bg-gradient-to-br from-cobalt-700 via-cobalt-600 to-cyan-600 p-6 text-white shadow-xl shadow-cobalt-500/15 sm:p-8">
-      <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
-        <div className="max-w-2xl"><div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-cyan-100"><BrainCircuit className="h-4 w-4" />BlueAI Custom</div><h1 className="mt-3 text-2xl font-black sm:text-3xl">Tùy chỉnh chính BlueAI cho từng nghiệp vụ</h1><p className="mt-3 text-sm leading-6 text-blue-50">Cấu hình này dùng chung BlueAI Core, mô hình ngôn ngữ, kho tri thức RAG, tài khoản và guardrails hiện có. Tên, Dialog và chỉ dẫn bên dưới tạo một trải nghiệm chuyên biệt trong BlueAI.</p></div>
-        <button type="button" role="switch" aria-checked={enabled} onClick={() => update({ blueAiCoreEnabled: !enabled })} className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-black ${enabled ? 'border-white/40 bg-white text-cobalt-700' : 'border-white/30 bg-slate-950/20 text-white'}`}><span className={`h-2.5 w-2.5 rounded-full ${enabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />{enabled ? 'BlueAI Core đang bật' : 'BlueAI Core đang tắt'}</button>
+  return <div className="mx-auto max-w-4xl space-y-4">
+    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-[#0B1324]">
+      <div><h1 className="text-base font-black">Cấu hình BlueAI chính</h1><p className="mt-0.5 text-xs text-slate-500">Dialog được xử lý trước, sau đó dùng RAG/LLM chung của BlueAI.</p></div>
+      <button type="button" role="switch" aria-checked={enabled} onClick={() => update({ blueAiCoreEnabled: !enabled })} className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-black ${enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-100 text-slate-500'}`}><span className={`h-2 w-2 rounded-full ${enabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />{enabled ? 'RAG/LLM bật' : 'Chỉ Dialog'}</button>
+    </div>
+
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0B1324]">
+      <h2 className="text-sm font-black">Danh tính và phong cách</h2>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <label><span className={labelClass}>Vai trò / cách xưng hô</span><input value={customization.identityRole || ''} onChange={event => updateCustomization({ identityRole: event.target.value })} className={inputClass} placeholder="Trợ lý CSKH, xưng mình – bạn" /></label>
+        <label><span className={labelClass}>Preset văn phong</span><select value={customization.tonePreset || 'professional'} onChange={event => updateCustomization({ tonePreset: event.target.value })} className={inputClass}><option value="professional">Chuyên nghiệp</option><option value="friendly">Thân thiện</option><option value="concise">Ngắn gọn</option><option value="formal">Trang trọng</option></select></label>
+        <label><span className={labelClass}>Độ dài</span><select value={customization.answerLength || 'balanced'} onChange={event => updateCustomization({ answerLength: event.target.value })} className={inputClass}><option value="short">Ngắn</option><option value="balanced">Cân bằng</option><option value="detailed">Chi tiết</option></select></label>
+        <label><span className={labelClass}>Cấu trúc trả lời</span><select value={customization.responseStructure || 'direct'} onChange={event => updateCustomization({ responseStructure: event.target.value })} className={inputClass}><option value="direct">Trả lời trực tiếp</option><option value="steps">Theo bước</option><option value="summary_then_detail">Tóm tắt rồi chi tiết</option></select></label>
       </div>
-    </div>
+    </section>
 
-    <div className="grid gap-4 md:grid-cols-3">
-      <CoreFeature icon={BrainCircuit} title="LLM dùng chung" description="Các câu ngoài Dialog được BlueAI Core xử lý bằng cùng runtime AI của hệ thống." />
-      <CoreFeature icon={Boxes} title="Knowledge & RAG" description="Câu trả lời truy xuất kho tri thức đã duyệt của đúng tài khoản sở hữu cấu hình." />
-      <CoreFeature icon={ShieldCheck} title="Auth & guardrails" description="Kế thừa phân quyền, xác minh nguồn và chính sách an toàn của BlueAI." />
-    </div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0B1324]">
+      <h2 className="text-sm font-black">Chính sách trả lời</h2>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <label><span className={labelClass}>Mức chủ động / hỏi lại</span><select value={customization.proactivity || 'ask_when_needed'} onChange={event => updateCustomization({ proactivity: event.target.value })} className={inputClass}><option value="low">Ít chủ động</option><option value="ask_when_needed">Hỏi lại khi cần</option><option value="proactive">Chủ động gợi ý</option></select></label>
+        <label><span className={labelClass}>Dẫn nguồn</span><select value={customization.citationPolicy || 'always_when_available'} onChange={event => updateCustomization({ citationPolicy: event.target.value })} className={inputClass}><option value="always_when_available">Luôn dẫn nguồn khi có</option><option value="when_factual">Dẫn nguồn cho thông tin thực tế</option></select></label>
+        <label><span className={labelClass}>Khi không có nguồn</span><select value={customization.noSourcePolicy || 'say_not_found'} onChange={event => updateCustomization({ noSourcePolicy: event.target.value })} className={inputClass}><option value="say_not_found">Nói rõ chưa tìm thấy</option><option value="ask_clarification">Hỏi lại để làm rõ</option><option value="escalate">Chuyển hỗ trợ</option></select></label>
+        <label><span className={labelClass}>Hồ sơ phản hồi / node Dialog</span><input value={customization.responseProfile || ''} onChange={event => updateCustomization({ responseProfile: event.target.value })} className={inputClass} placeholder="Tên profile hoặc node tuỳ chọn" /></label>
+      </div>
+    </section>
 
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0B1324] sm:p-8">
-      <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"><Sparkles className="h-5 w-5" /></div><div><h2 className="text-base font-black">Chỉ dẫn tùy chỉnh</h2><p className="mt-1 text-sm leading-6 text-slate-500">BlueAI áp dụng chỉ dẫn này sau các quy tắc nhận diện danh tính và trích dẫn nguồn của hệ thống.</p></div></div>
-      <textarea value={configuration.bot.customInstructions || ''} onChange={event => update({ customInstructions: event.target.value })} rows={8} maxLength={2000} disabled={!enabled} className={`${inputClass} mt-5 resize-y leading-6 disabled:cursor-not-allowed disabled:opacity-50`} placeholder="Ví dụ: Trả lời như chuyên viên chăm sóc khách hàng của BlueAI; ưu tiên tiếng Việt; hỏi lại mã đơn hàng khi cần tra cứu..." />
-      <div className="mt-2 flex justify-between text-[11px] text-slate-400"><span>Dialog vẫn được ưu tiên trước BlueAI Core.</span><span>{(configuration.bot.customInstructions || '').length}/2000</span></div>
-      {!enabled && <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">Khi tắt BlueAI Core, chỉ các node Dialog và Fallback cố định được dùng để trả lời.</p>}
-    </div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0B1324]">
+      <h2 className="text-sm font-black">Thuật ngữ và xử lý ngoại lệ</h2>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <label><span className={labelClass}>Thuật ngữ ưu tiên</span><textarea value={customization.preferredTerms || ''} onChange={event => updateCustomization({ preferredTerms: event.target.value })} rows={2} className={`${inputClass} resize-y`} placeholder="eSIM, mã QR, ..." /></label>
+        <label><span className={labelClass}>Từ / cụm từ cấm</span><textarea value={customization.forbiddenTerms || ''} onChange={event => updateCustomization({ forbiddenTerms: event.target.value })} rows={2} className={`${inputClass} resize-y`} placeholder="Mỗi cụm từ cách nhau bằng dấu phẩy" /></label>
+        <label><span className={labelClass}>Fallback</span><textarea value={customization.fallbackMessage || ''} onChange={event => updateCustomization({ fallbackMessage: event.target.value })} rows={2} className={`${inputClass} resize-y`} /></label>
+        <label><span className={labelClass}>Escalation</span><textarea value={customization.escalationMessage || ''} onChange={event => updateCustomization({ escalationMessage: event.target.value })} rows={2} className={`${inputClass} resize-y`} /></label>
+      </div>
+      <label className="mt-3 block"><span className={labelClass}>Chỉ dẫn bổ sung</span><textarea value={configuration.bot.customInstructions || ''} onChange={event => update({ customInstructions: event.target.value })} rows={3} maxLength={2000} disabled={!enabled} className={`${inputClass} resize-y leading-6 disabled:cursor-not-allowed disabled:opacity-50`} placeholder="Quy tắc nghiệp vụ ngắn gọn, áp dụng sau guardrails hệ thống" /></label>
+    </section>
   </div>;
 }
 
@@ -526,7 +569,7 @@ function IntegrationPanel({ configuration }: { configuration: StudioBotConfigura
 
   return <div className="mx-auto max-w-4xl space-y-5">
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0B1324] sm:p-8">
-      <div className="flex items-start gap-4"><div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${isPublished ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>{isPublished ? <CheckCircle2 className="h-6 w-6" /> : <Rocket className="h-6 w-6" />}</div><div><h1 className="text-xl font-black">{isPublished ? 'BlueAI Custom đã sẵn sàng để nhúng' : 'Phát hành cấu hình trước khi tích hợp'}</h1><p className="mt-1 text-sm leading-6 text-slate-500">Mỗi phiên widget được ghim vào đúng release đã phát hành. Các thay đổi bản nháp sẽ không làm đổi cuộc hội thoại đang diễn ra.</p></div></div>
+      <div className="flex items-start gap-4"><div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${isPublished ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>{isPublished ? <CheckCircle2 className="h-6 w-6" /> : <Rocket className="h-6 w-6" />}</div><div><h1 className="text-xl font-black">{isPublished ? 'Cấu hình BlueAI đã sẵn sàng để nhúng' : 'Phát hành cấu hình trước khi tích hợp'}</h1><p className="mt-1 text-sm leading-6 text-slate-500">Mỗi phiên widget được ghim vào đúng release đã phát hành. Các thay đổi bản nháp sẽ không làm đổi cuộc hội thoại đang diễn ra.</p></div></div>
       <div className="mt-6 grid gap-3 sm:grid-cols-3"><InfoCard label="Public key" value={configuration.bot.publicKey} /><InfoCard label="Release" value={configuration.bot.publishedReleaseId || 'Chưa phát hành'} /><InfoCard label="Locale" value={configuration.bot.locale} /></div>
     </div>
     <div className={`rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0B1324] sm:p-8 ${!isPublished ? 'opacity-60' : ''}`}>

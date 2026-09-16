@@ -39,6 +39,10 @@ public class Conversation {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** Serialized Dialog PreviewContext for the active dashboard configuration. */
+    @Column(name = "dialog_state_json", columnDefinition = "longtext")
+    private String dialogStateJson;
+
     protected Conversation() {
     }
 
@@ -67,6 +71,10 @@ public class Conversation {
         updatedAt = Instant.now();
     }
 
+    public void updateDialogState(String dialogStateJson) {
+        this.dialogStateJson = dialogStateJson;
+    }
+
     public String getId() {
         return id;
     }
@@ -81,5 +89,9 @@ public class Conversation {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public String getDialogStateJson() {
+        return dialogStateJson;
     }
 }

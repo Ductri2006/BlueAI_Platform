@@ -63,6 +63,10 @@ public class User {
         this.status = status;
     }
 
+    public void changeRole(UserRole role) {
+        this.role = role;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

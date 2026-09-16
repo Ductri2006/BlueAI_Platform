@@ -117,6 +117,23 @@ export interface StudioBotSummary {
   draftRevision: number;
   publishedReleaseId?: string;
   updatedAt: string;
+  active?: boolean;
+  customization?: StudioCustomization;
+}
+
+export interface StudioCustomization {
+  identityRole?: string;
+  tonePreset?: string;
+  answerLength?: string;
+  responseStructure?: string;
+  proactivity?: string;
+  citationPolicy?: string;
+  noSourcePolicy?: string;
+  preferredTerms?: string;
+  forbiddenTerms?: string;
+  fallbackMessage?: string;
+  escalationMessage?: string;
+  responseProfile?: string;
 }
 
 export interface StudioIntent {
@@ -157,6 +174,7 @@ export interface StudioBotConfiguration {
   intents: StudioIntent[];
   entities: StudioEntity[];
   dialogNodes: StudioDialogNode[];
+  customization?: StudioCustomization;
 }
 
 export interface StudioPreviewContext {
@@ -174,6 +192,7 @@ export interface StudioRuntimeResponse {
   matchedNode?: string;
   context: StudioPreviewContext;
   fallback: boolean;
+  dialogHandled?: boolean;
 }
 
 export interface StudioPublishResponse {
@@ -357,6 +376,10 @@ export class BlueAiApi {
     );
   }
 
+  async getActiveStudioBot(): Promise<StudioBotConfiguration> {
+    return this.authorizedRequest<StudioBotConfiguration>('/api/v1/studio/bots/active', { method: 'GET' });
+  }
+
   async saveStudioBotConfiguration(
     botId: string,
     configuration: Omit<StudioBotConfiguration, 'bot'> & {
@@ -367,6 +390,7 @@ export class BlueAiApi {
       timezone: string;
       blueAiCoreEnabled?: boolean;
       customInstructions?: string;
+      customization?: StudioCustomization;
     },
   ): Promise<StudioBotConfiguration> {
     return this.authorizedRequest<StudioBotConfiguration>(
@@ -389,6 +413,13 @@ export class BlueAiApi {
   async publishStudioBot(botId: string): Promise<StudioPublishResponse> {
     return this.authorizedRequest<StudioPublishResponse>(
       `/api/v1/studio/bots/${encodeURIComponent(botId)}/publish`,
+      { method: 'POST' },
+    );
+  }
+
+  async activateStudioBot(botId: string): Promise<StudioBotConfiguration> {
+    return this.authorizedRequest<StudioBotConfiguration>(
+      `/api/v1/studio/bots/${encodeURIComponent(botId)}/activate`,
       { method: 'POST' },
     );
   }

@@ -1,14 +1,24 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../auth/AuthContext';
 import { SidebarRail } from './SidebarRail';
 import { TopHeader } from './TopHeader';
-import { ChatWorkspace } from '../chat/ChatWorkspace';
-import { KnowledgeDashboard } from '../dashboards/KnowledgeDashboard';
-import { AdminDashboard } from '../dashboards/AdminDashboard';
-import { ChatbotStudio } from '../studio/ChatbotStudio';
-import { EvidenceDrawer } from '../chat/EvidenceDrawer';
 import { CheckCircle2, Info, AlertTriangle } from 'lucide-react';
+
+const ChatWorkspace = lazy(() => import('../chat/ChatWorkspace').then(module => ({ default: module.ChatWorkspace })));
+const KnowledgeDashboard = lazy(() => import('../dashboards/KnowledgeDashboard').then(module => ({ default: module.KnowledgeDashboard })));
+const AdminDashboard = lazy(() => import('../dashboards/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
+const ChatbotStudio = lazy(() => import('../studio/ChatbotStudio').then(module => ({ default: module.ChatbotStudio })));
+const EvidenceDrawer = lazy(() => import('../chat/EvidenceDrawer').then(module => ({ default: module.EvidenceDrawer })));
+
+const WorkspaceFallback: React.FC = () => (
+  <section className="flex flex-1 items-center justify-center bg-canvas-light dark:bg-canvas-dark" aria-busy="true" aria-label="Đang tải không gian làm việc">
+    <div className="w-full max-w-3xl space-y-4 px-6">
+      <div className="h-8 w-48 animate-pulse rounded-xl bg-slate-200/80 dark:bg-slate-800" />
+      <div className="h-28 w-full animate-pulse rounded-2xl bg-white/80 shadow-subtle dark:bg-slate-900/70" />
+    </div>
+  </section>
+);
 
 export const AppShell: React.FC = () => {
   const { activeRole, toast } = useAppStore();
@@ -39,12 +49,12 @@ export const AppShell: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
         <TopHeader />
         <main className="flex-1 flex overflow-hidden relative">
-          {renderActiveWorkspace()}
+          <Suspense fallback={<WorkspaceFallback />}>{renderActiveWorkspace()}</Suspense>
         </main>
       </div>
 
       {/* 3. Evidence / Citation Inspector Side Panel */}
-      <EvidenceDrawer />
+      <Suspense fallback={null}><EvidenceDrawer /></Suspense>
 
       {/* 4. Global Toast Notification */}
       {toast && (

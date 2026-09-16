@@ -39,8 +39,73 @@ public final class BotStudioDtos {
             String publicKey,
             long draftRevision,
             String publishedReleaseId,
-            Instant updatedAt
+            Instant updatedAt,
+            boolean active,
+            CustomizationInput customization
     ) {
+    }
+
+    /**
+     * Compact, persisted BlueAI behavior settings. Every field is optional on
+     * input so releases created by older versions remain readable; the service
+     * fills defaults before writing a release snapshot.
+     */
+    public record CustomizationInput(
+            @Size(max = 120) String identityRole,
+            @Size(max = 40) String tonePreset,
+            @Size(max = 24) String answerLength,
+            @Size(max = 40) String responseStructure,
+            @Size(max = 24) String proactivity,
+            @Size(max = 40) String citationPolicy,
+            @Size(max = 80) String noSourcePolicy,
+            @Size(max = 1000) String preferredTerms,
+            @Size(max = 1000) String forbiddenTerms,
+            @Size(max = 1000) String fallbackMessage,
+            @Size(max = 1000) String escalationMessage,
+            @Size(max = 120) String responseProfile
+    ) {
+        public static CustomizationInput defaults() {
+            return new CustomizationInput(
+                    "Trợ lý BlueAI",
+                    "professional",
+                    "balanced",
+                    "direct",
+                    "ask_when_needed",
+                    "always_when_available",
+                    "say_not_found",
+                    null,
+                    null,
+                    "Mình chưa tìm thấy đủ thông tin trong kho tri thức để trả lời chắc chắn.",
+                    "Mình sẽ chuyển yêu cầu này tới đội hỗ trợ để được xử lý tiếp.",
+                    null
+            );
+        }
+
+        public CustomizationInput withDefaults() {
+            CustomizationInput defaults = defaults();
+            return new CustomizationInput(
+                    valueOrDefault(identityRole, defaults.identityRole()),
+                    valueOrDefault(tonePreset, defaults.tonePreset()),
+                    valueOrDefault(answerLength, defaults.answerLength()),
+                    valueOrDefault(responseStructure, defaults.responseStructure()),
+                    valueOrDefault(proactivity, defaults.proactivity()),
+                    valueOrDefault(citationPolicy, defaults.citationPolicy()),
+                    valueOrDefault(noSourcePolicy, defaults.noSourcePolicy()),
+                    trimToNull(preferredTerms),
+                    trimToNull(forbiddenTerms),
+                    valueOrDefault(fallbackMessage, defaults.fallbackMessage()),
+                    valueOrDefault(escalationMessage, defaults.escalationMessage()),
+                    trimToNull(responseProfile)
+            );
+        }
+
+        private static String valueOrDefault(String value, String fallback) {
+            return value == null || value.isBlank() ? fallback : value.trim();
+        }
+
+        private static String trimToNull(String value) {
+            return value == null || value.isBlank() ? null : value.trim();
+        }
     }
 
     public record IntentInput(
@@ -90,7 +155,8 @@ public final class BotStudioDtos {
             @Size(max = 2000) String customInstructions,
             @NotNull List<@Valid IntentInput> intents,
             @NotNull List<@Valid EntityInput> entities,
-            @NotNull List<@Valid DialogNodeInput> dialogNodes
+            @NotNull List<@Valid DialogNodeInput> dialogNodes,
+            @Valid CustomizationInput customization
     ) {
     }
 
@@ -98,7 +164,8 @@ public final class BotStudioDtos {
             BotSummaryResponse bot,
             List<IntentInput> intents,
             List<EntityInput> entities,
-            List<DialogNodeInput> dialogNodes
+            List<DialogNodeInput> dialogNodes,
+            CustomizationInput customization
     ) {
     }
 
@@ -130,8 +197,19 @@ public final class BotStudioDtos {
             Map<String, String> recognizedEntities,
             String matchedNode,
             PreviewContext context,
-            boolean fallback
+            boolean fallback,
+            boolean dialogHandled
     ) {
+        public RuntimeResponse(
+                String message,
+                String matchedIntent,
+                Map<String, String> recognizedEntities,
+                String matchedNode,
+                PreviewContext context,
+                boolean fallback
+        ) {
+            this(message, matchedIntent, recognizedEntities, matchedNode, context, fallback, false);
+        }
     }
 
     public record PublishResponse(

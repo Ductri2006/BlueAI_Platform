@@ -1,7 +1,5 @@
 package com.blueai.studio.service;
 
-import com.blueai.auth.exception.ApiException;
-import com.blueai.rag.chat.service.RagChatService;
 import com.blueai.studio.dto.BotStudioDtos.DialogNodeInput;
 import com.blueai.studio.dto.BotStudioDtos.EntityInput;
 import com.blueai.studio.dto.BotStudioDtos.EntityValueInput;
@@ -32,10 +30,7 @@ public class DialogRuntimeService {
     private static final double INTENT_THRESHOLD = 0.42;
     private static final int MAX_AUTOMATIC_STEPS = 20;
 
-    private final RagChatService ragChatService;
-
-    public DialogRuntimeService(RagChatService ragChatService) {
-        this.ragChatService = ragChatService;
+    public DialogRuntimeService() {
     }
 
     public RuntimeResponse welcome(BotSnapshot snapshot) {
@@ -108,6 +103,7 @@ public class DialogRuntimeService {
                     Map.of(),
                     waitingNode.name(),
                     new PreviewContext(null, null, current.lastIntent(), variables, waitingNode.name()),
+                    true,
                     true
             );
         }
@@ -138,28 +134,6 @@ public class DialogRuntimeService {
                 .filter(node -> node.type() == DialogNodeType.FALLBACK)
                 .min(Comparator.comparingInt(DialogNodeInput::priority))
                 .orElse(null);
-        if (!Boolean.FALSE.equals(snapshot.blueAiCoreEnabled()) && !isBlank(snapshot.ownerId())) {
-            try {
-                String blueAiAnswer = ragChatService.answerForCustomAssistant(
-                        snapshot.ownerId(),
-                        blankToDefault(snapshot.name(), "BlueAI Custom"),
-                        snapshot.customInstructions(),
-                        message
-                );
-                if (!isBlank(blueAiAnswer)) {
-                    return new RuntimeResponse(
-                            blueAiAnswer,
-                            matchedIntent,
-                            recognizedEntities,
-                            "BlueAI Core",
-                            new PreviewContext(null, null, current.lastIntent(), variables, current.waitingNode()),
-                            false
-                    );
-                }
-            } catch (ApiException ignored) {
-                // Keep the configured deterministic fallback available when the shared AI runtime is unavailable.
-            }
-        }
         if (fallback == null) {
             return new RuntimeResponse(
                     "Mình chưa hiểu yêu cầu này. Bạn thử diễn đạt theo cách khác nhé.",
