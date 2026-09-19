@@ -28,7 +28,10 @@ public class GlobalExceptionHandler {
         );
         ResponseEntity.BodyBuilder response = ResponseEntity.status(exception.getStatus());
         if (exception.getStatus() == HttpStatus.TOO_MANY_REQUESTS) {
-            response.header(HttpHeaders.RETRY_AFTER, "60");
+            long retryAfter = exception.getRetryAfterSeconds() == null
+                    ? 60
+                    : Math.max(1, exception.getRetryAfterSeconds());
+            response.header(HttpHeaders.RETRY_AFTER, Long.toString(retryAfter));
         }
         return response.body(body);
     }

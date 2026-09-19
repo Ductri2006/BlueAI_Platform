@@ -189,6 +189,25 @@
     launcher.focus();
   });
 
+  // A failed network read does not prove that the server did not process the
+  // request. Retry once with the same requestId so the backend can safely
+  // return its idempotent result instead of spending another LLM call.
+  const sendRuntimeMessage = async (requestId, message) => {
+    const url = `${apiBase}/api/v1/runtime/sessions/${encodeURIComponent(sessionId)}/messages`;
+    const options = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Widget-Token': accessToken },
+      body: JSON.stringify({ requestId, message }),
+    };
+    try {
+      return await fetch(url, options);
+    } catch (firstError) {
+      if (!(firstError instanceof TypeError)) throw firstError;
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      return fetch(url, options);
+    }
+  };
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const message = input.value.trim();
@@ -206,11 +225,12 @@
       const requestId = window.crypto && window.crypto.randomUUID
         ? window.crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      const response = await fetch(`${apiBase}/api/v1/runtime/sessions/${encodeURIComponent(sessionId)}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Widget-Token': accessToken },
-        body: JSON.stringify({ requestId, message }),
-      });
+      const response = await sendRuntimeMessage(requestId, message);
+      if (!response.ok && response.status === 429) {
+        const retryAfter = Number.parseInt(response.headers.get('Retry-After') || '60', 10);
+        const seconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60;
+        throw new Error(`Bạn đang gửi tin nhắn quá nhanh. Vui lòng thử lại sau ${seconds} giây.`);
+      }
       if (!response.ok) throw new Error(response.status === 401 ? 'Phiên chat đã hết hạn. Hãy tải lại trang.' : 'Không thể gửi tin nhắn.');
       const payload = await response.json();
       addMessage('assistant', payload.result.message);

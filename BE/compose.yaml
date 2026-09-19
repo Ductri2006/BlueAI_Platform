@@ -42,6 +42,18 @@ services:
       timeout: 5s
       retries: 30
 
+  # Redis holds only short-lived widget context, idempotency coordination and
+  # shared rate-limit counters. It is intentionally not published to the host.
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   auth-api:
     build:
       context: .
@@ -59,6 +71,10 @@ services:
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
       APP_WIDGET_ALLOWED_ORIGINS: "${APP_WIDGET_ALLOWED_ORIGINS:-*}"
       APP_WIDGET_CLEANUP_INTERVAL: ${APP_WIDGET_CLEANUP_INTERVAL:-15m}
+      APP_WIDGET_REDIS_ENABLED: "true"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      APP_WIDGET_CLIENT_KEY_SALT: ${APP_WIDGET_CLIENT_KEY_SALT:-local-widget-client-key-salt-change-before-production}
       APP_WORKER_API_KEY: ${APP_WORKER_API_KEY:-local-worker-api-key-change-before-production}
       APP_DOCUMENT_STORAGE_DIR: /app/storage/documents
       APP_RAG_RETRIEVAL_BASE_URL: ${APP_RAG_RETRIEVAL_BASE_URL:-http://rag-ai:8000}
@@ -76,6 +92,8 @@ services:
       mysql:
         condition: service_healthy
       rag-ai:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 

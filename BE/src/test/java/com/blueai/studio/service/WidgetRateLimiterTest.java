@@ -1,6 +1,7 @@
 package com.blueai.studio.service;
 
 import com.blueai.auth.exception.ApiException;
+import com.blueai.studio.config.WidgetProtectionProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
@@ -13,7 +14,7 @@ class WidgetRateLimiterTest {
 
     @Test
     void rejectsRequestsAfterTheConfiguredWindowLimit() {
-        WidgetRateLimiter limiter = new WidgetRateLimiter();
+        WidgetRateLimiter limiter = new WidgetRateLimiter(null, new WidgetProtectionProperties());
 
         limiter.check("client:127.0.0.1", 2, Duration.ofMinutes(1), "slow down");
         limiter.check("client:127.0.0.1", 2, Duration.ofMinutes(1), "slow down");
@@ -31,7 +32,7 @@ class WidgetRateLimiterTest {
 
     @Test
     void keepsCountersSeparatePerKey() {
-        WidgetRateLimiter limiter = new WidgetRateLimiter();
+        WidgetRateLimiter limiter = new WidgetRateLimiter(null, new WidgetProtectionProperties());
 
         limiter.check("client:a", 1, Duration.ofMinutes(1), "slow down");
         limiter.check("client:b", 1, Duration.ofMinutes(1), "slow down");

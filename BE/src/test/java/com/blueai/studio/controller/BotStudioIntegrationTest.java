@@ -144,6 +144,18 @@ class BotStudioIntegrationTest {
         assertThat(widgetReplay).isEqualTo(widgetFirst);
         assertThat(turnRepository.count()).isEqualTo(1);
 
+        JsonNode sameMessageWithNewRequestId = postWidgetMessage(
+                sessionId,
+                widgetToken,
+                messageBody.replace("req-hours-1", "req-hours-retry"),
+                200
+        );
+        assertThat(sameMessageWithNewRequestId.path("requestId").asText()).isEqualTo("req-hours-retry");
+        assertThat(sameMessageWithNewRequestId.path("result")).isEqualTo(widgetFirst.path("result"));
+        // An exact repeat with a fresh requestId reuses the recent response;
+        // it records only that idempotency mapping and does not invoke AI.
+        assertThat(turnRepository.count()).isEqualTo(2);
+
         postWidgetMessage(
                 sessionId,
                 widgetToken,
@@ -166,7 +178,7 @@ class BotStudioIntegrationTest {
         assertThat(widgetSecond.path("result").has("recognizedEntities")).isFalse();
         assertThat(widgetSecond.path("result").has("matchedNode")).isFalse();
         assertThat(widgetSecond.path("result").has("context")).isFalse();
-        assertThat(turnRepository.count()).isEqualTo(2);
+        assertThat(turnRepository.count()).isEqualTo(3);
     }
 
     @Test
