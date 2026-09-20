@@ -15,6 +15,7 @@ import {
 } from '../../api/blueAiApi';
 import { useAppStore } from '../../store/useAppStore';
 import { TryItOutPanel } from './TryItOutPanel';
+import { compactDraftEntries, splitCommaDraft, splitMultilineDraft } from './studioDrafts';
 
 type StudioTab = 'blueai' | 'intents' | 'entities' | 'dialog' | 'integrate';
 
@@ -107,6 +108,31 @@ export const ChatbotStudio: React.FC = () => {
 
   const save = async (announce = true): Promise<StudioBotConfiguration | undefined> => {
     if (!configuration) return undefined;
+    const intents = configuration.intents.map(intent => ({
+      ...intent,
+      examples: compactDraftEntries(intent.examples),
+    }));
+    const entities = configuration.entities.map(entity => ({
+      ...entity,
+      values: entity.values.map(value => ({
+        ...value,
+        synonyms: compactDraftEntries(value.synonyms),
+      })),
+    }));
+    const invalidIntent = intents.find(intent => !intent.name.trim() || intent.examples.length === 0);
+    if (invalidIntent) {
+      setError('Mỗi intent cần có tên và ít nhất một câu người dùng mẫu.');
+      return undefined;
+    }
+    const invalidEntity = entities.find(entity => (
+      !entity.name.trim()
+      || entity.values.length === 0
+      || entity.values.some(value => !value.value.trim())
+    ));
+    if (invalidEntity) {
+      setError('Mỗi entity cần có tên và ít nhất một giá trị không để trống.');
+      return undefined;
+    }
     setIsSaving(true);
     setError('');
     try {
@@ -119,8 +145,8 @@ export const ChatbotStudio: React.FC = () => {
         blueAiCoreEnabled: configuration.bot.blueAiCoreEnabled !== false,
         customInstructions: configuration.bot.customInstructions || '',
         customization: configuration.customization || configuration.bot.customization || {},
-        intents: configuration.intents,
-        entities: configuration.entities,
+        intents,
+        entities,
         dialogNodes: configuration.dialogNodes,
       });
       setConfiguration(copyConfiguration(saved));
@@ -254,7 +280,13 @@ export const ChatbotStudio: React.FC = () => {
         {activeTab === 'integrate' && <IntegrationPanel configuration={configuration} />}
       </div>
 
-      {isPreviewOpen && <TryItOutPanel botId={configuration.bot.id} botName={configuration.bot.name} onClose={() => setIsPreviewOpen(false)} />}
+      {isPreviewOpen && <TryItOutPanel
+        botId={configuration.bot.id}
+        botName={configuration.bot.name}
+        blueAiCoreEnabled={configuration.bot.blueAiCoreEnabled !== false}
+        customization={configuration.customization || configuration.bot.customization}
+        onClose={() => setIsPreviewOpen(false)}
+      />}
 
       {isCreateOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
@@ -280,13 +312,13 @@ function IntentsEditor({ intents, onChange }: { intents: StudioIntent[]; onChang
 
   return <EditorLayout
     title="Intents" description="Nhóm các cách diễn đạt có cùng mục đích của người dùng. Nên có ít nhất 5 ví dụ đa dạng cho mỗi intent."
-    items={intents.map(intent => ({ title: `#${intent.name}`, subtitle: `${intent.examples.length} câu mẫu` }))}
+    items={intents.map(intent => ({ title: `#${intent.name}`, subtitle: `${compactDraftEntries(intent.examples).length} câu mẫu` }))}
     selected={selected} onSelect={setSelected} onAdd={add} addLabel="Thêm intent"
   >
     {current ? <div className="space-y-5">
       <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cobalt-600">Intent đang chọn</p><h2 className="mt-1 text-xl font-black">#{current.name}</h2></div><button type="button" onClick={remove} className="rounded-xl p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40" aria-label="Xoá intent"><Trash2 className="h-4 w-4" /></button></div>
       <div className="grid gap-4 md:grid-cols-2"><label><span className={labelClass}>Tên intent</span><input value={current.name} onChange={event => update({ name: event.target.value.replace(/\s+/g, '_') })} className={inputClass} /></label><label><span className={labelClass}>Mô tả</span><input value={current.description || ''} onChange={event => update({ description: event.target.value })} className={inputClass} /></label></div>
-      <label className="block"><span className={labelClass}>Câu người dùng mẫu — mỗi dòng một câu</span><textarea value={current.examples.join('\n')} onChange={event => update({ examples: event.target.value.split('\n').map(item => item.trim()).filter(Boolean) })} rows={12} className={`${inputClass} resize-y font-medium leading-7`} placeholder={'Xin chào\nChào BlueAI\nBạn có thể giúp gì?'} /></label>
+      <label className="block"><span className={labelClass}>Câu người dùng mẫu — mỗi dòng một câu</span><textarea value={current.examples.join('\n')} onChange={event => update({ examples: splitMultilineDraft(event.target.value) })} rows={12} className={`${inputClass} resize-y font-medium leading-7`} placeholder={'Xin chào\nChào BlueAI\nBạn có thể giúp gì?'} /></label>
     </div> : <EmptySelection label="intent" />}
   </EditorLayout>;
 }
@@ -310,7 +342,7 @@ function EntitiesEditor({ entities, onChange }: { entities: StudioEntity[]; onCh
       <div><div className="mb-2 flex items-center justify-between"><span className={labelClass}>Từ điển giá trị và từ đồng nghĩa</span><button type="button" onClick={() => update({ values: [...current.values, { value: 'Giá trị mới', synonyms: [] }] })} className="inline-flex items-center gap-1 text-xs font-bold text-cobalt-600"><Plus className="h-3.5 w-3.5" />Thêm giá trị</button></div>
         <div className="space-y-2">{current.values.map((entityValue, valueIndex) => <div key={valueIndex} className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950 md:grid-cols-[0.8fr_1.5fr_auto]">
           <input value={entityValue.value} onChange={event => update({ values: current.values.map((value, index) => index === valueIndex ? { ...value, value: event.target.value } : value) })} className={inputClass} aria-label={`Giá trị entity ${valueIndex + 1}`} />
-          <input value={entityValue.synonyms.join(', ')} onChange={event => update({ values: current.values.map((value, index) => index === valueIndex ? { ...value, synonyms: event.target.value.split(',').map(item => item.trim()).filter(Boolean) } : value) })} className={inputClass} placeholder="Từ đồng nghĩa, cách viết tắt" aria-label={`Từ đồng nghĩa ${valueIndex + 1}`} />
+          <input value={entityValue.synonyms.join(', ')} onChange={event => update({ values: current.values.map((value, index) => index === valueIndex ? { ...value, synonyms: splitCommaDraft(event.target.value) } : value) })} className={inputClass} placeholder="Từ đồng nghĩa, cách viết tắt" aria-label={`Từ đồng nghĩa ${valueIndex + 1}`} />
           <button type="button" disabled={current.values.length === 1} onClick={() => update({ values: current.values.filter((_, index) => index !== valueIndex) })} className="rounded-lg p-2 text-slate-400 hover:text-rose-600 disabled:opacity-30" aria-label={`Xoá giá trị ${valueIndex + 1}`}><Trash2 className="h-4 w-4" /></button>
         </div>)}</div>
       </div>

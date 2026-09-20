@@ -171,6 +171,7 @@ public class RagChatService {
     public String answerForCustomAssistant(
             String ownerId,
             String assistantName,
+            CustomizationInput customization,
             String customInstructions,
             String question
     ) {
@@ -178,7 +179,7 @@ public class RagChatService {
         List<RetrievedChunk> chunks = retrieve(ownerId, question);
         List<RagSourceResponse> sources = toVerifiedSources(ownerId, chunks);
         StringBuilder systemPrompt = new StringBuilder(buildSystemPrompt(
-                List.of(), null, sources, CustomizationInput.defaults(), assistantName, customInstructions));
+                List.of(), null, sources, customization, assistantName, customInstructions));
         systemPrompt.append("\nYou are the BlueAI custom experience named ‘")
                 .append(shorten(assistantName, 100))
                 .append("’. Keep the BlueAI identity and capabilities; do not present yourself as a separate AI product.\n");

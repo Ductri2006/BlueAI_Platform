@@ -165,6 +165,7 @@ public class BotStudioService {
                 String answer = ragChatService.answerForCustomAssistant(
                         ownerId,
                         bot.getName(),
+                        customization(snapshot.customization()),
                         bot.getCustomInstructions(),
                         request.message().trim()
                 );

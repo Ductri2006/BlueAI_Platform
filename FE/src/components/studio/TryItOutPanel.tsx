@@ -1,10 +1,12 @@
 import React from 'react';
 import { Bot, RotateCcw, Send, UserRound, X } from 'lucide-react';
-import { blueAiApi, type StudioPreviewContext } from '../../api/blueAiApi';
+import { blueAiApi, type StudioCustomization, type StudioPreviewContext } from '../../api/blueAiApi';
 
 interface TryItOutPanelProps {
   botId: string;
   botName: string;
+  blueAiCoreEnabled: boolean;
+  customization?: StudioCustomization;
   onClose: () => void;
 }
 
@@ -20,10 +22,29 @@ interface TranscriptItem {
 const INITIAL_MESSAGE: TranscriptItem = {
   id: 'welcome',
   role: 'assistant',
-  text: 'Bản nháp đã sẵn sàng. Hãy nhập một câu để kiểm tra intent, entity và luồng hội thoại.',
+  text: 'Bản nháp đã sẵn sàng. Intent/entity/Dialog chạy trước; các preset phong cách được áp dụng khi câu hỏi chuyển sang BlueAI Core.',
 };
 
-export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, onClose }) => {
+const toneLabels: Record<string, string> = {
+  professional: 'Chuyên nghiệp',
+  friendly: 'Thân thiện',
+  concise: 'Ngắn gọn',
+  formal: 'Trang trọng',
+};
+
+const lengthLabels: Record<string, string> = {
+  short: 'Trả lời ngắn',
+  balanced: 'Độ dài cân bằng',
+  detailed: 'Trả lời chi tiết',
+};
+
+const structureLabels: Record<string, string> = {
+  direct: 'Trực tiếp',
+  steps: 'Theo bước',
+  summary_then_detail: 'Tóm tắt → chi tiết',
+};
+
+export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, blueAiCoreEnabled, customization, onClose }) => {
   const [items, setItems] = React.useState<TranscriptItem[]>([INITIAL_MESSAGE]);
   const [context, setContext] = React.useState<StudioPreviewContext>();
   const [message, setMessage] = React.useState('');
@@ -76,6 +97,14 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, on
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-400">Try it out</p>
           <h2 className="mt-1 text-base font-black">{botName}</h2>
+          <div className="mt-2 flex flex-wrap gap-1 text-[10px] font-bold">
+            <span className={`rounded-full px-2 py-0.5 ${blueAiCoreEnabled ? 'bg-emerald-500/20 text-emerald-200' : 'bg-amber-500/20 text-amber-200'}`}>{blueAiCoreEnabled ? 'BlueAI Core bật' : 'Chỉ Dialog'}</span>
+            {blueAiCoreEnabled && <>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-slate-300">{toneLabels[customization?.tonePreset || 'professional'] || customization?.tonePreset}</span>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-slate-300">{lengthLabels[customization?.answerLength || 'balanced'] || customization?.answerLength}</span>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-slate-300">{structureLabels[customization?.responseStructure || 'direct'] || customization?.responseStructure}</span>
+            </>}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <button type="button" onClick={reset} className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white" title="Xoá ngữ cảnh" aria-label="Xoá ngữ cảnh thử nghiệm">
@@ -107,7 +136,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, on
             </div>
           </div>
         ))}
-        {isSending && <p className="pl-11 text-xs text-slate-400">Đang phân tích intent và entity…</p>}
+        {isSending && <p className="pl-11 text-xs text-slate-400">Đang chạy Dialog và gọi BlueAI Core khi cần…</p>}
         <div ref={endRef} />
       </div>
 

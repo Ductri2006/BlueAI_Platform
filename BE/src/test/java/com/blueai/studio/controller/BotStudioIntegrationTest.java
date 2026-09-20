@@ -31,6 +31,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -294,6 +295,14 @@ class BotStudioIntegrationTest {
                 .put("timezone", configuration.path("bot").path("timezone").asText())
                 .put("blueAiCoreEnabled", true)
                 .put("customInstructions", customInstructions);
+        saveRequest.set("customization", objectMapper.createObjectNode()
+                .put("identityRole", "Trợ lý CSKH thân thiện")
+                .put("tonePreset", "friendly")
+                .put("answerLength", "short")
+                .put("responseStructure", "steps")
+                .put("proactivity", "proactive")
+                .put("citationPolicy", "always_when_available")
+                .put("noSourcePolicy", "say_not_found"));
         saveRequest.set("intents", configuration.path("intents"));
         saveRequest.set("entities", configuration.path("entities"));
         saveRequest.set("dialogNodes", configuration.path("dialogNodes"));
@@ -308,6 +317,11 @@ class BotStudioIntegrationTest {
         when(ragChatService.answerForCustomAssistant(
                 anyString(),
                 eq("CSKH BlueAI"),
+                argThat(customization -> customization != null
+                        && "friendly".equals(customization.tonePreset())
+                        && "short".equals(customization.answerLength())
+                        && "steps".equals(customization.responseStructure())
+                        && "proactive".equals(customization.proactivity())),
                 eq(customInstructions),
                 eq("Chính sách đổi trả là gì?")
         )).thenReturn("BlueAI đã tra cứu chính sách đổi trả cho bạn.");
