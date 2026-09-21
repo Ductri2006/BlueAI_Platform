@@ -64,12 +64,30 @@ vì fallback không chia sẻ được giữa nhiều replica.
 Các số này là điểm khởi đầu. Chạy shadow monitoring hoặc theo dõi `429`, chi
 phí model, session creation và false-positive trước khi siết/chỉnh giới hạn.
 
-## Reverse proxy và WAF
+## Proxy tin cậy, edge limit và WAF
 
 Mặc định backend dùng `request.getRemoteAddr()` và bỏ qua `X-Forwarded-For` để
 không nhận IP giả mạo. Chỉ bật `APP_WIDGET_TRUST_FORWARDED_HEADERS=true` khi
-backend không thể bị gọi trực tiếp và reverse proxy tin cậy đã thay thế header.
+backend không thể bị gọi trực tiếp, reverse proxy tin cậy **thay thế** header
+và `APP_WIDGET_TRUSTED_PROXY_CIDRS` chỉ rõ CIDR nguồn của proxy đó. Nếu thiếu
+CIDR, backend fail-closed và tiếp tục dùng địa chỉ remote thay vì tin header.
+
+`FE/nginx.conf` là lớp edge trong stack Compose: nó thay, không append,
+`X-Forwarded-For`, rate-limit hai endpoint public trước Java và không cho
+`/actuator/**` đi ra frontend. Preflight `OPTIONS` không mất quota. Nginx có
+ngưỡng cao hơn backend để lọc flood; Redis limiter vẫn là nguồn quota chính
+xác. Khi CDN đứng trước Nginx, cấu hình `real_ip` ở edge chỉ với dải IP CDN
+chính thức trước khi ghi header client.
 
 Production public vẫn cần rate-limit/challenge tại Cloudflare, Nginx, API
 Gateway hoặc WAF tương đương. Các lớp này chặn flood trước khi nó tiêu connection
 pool hoặc CPU ở Java; Redis limiter là lớp bảo vệ application, không thay thế WAF.
+
+## Metric không chứa dữ liệu người dùng
+
+Metric `blueai.widget.protection.events` dùng hai tag enum cố định `event` và
+`scope`, nên không thể vô tình tạo tag từ IP, token, session/request ID hay nội
+dung chat. Theo dõi đặc biệt `redis_fallback`, `rate_limited`,
+`duplicate_blocked` và `request_in_progress`. `/actuator/metrics` yêu cầu
+quyền `ADMIN`; health check vẫn public. Quy trình deploy, alert và test staging
+đầy đủ nằm trong [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md).

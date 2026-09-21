@@ -101,6 +101,8 @@ API widget/runtime là public nhưng không phải không giới hạn: mỗi IP
 
 CORS của API đăng nhập dùng `APP_CORS_ALLOWED_ORIGINS`. CORS của widget dùng `APP_WIDGET_ALLOWED_ORIGINS` (mặc định `*` vì widget public, không dùng browser credentials); khi nhúng trên production nên đặt thành danh sách domain cụ thể, phân tách bằng dấu phẩy.
 
+Hướng dẫn deploy production đầy đủ (secret, CORS, Redis, proxy CIDR, Nginx edge limit, WAF và staging) nằm tại [`BE/PRODUCTION_DEPLOYMENT.md`](BE/PRODUCTION_DEPLOYMENT.md). Production dùng `BE/compose.production.yaml`, không expose Java API, MySQL hoặc RAG ra host.
+
 Các API chính:
 
 | API | Quyền | Mục đích |

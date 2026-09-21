@@ -49,14 +49,17 @@ public class WidgetRateLimiter {
     private final Map<String, Window> localWindows = new ConcurrentHashMap<>();
     private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
     private final WidgetProtectionProperties properties;
+    private final WidgetProtectionMetrics protectionMetrics;
     private final AtomicBoolean redisFailureLogged = new AtomicBoolean();
 
     public WidgetRateLimiter(
             ObjectProvider<StringRedisTemplate> redisTemplateProvider,
-            WidgetProtectionProperties properties
+            WidgetProtectionProperties properties,
+            WidgetProtectionMetrics protectionMetrics
     ) {
         this.redisTemplateProvider = redisTemplateProvider;
         this.properties = properties;
+        this.protectionMetrics = protectionMetrics;
     }
 
     public void check(String key, int maxRequests, Duration window, String message) {
@@ -65,6 +68,7 @@ public class WidgetRateLimiter {
         }
         long count = increment(key, window);
         if (count > maxRequests) {
+            protectionMetrics.record(WidgetProtectionMetrics.Event.RATE_LIMITED, scopeFor(key));
             throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "WIDGET_RATE_LIMITED", message);
         }
     }
@@ -127,8 +131,22 @@ public class WidgetRateLimiter {
 
     private void logRedisFallback(DataAccessException exception) {
         if (redisFailureLogged.compareAndSet(false, true)) {
+            protectionMetrics.record(WidgetProtectionMetrics.Event.REDIS_FALLBACK, WidgetProtectionMetrics.Scope.RATE_LIMIT);
             LOGGER.warn("Widget Redis protection is unavailable; using per-instance fallback until it recovers.", exception);
         }
+    }
+
+    private WidgetProtectionMetrics.Scope scopeFor(String key) {
+        if (key.startsWith("session:")) {
+            return WidgetProtectionMetrics.Scope.SESSION_CREATION;
+        }
+        if (key.startsWith("message-client:")) {
+            return WidgetProtectionMetrics.Scope.MESSAGE_CLIENT;
+        }
+        if (key.startsWith("message-session:")) {
+            return WidgetProtectionMetrics.Scope.MESSAGE_SESSION;
+        }
+        return WidgetProtectionMetrics.Scope.RATE_LIMIT;
     }
 
     private String sha256(String value) {

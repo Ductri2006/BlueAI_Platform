@@ -2,7 +2,9 @@ package com.blueai.studio.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Configuration for the unauthenticated public-widget boundary.
@@ -18,6 +20,7 @@ public class WidgetProtectionProperties {
     private String redisKeyPrefix = "blueai:widget:";
     private String clientKeySalt = "local-widget-client-key-salt-change-before-production";
     private boolean trustForwardedHeaders;
+    private List<String> trustedProxyCidrs = new ArrayList<>();
     private Duration sessionTtl = Duration.ofMinutes(30);
     private Duration rateLimitWindow = Duration.ofMinutes(1);
     private int maxSessionCreationsPerWindow = 10;
@@ -39,6 +42,16 @@ public class WidgetProtectionProperties {
 
     public boolean isTrustForwardedHeaders() { return trustForwardedHeaders; }
     public void setTrustForwardedHeaders(boolean trustForwardedHeaders) { this.trustForwardedHeaders = trustForwardedHeaders; }
+
+    /**
+     * CIDR ranges allowed to supply X-Forwarded-For. An empty list is
+     * intentionally fail-closed: forwarding headers are ignored even when
+     * trustForwardedHeaders was enabled by mistake.
+     */
+    public List<String> getTrustedProxyCidrs() { return trustedProxyCidrs; }
+    public void setTrustedProxyCidrs(List<String> trustedProxyCidrs) {
+        this.trustedProxyCidrs = trustedProxyCidrs == null ? new ArrayList<>() : new ArrayList<>(trustedProxyCidrs);
+    }
 
     public Duration getSessionTtl() { return sessionTtl; }
     public void setSessionTtl(Duration sessionTtl) { this.sessionTtl = sessionTtl; }

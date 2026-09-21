@@ -47,6 +47,11 @@ Hợp đồng giữa Java và Python được mô tả tại [`RAG_WORKER_CONTRA
 Nếu một trong hai upstream chưa sẵn sàng, API trả lỗi `503/502` có mã rõ ràng để
 frontend hiển thị, không tự chuyển sang câu trả lời giả.
 
+Cho môi trường thật, không chạy file Compose local nguyên trạng. Dùng
+[`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) cùng
+`compose.production.yaml`: nó bỏ host port của API/MySQL/RAG, bắt buộc secret
+và CORS production, đồng thời bật production gate chống cấu hình local.
+
 ## API
 
 ### Tài khoản admin bootstrap

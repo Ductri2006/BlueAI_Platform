@@ -1,6 +1,7 @@
 package com.blueai.studio.service;
 
 import com.blueai.studio.config.WidgetProtectionProperties;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,7 +12,8 @@ class WidgetSessionRequestCoordinatorTest {
     void allowsOnlyOneInFlightRequestPerLocalSession() {
         WidgetSessionRequestCoordinator coordinator = new WidgetSessionRequestCoordinator(
                 null,
-                new WidgetProtectionProperties()
+                new WidgetProtectionProperties(),
+                new WidgetProtectionMetrics(new SimpleMeterRegistry())
         );
 
         try (WidgetSessionRequestCoordinator.LockHandle first = coordinator.tryAcquire("session-1")) {

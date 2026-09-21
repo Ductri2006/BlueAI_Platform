@@ -36,16 +36,19 @@ public class WidgetConversationContextStore {
     private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
     private final WidgetProtectionProperties properties;
     private final ObjectMapper objectMapper;
+    private final WidgetProtectionMetrics protectionMetrics;
     private final AtomicBoolean redisFailureLogged = new AtomicBoolean();
 
     public WidgetConversationContextStore(
             ObjectProvider<StringRedisTemplate> redisTemplateProvider,
             WidgetProtectionProperties properties,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            WidgetProtectionMetrics protectionMetrics
     ) {
         this.redisTemplateProvider = redisTemplateProvider;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.protectionMetrics = protectionMetrics;
     }
 
     /**
@@ -153,6 +156,7 @@ public class WidgetConversationContextStore {
 
     private void logRedisFallback(Exception exception) {
         if (redisFailureLogged.compareAndSet(false, true)) {
+            protectionMetrics.record(WidgetProtectionMetrics.Event.REDIS_FALLBACK, WidgetProtectionMetrics.Scope.CONTEXT);
             LOGGER.warn("Widget Redis context is unavailable; using per-instance fallback until it recovers.", exception);
         }
     }

@@ -38,14 +38,17 @@ public class WidgetSessionRequestCoordinator {
     private final Map<String, String> localLocks = new ConcurrentHashMap<>();
     private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
     private final WidgetProtectionProperties properties;
+    private final WidgetProtectionMetrics protectionMetrics;
     private final AtomicBoolean redisFailureLogged = new AtomicBoolean();
 
     public WidgetSessionRequestCoordinator(
             ObjectProvider<StringRedisTemplate> redisTemplateProvider,
-            WidgetProtectionProperties properties
+            WidgetProtectionProperties properties,
+            WidgetProtectionMetrics protectionMetrics
     ) {
         this.redisTemplateProvider = redisTemplateProvider;
         this.properties = properties;
+        this.protectionMetrics = protectionMetrics;
     }
 
     public LockHandle tryAcquire(String sessionId) {
@@ -91,6 +94,7 @@ public class WidgetSessionRequestCoordinator {
 
     private void logRedisFallback(DataAccessException exception) {
         if (redisFailureLogged.compareAndSet(false, true)) {
+            protectionMetrics.record(WidgetProtectionMetrics.Event.REDIS_FALLBACK, WidgetProtectionMetrics.Scope.REQUEST_LOCK);
             LOGGER.warn("Widget Redis request lock is unavailable; using per-instance fallback until it recovers.", exception);
         }
     }

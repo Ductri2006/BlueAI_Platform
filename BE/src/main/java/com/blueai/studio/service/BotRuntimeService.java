@@ -42,6 +42,7 @@ public class BotRuntimeService {
     private final WidgetConversationContextStore contextStore;
     private final WidgetSessionRequestCoordinator requestCoordinator;
     private final WidgetProtectionProperties protectionProperties;
+    private final WidgetProtectionMetrics protectionMetrics;
     private final ObjectMapper objectMapper;
 
     public BotRuntimeService(
@@ -54,6 +55,7 @@ public class BotRuntimeService {
             WidgetConversationContextStore contextStore,
             WidgetSessionRequestCoordinator requestCoordinator,
             WidgetProtectionProperties protectionProperties,
+            WidgetProtectionMetrics protectionMetrics,
             ObjectMapper objectMapper
     ) {
         this.botRepository = botRepository;
@@ -65,6 +67,7 @@ public class BotRuntimeService {
         this.contextStore = contextStore;
         this.requestCoordinator = requestCoordinator;
         this.protectionProperties = protectionProperties;
+        this.protectionMetrics = protectionMetrics;
         this.objectMapper = objectMapper;
     }
 
@@ -125,9 +128,17 @@ public class BotRuntimeService {
                     existingTurn.getRequestDigest().getBytes(StandardCharsets.US_ASCII),
                     digest.getBytes(StandardCharsets.US_ASCII)
             )) {
+                protectionMetrics.record(
+                        WidgetProtectionMetrics.Event.IDEMPOTENCY_CONFLICT,
+                        WidgetProtectionMetrics.Scope.MESSAGE
+                );
                 throw new ApiException(HttpStatus.CONFLICT, "IDEMPOTENCY_CONFLICT",
                         "requestId has already been used with different content.");
             }
+            protectionMetrics.record(
+                    WidgetProtectionMetrics.Event.IDEMPOTENCY_REPLAY,
+                    WidgetProtectionMetrics.Scope.MESSAGE
+            );
             return readJson(existingTurn.getResponseJson(), RuntimeMessageResponse.class);
         }
 
@@ -152,17 +163,29 @@ public class BotRuntimeService {
                     raceCompleted.getRequestDigest().getBytes(StandardCharsets.US_ASCII),
                     digest.getBytes(StandardCharsets.US_ASCII)
             )) {
+                protectionMetrics.record(
+                        WidgetProtectionMetrics.Event.IDEMPOTENCY_CONFLICT,
+                        WidgetProtectionMetrics.Scope.MESSAGE
+                );
                 throw new ApiException(
                         HttpStatus.CONFLICT,
                         "IDEMPOTENCY_CONFLICT",
                         "requestId đã được dùng với một nội dung khác."
                 );
             }
+            protectionMetrics.record(
+                    WidgetProtectionMetrics.Event.IDEMPOTENCY_REPLAY,
+                    WidgetProtectionMetrics.Scope.MESSAGE
+            );
             return readJson(raceCompleted.getResponseJson(), RuntimeMessageResponse.class);
         }
         WidgetConversationContextStore.DuplicateResult duplicate = contextStore.recordDuplicateAttempt(sessionId, digest);
         if (duplicate.isDuplicate()) {
             if (duplicate.repeatCount() > protectionProperties.getDuplicateReplayLimit()) {
+                protectionMetrics.record(
+                        WidgetProtectionMetrics.Event.DUPLICATE_BLOCKED,
+                        WidgetProtectionMetrics.Scope.MESSAGE
+                );
                 throw new ApiException(
                         HttpStatus.TOO_MANY_REQUESTS,
                         "WIDGET_DUPLICATE_MESSAGE",
@@ -174,6 +197,10 @@ public class BotRuntimeService {
                     request.requestId(),
                     readJson(duplicate.responseJson(), RuntimeMessageResponse.class)
             );
+            protectionMetrics.record(
+                    WidgetProtectionMetrics.Event.DUPLICATE_REPLAY,
+                    WidgetProtectionMetrics.Scope.MESSAGE
+            );
             // Persist the fresh requestId too. Redis is deliberately ephemeral;
             // this keeps an uncertain network retry idempotent after its cache
             // entry has expired without treating the replay as a new AI turn.
@@ -182,6 +209,10 @@ public class BotRuntimeService {
         }
 
         if (session.getTurnCount() >= protectionProperties.getMaxMessagesPerSession()) {
+            protectionMetrics.record(
+                    WidgetProtectionMetrics.Event.SESSION_TURN_LIMIT,
+                    WidgetProtectionMetrics.Scope.MESSAGE
+            );
             throw new ApiException(
                     HttpStatus.TOO_MANY_REQUESTS,
                     "SESSION_TURN_LIMIT",
@@ -196,8 +227,16 @@ public class BotRuntimeService {
                         completedTurn.getRequestDigest().getBytes(StandardCharsets.US_ASCII),
                         digest.getBytes(StandardCharsets.US_ASCII)
                 )) {
+                    protectionMetrics.record(
+                            WidgetProtectionMetrics.Event.IDEMPOTENCY_REPLAY,
+                            WidgetProtectionMetrics.Scope.MESSAGE
+                    );
                     return readJson(completedTurn.getResponseJson(), RuntimeMessageResponse.class);
                 }
+                protectionMetrics.record(
+                        WidgetProtectionMetrics.Event.REQUEST_IN_PROGRESS,
+                        WidgetProtectionMetrics.Scope.MESSAGE
+                );
                 throw new ApiException(
                         HttpStatus.CONFLICT,
                         "WIDGET_REQUEST_IN_PROGRESS",

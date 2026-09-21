@@ -2,6 +2,7 @@ package com.blueai.studio.service;
 
 import com.blueai.studio.config.WidgetProtectionProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,7 +16,8 @@ class WidgetConversationContextStoreTest {
         WidgetConversationContextStore store = new WidgetConversationContextStore(
                 null,
                 properties,
-                new ObjectMapper()
+                new ObjectMapper(),
+                new WidgetProtectionMetrics(new SimpleMeterRegistry())
         );
 
         store.recordResponse("session-1", "digest-a", "{\"requestId\":\"first\"}", "Cửa hàng mở cửa mấy giờ?");
@@ -35,7 +37,8 @@ class WidgetConversationContextStoreTest {
         WidgetConversationContextStore store = new WidgetConversationContextStore(
                 null,
                 new WidgetProtectionProperties(),
-                new ObjectMapper()
+                new ObjectMapper(),
+                new WidgetProtectionMetrics(new SimpleMeterRegistry())
         );
 
         assertThat(store.isClarification("Mình chưa hiểu, hãy cho một ví dụ cụ thể.")).isTrue();
