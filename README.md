@@ -97,9 +97,11 @@ Menu bên trái: **Hỏi BlueAI** (chat RAG) cho mọi tài khoản; **Tài li�
 
 Widget được phục vụ tại `/widget.js`. Nó tạo phiên 30 phút khi khách mở hộp chat, giữ token trong bộ nhớ trang và gửi `requestId` cho mỗi lượt. Backend ghim phiên vào release đang hoạt động; phát hành bản mới không làm đổi release của phiên cũ. API công khai chỉ trả nội dung cần render và không trả intent, entity, node hay context nội bộ.
 
-API widget/runtime là public nhưng không phải không giới hạn: mỗi IP chỉ được tạo tối đa 20 phiên/phút, gửi tối đa 60 tin nhắn/phút; mỗi phiên tối đa 30 tin nhắn/phút và 200 lượt tổng cộng. Session và idempotency record hết hạn được dọn tự động. Các giới hạn này là lớp bảo vệ cơ bản trong từng instance; production nên đặt thêm rate limit ở reverse proxy/WAF nếu chạy nhiều instance.
+API widget/runtime là public nhưng không phải không giới hạn: mỗi IP chỉ được tạo tối đa 10 phiên/phút, gửi tối đa 30 tin nhắn/phút; mỗi phiên tối đa 12 tin nhắn/phút và 120 lượt tổng cộng. Gửi lại cùng `requestId` với cùng nội dung sẽ nhận lại response cũ, không tiêu thêm quota hoặc gọi AI lần nữa. Cùng một nội dung với `requestId` mới chỉ được replay hai lần trong 2 phút; lần lặp bất thường tiếp theo nhận `429` kèm `Retry-After`. Session và idempotency record hết hạn được dọn tự động. Các giới hạn này là lớp bảo vệ application dùng Redis shared state; production vẫn nên đặt thêm rate limit ở reverse proxy/WAF nếu chạy nhiều instance.
 
 CORS của API đăng nhập dùng `APP_CORS_ALLOWED_ORIGINS`. CORS của widget dùng `APP_WIDGET_ALLOWED_ORIGINS` (mặc định `*` vì widget public, không dùng browser credentials); khi nhúng trên production nên đặt thành danh sách domain cụ thể, phân tách bằng dấu phẩy.
+
+Hướng dẫn deploy production đầy đủ (secret, CORS, Redis, proxy CIDR, Nginx edge limit, WAF và staging) nằm tại [`BE/PRODUCTION_DEPLOYMENT.md`](BE/PRODUCTION_DEPLOYMENT.md). Production dùng `BE/compose.production.yaml`, không expose Java API, MySQL hoặc RAG ra host.
 
 Các API chính:
 

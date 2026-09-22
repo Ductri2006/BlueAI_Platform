@@ -4,6 +4,7 @@ import com.blueai.studio.dto.BotStudioDtos.CreateWidgetSessionResponse;
 import com.blueai.studio.dto.BotStudioDtos.RuntimeMessageRequest;
 import com.blueai.studio.dto.BotStudioDtos.RuntimeMessageResponse;
 import com.blueai.studio.service.BotRuntimeService;
+import com.blueai.studio.service.WidgetClientAddressResolver;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +21,14 @@ import jakarta.servlet.http.HttpServletRequest;
 public class BotRuntimeController {
 
     private final BotRuntimeService runtimeService;
+    private final WidgetClientAddressResolver clientAddressResolver;
 
-    public BotRuntimeController(BotRuntimeService runtimeService) {
+    public BotRuntimeController(
+            BotRuntimeService runtimeService,
+            WidgetClientAddressResolver clientAddressResolver
+    ) {
         this.runtimeService = runtimeService;
+        this.clientAddressResolver = clientAddressResolver;
     }
 
     @PostMapping("/api/v1/widget/{publicKey}/sessions")
@@ -31,7 +37,7 @@ public class BotRuntimeController {
             HttpServletRequest request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(runtimeService.createSession(publicKey, request.getRemoteAddr()));
+                .body(runtimeService.createSession(publicKey, clientAddressResolver.resolve(request)));
     }
 
     @PostMapping("/api/v1/runtime/sessions/{sessionId}/messages")
@@ -41,6 +47,6 @@ public class BotRuntimeController {
             @Valid @RequestBody RuntimeMessageRequest request,
             HttpServletRequest httpRequest
     ) {
-        return runtimeService.message(sessionId, accessToken, request, httpRequest.getRemoteAddr());
+        return runtimeService.message(sessionId, accessToken, request, clientAddressResolver.resolve(httpRequest));
     }
 }

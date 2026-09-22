@@ -30,14 +30,17 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -145,6 +148,18 @@ class BotStudioIntegrationTest {
         assertThat(widgetReplay).isEqualTo(widgetFirst);
         assertThat(turnRepository.count()).isEqualTo(1);
 
+        JsonNode sameMessageWithNewRequestId = postWidgetMessage(
+                sessionId,
+                widgetToken,
+                messageBody.replace("req-hours-1", "req-hours-retry"),
+                200
+        );
+        assertThat(sameMessageWithNewRequestId.path("requestId").asText()).isEqualTo("req-hours-retry");
+        assertThat(sameMessageWithNewRequestId.path("result")).isEqualTo(widgetFirst.path("result"));
+        // An exact repeat with a fresh requestId reuses the recent response;
+        // it records only that idempotency mapping and does not invoke AI.
+        assertThat(turnRepository.count()).isEqualTo(2);
+
         postWidgetMessage(
                 sessionId,
                 widgetToken,
@@ -167,7 +182,7 @@ class BotStudioIntegrationTest {
         assertThat(widgetSecond.path("result").has("recognizedEntities")).isFalse();
         assertThat(widgetSecond.path("result").has("matchedNode")).isFalse();
         assertThat(widgetSecond.path("result").has("context")).isFalse();
-        assertThat(turnRepository.count()).isEqualTo(2);
+        assertThat(turnRepository.count()).isEqualTo(3);
     }
 
     @Test
@@ -190,6 +205,37 @@ class BotStudioIntegrationTest {
                 "{}",
                 404
         );
+    }
+
+    @Test
+    void publicWidgetCorsUsesWidgetOriginPolicyAndExposesRetryAfter() throws Exception {
+        mockMvc.perform(options("/api/v1/runtime/sessions/{sessionId}/messages", "widget-session")
+                        .header("Origin", "https://widget-user.example")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type,x-widget-token"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://widget-user.example"))
+                .andExpect(header().string("Access-Control-Allow-Methods", containsString("POST")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("x-widget-token")))
+                .andExpect(header().string("Access-Control-Expose-Headers", containsString("Retry-After")))
+                .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
+    }
+
+    @Test
+    void actuatorMetricsRequireAdminWhileHealthRemainsPublic() throws Exception {
+        String userToken = registerUserAndGetAccessToken("metrics.user@example.com");
+        String adminToken = registerAndGetAccessToken("metrics.admin@example.com");
+
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/actuator/metrics"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/actuator/metrics")
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/actuator/metrics")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
     }
 
     @Test

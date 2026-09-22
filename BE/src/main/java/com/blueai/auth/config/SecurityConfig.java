@@ -56,8 +56,12 @@ public class SecurityConfig {
                                 "/api/v1/internal/documents/**",
                                 "/api/v1/widget/**",
                                 "/api/v1/runtime/**",
-                                "/actuator/health"
+                                "/actuator/health",
+                                "/actuator/health/**"
                         ).permitAll()
+                        // Health is intentionally public for orchestration.
+                        // All other actuator data is operationally sensitive.
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/**", "/api/v1/documents/**", "/api/v1/system/**", "/api/v1/studio/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
@@ -122,16 +126,32 @@ public class SecurityConfig {
 
     @Bean
     CorsConfigurationSource corsConfigurationSource(CorsProperties properties) {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(properties.getAllowedOrigins());
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID", "X-Widget-Token"));
-        configuration.setExposedHeaders(List.of("X-Request-ID"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
+        CorsConfiguration applicationConfiguration = new CorsConfiguration();
+        applicationConfiguration.setAllowedOrigins(properties.getAllowedOrigins());
+        applicationConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        applicationConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
+        applicationConfiguration.setExposedHeaders(List.of("X-Request-ID"));
+        applicationConfiguration.setAllowCredentials(true);
+        applicationConfiguration.setMaxAge(3600L);
+
+        // The embedded widget is intentionally public and never sends browser
+        // credentials. It must therefore use its own origin policy instead of
+        // inheriting the authenticated application policy above. Origin
+        // patterns allow the documented "*" default and explicit production
+        // allowlists via APP_WIDGET_ALLOWED_ORIGINS.
+        CorsConfiguration widgetConfiguration = new CorsConfiguration();
+        widgetConfiguration.setAllowedOriginPatterns(properties.getWidgetAllowedOrigins());
+        widgetConfiguration.setAllowedMethods(List.of("POST", "OPTIONS"));
+        widgetConfiguration.setAllowedHeaders(List.of("Content-Type", "X-Widget-Token"));
+        // widget.js reads this header to tell a visitor when a 429 can be retried.
+        widgetConfiguration.setExposedHeaders(List.of("Retry-After"));
+        widgetConfiguration.setAllowCredentials(false);
+        widgetConfiguration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/api/v1/widget/**", widgetConfiguration);
+        source.registerCorsConfiguration("/api/v1/runtime/**", widgetConfiguration);
+        source.registerCorsConfiguration("/**", applicationConfiguration);
         return source;
     }
 
