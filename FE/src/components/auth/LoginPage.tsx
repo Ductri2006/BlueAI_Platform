@@ -95,7 +95,7 @@ export function LoginPage() {
           <p className="text-xs text-slate-500">© 2026 Bluecom Solutions · Enterprise AI Platform</p>
         </section>
 
-        <section className="flex items-center justify-center px-5 py-8 sm:px-8 lg:bg-white/[0.025] lg:backdrop-blur-sm">
+        <section className="flex items-center justify-center px-5 py-8 sm:px-8 lg:bg-white/[0.025]">
           <div className="w-full max-w-md">
             <div className="mb-8 flex items-center gap-3 lg:hidden">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cobalt-600">
@@ -107,7 +107,7 @@ export function LoginPage() {
               </div>
             </div>
 
-            <div className="rounded-[2rem] border border-white/10 bg-white/[0.075] p-6 shadow-2xl backdrop-blur-xl sm:p-8">
+            <div className="rounded-[2rem] border border-white/10 bg-[#0B1930]/95 p-6 shadow-2xl sm:p-8">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-300">Tài khoản BlueAI</p>
                 <h2 className="mt-2 text-2xl font-black tracking-tight">Chào mừng trở lại</h2>

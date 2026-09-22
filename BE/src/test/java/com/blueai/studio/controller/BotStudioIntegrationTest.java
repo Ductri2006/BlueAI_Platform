@@ -1,6 +1,6 @@
 package com.blueai.studio.controller;
 
-import com.blueai.auth.BlueAiAuthApplication;
+import com.blueai.BlueAiAuthApplication;
 import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserRole;
 import com.blueai.auth.repository.RefreshTokenRepository;
@@ -317,6 +317,59 @@ class BotStudioIntegrationTest {
                 200
         );
         assertThat(validReply.path("message").asText()).contains("HCM").contains("22:00");
+    }
+
+    @Test
+    void blankResponseJumpRouteSavesAndReachesDestinationWithoutExtraMessage() throws Exception {
+        String ownerToken = registerAndGetAccessToken("dialog.jump-only@example.com");
+        JsonNode configuration = postJson(
+                "/api/v1/studio/bots",
+                ownerToken,
+                "{\"name\":\"Bot jump-only flow\",\"includeStarterTemplate\":true}",
+                201
+        );
+        String botId = configuration.path("bot").path("id").asText();
+        ArrayNode nodes = (ArrayNode) configuration.path("dialogNodes");
+        nodes.add(objectMapper.createObjectNode()
+                .put("name", "Jump without response")
+                .put("type", "ROUTE")
+                .put("matchIntent", "store_hours")
+                .put("responseText", "")
+                .put("nextStep", "JUMP_TO")
+                .put("jumpToNode", "Jump destination")
+                .put("priority", 15));
+        nodes.add(objectMapper.createObjectNode()
+                .put("name", "Jump destination")
+                .put("type", "ROUTE")
+                .put("matchIntent", "store_hours")
+                .put("responseText", "Đây là nội dung ở node đích.")
+                .put("nextStep", "WAIT_FOR_REPLY")
+                .put("priority", 16));
+
+        ObjectNode saveRequest = objectMapper.createObjectNode()
+                .put("expectedRevision", configuration.path("bot").path("draftRevision").asLong())
+                .put("name", configuration.path("bot").path("name").asText())
+                .put("description", configuration.path("bot").path("description").asText())
+                .put("locale", configuration.path("bot").path("locale").asText())
+                .put("timezone", configuration.path("bot").path("timezone").asText());
+        saveRequest.set("intents", configuration.path("intents"));
+        saveRequest.set("entities", configuration.path("entities"));
+        saveRequest.set("dialogNodes", nodes);
+        putJson(
+                "/api/v1/studio/bots/" + botId + "/configuration",
+                ownerToken,
+                objectMapper.writeValueAsString(saveRequest),
+                200
+        );
+
+        JsonNode preview = postJson(
+                "/api/v1/studio/bots/" + botId + "/preview",
+                ownerToken,
+                "{\"message\":\"Mấy giờ cửa hàng đóng cửa?\"}",
+                200
+        );
+        assertThat(preview.path("message").asText()).isEqualTo("Đây là nội dung ở node đích.");
+        assertThat(preview.path("matchedNode").asText()).isEqualTo("Jump destination");
     }
 
     @Test

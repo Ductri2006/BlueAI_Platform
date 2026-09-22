@@ -1,6 +1,6 @@
 package com.blueai.rag.chat.controller;
 
-import com.blueai.auth.BlueAiAuthApplication;
+import com.blueai.BlueAiAuthApplication;
 import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserRole;
 import com.blueai.auth.repository.RefreshTokenRepository;

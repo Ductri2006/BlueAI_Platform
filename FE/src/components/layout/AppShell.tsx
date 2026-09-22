@@ -4,8 +4,9 @@ import { useAuth } from '../../auth/AuthContext';
 import { SidebarRail } from './SidebarRail';
 import { TopHeader } from './TopHeader';
 import { CheckCircle2, Info, AlertTriangle } from 'lucide-react';
+import { loadChatWorkspace } from './workspaceLoaders';
 
-const ChatWorkspace = lazy(() => import('../chat/ChatWorkspace').then(module => ({ default: module.ChatWorkspace })));
+const ChatWorkspace = lazy(() => loadChatWorkspace().then(module => ({ default: module.ChatWorkspace })));
 const KnowledgeDashboard = lazy(() => import('../dashboards/KnowledgeDashboard').then(module => ({ default: module.KnowledgeDashboard })));
 const AdminDashboard = lazy(() => import('../dashboards/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
 const ChatbotStudio = lazy(() => import('../studio/ChatbotStudio').then(module => ({ default: module.ChatbotStudio })));
@@ -21,7 +22,7 @@ const WorkspaceFallback: React.FC = () => (
 );
 
 export const AppShell: React.FC = () => {
-  const { activeRole, toast } = useAppStore();
+  const { activeRole, toast, isEvidenceOpen } = useAppStore();
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
 
@@ -54,7 +55,7 @@ export const AppShell: React.FC = () => {
       </div>
 
       {/* 3. Evidence / Citation Inspector Side Panel */}
-      <Suspense fallback={null}><EvidenceDrawer /></Suspense>
+      {isEvidenceOpen && <Suspense fallback={null}><EvidenceDrawer /></Suspense>}
 
       {/* 4. Global Toast Notification */}
       {toast && (

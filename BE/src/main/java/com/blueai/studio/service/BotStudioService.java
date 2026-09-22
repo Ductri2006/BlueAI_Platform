@@ -435,6 +435,7 @@ public class BotStudioService {
             DialogNextStep nextStep = node.nextStep() == null ? DialogNextStep.WAIT_FOR_REPLY : node.nextStep();
             if (node.type() != DialogNodeType.FOLDER
                     && nextStep != DialogNextStep.SKIP_USER_INPUT
+                    && nextStep != DialogNextStep.JUMP_TO
                     && isBlank(node.responseText())) {
                 invalid("Node ‘" + node.name() + "’ chưa có nội dung phản hồi.");
             }
