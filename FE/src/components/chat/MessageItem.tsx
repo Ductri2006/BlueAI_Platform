@@ -3,7 +3,7 @@ import { ChatMessage } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { GroundedStatusBadge } from './GroundedStatusBadge';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
-import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles, Info } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles, Info, Layers } from 'lucide-react';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -62,7 +62,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
           {message.confidence && (
             <GroundedStatusBadge 
               confidence={message.confidence} 
-              sourcesCount={message.citations?.length || 1} 
+              sourcesCount={message.citations?.length || message.contextSources?.length || 1}
             />
           )}
         </div>
@@ -99,6 +99,26 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
                   <BookOpen className="w-3 h-3 text-cobalt-600 dark:text-cobalt-400" />
                   <span className="font-medium truncate max-w-[200px]">[{idx + 1}] {citation.title}</span>
                 </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {message.contextSources && message.contextSources.length > 0 && (
+          <div className="pt-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <Layers className="h-3 w-3" />
+                Context đã dùng:
+              </span>
+              {message.contextSources.map((source, index) => (
+                <span
+                  key={`${source.type}:${source.conversationId || source.memoryKey || source.title}:${index}`}
+                  className="inline-flex max-w-[240px] items-center rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-800 dark:border-violet-900/70 dark:bg-violet-950/30 dark:text-violet-200"
+                  title={source.title}
+                >
+                  <span className="truncate">{source.title}</span>
+                </span>
               ))}
             </div>
           </div>

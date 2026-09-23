@@ -2,6 +2,7 @@ import React, { lazy, Suspense, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { MessageItem } from './MessageItem';
 import { Composer } from './Composer';
+import { ConversationContextPanel } from './ConversationContextPanel';
 import { 
   Sparkles, Shield, Wifi, Download,
   Trash2, ArrowRight, Layers, FileText, Pin, 
@@ -70,15 +71,19 @@ export const ChatWorkspace: React.FC = () => {
   const { 
     sessions, 
     activeSessionId, 
+    setActiveSessionId,
+    createNewSession,
     streamStatus, 
     currentStreamActivity, 
     sendMessage,
     deleteSession,
     togglePinSession,
+    updateSessionContextMode,
     showToast
   } = useAppStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isContextOpen, setIsContextOpen] = React.useState(false);
   const currentSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
   const messages = currentSession?.messages || [];
 
@@ -166,6 +171,15 @@ export const ChatWorkspace: React.FC = () => {
         {/* Action Tools */}
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setIsContextOpen(true)}
+            disabled={!currentSession?.conversationId}
+            className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-cobalt-50 dark:hover:bg-cyan-950/40 text-slate-600 dark:text-slate-300 hover:text-cobalt-700 dark:hover:text-cyan-300 transition-colors shadow-2xs disabled:cursor-not-allowed disabled:opacity-40"
+            title={currentSession?.conversationId ? 'Quản lý context và ghi nhớ' : 'Gửi tin nhắn đầu tiên để tạo phiên và cấu hình context'}
+            aria-label="Quản lý context và ghi nhớ"
+          >
+            <Layers className="w-3.5 h-3.5" />
+          </button>
+          <button
             onClick={handleExportMarkdown}
             className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors shadow-2xs"
             title="Xuất hội thoại dạng Markdown (.md)"
@@ -186,6 +200,22 @@ export const ChatWorkspace: React.FC = () => {
           )}
         </div>
       </header>
+
+      {/* The desktop sidebar is hidden below lg; retain session navigation. */}
+      <nav aria-label="Chuyển hội thoại" className="lg:hidden flex items-center gap-2 px-4 py-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
+        <select
+          aria-label="Hội thoại đang mở"
+          value={currentSession?.id || ''}
+          onChange={event => setActiveSessionId(event.target.value)}
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-sm"
+        >
+          {sessions.length === 0 && <option value="">Chưa có hội thoại</option>}
+          {sessions.map(session => <option key={session.id} value={session.id}>{session.title}</option>)}
+        </select>
+        <button type="button" onClick={createNewSession} className="shrink-0 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm">
+          Cuộc trò chuyện mới
+        </button>
+      </nav>
 
       {/* Main Conversation Canvas */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -284,6 +314,14 @@ export const ChatWorkspace: React.FC = () => {
           </div>
         </div>
       </div>
+      <ConversationContextPanel
+        conversationId={currentSession?.conversationId}
+        isOpen={isContextOpen}
+        onClose={() => setIsContextOpen(false)}
+        onModeChange={mode => {
+          if (currentSession) updateSessionContextMode(currentSession.id, mode);
+        }}
+      />
     </div>
   );
 };

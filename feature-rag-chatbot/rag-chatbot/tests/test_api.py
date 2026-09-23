@@ -212,6 +212,34 @@ class RagApiTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 api.RagRuntime().complete(request)
 
+    def test_completion_falls_back_after_a_transient_model_failure(self):
+        attempted_models = []
+
+        class FakeLlm:
+            def __init__(self, model):
+                self.model = model
+
+            def invoke(self, _messages):
+                if self.model == "primary-model":
+                    raise RuntimeError("503 UNAVAILABLE: high demand")
+                return AIMessage(content="fallback ok")
+
+        def fake_factory(*, model, **_kwargs):
+            attempted_models.append(model)
+            return FakeLlm(model)
+
+        request = api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="hello")])
+        with patch.dict("os.environ", {
+            "GEMINI_CHAT_MODEL": "primary-model",
+            "GEMINI_CHAT_FALLBACK_MODELS": "fallback-model",
+        }):
+            with patch.object(api, "ChatGoogleGenerativeAI", side_effect=fake_factory):
+                response = api.RagRuntime().complete(request)
+
+        self.assertEqual(["primary-model", "fallback-model"], attempted_models)
+        self.assertEqual("fallback-model", response.model)
+        self.assertEqual("fallback ok", response.choices[0].message.content)
+
     def test_openai_compatible_completion_contract(self):
         expected = api.ChatCompletionResponse(
             id="chatcmpl-test",
@@ -225,6 +253,26 @@ class RagApiTest(unittest.TestCase):
         with patch.object(api.runtime, "complete", return_value=expected):
             response = api.chat_completions(request)
         self.assertEqual("answer", response.choices[0].message.content)
+
+    def test_completion_budget_has_no_nested_sdk_retries(self):
+        fake = unittest.mock.Mock()
+        fake.invoke.return_value = AIMessage(content="ok")
+        with patch.object(api, "ChatGoogleGenerativeAI", return_value=fake) as factory:
+            api.RagRuntime().complete(api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="test")]))
+        self.assertEqual(1, factory.call_args.kwargs["max_retries"])
+        self.assertEqual(12, factory.call_args.kwargs["timeout"])
+
+    def test_model_list_deduplicates_and_bounds_provider_attempts(self):
+        with patch.dict("os.environ", {"GEMINI_CHAT_MODEL": "primary", "GEMINI_CHAT_FALLBACK_MODELS": "primary, backup, third"}):
+            self.assertEqual(["primary", "backup"], api._chat_models())
+
+    def test_authentication_failure_does_not_try_fallback(self):
+        fake = unittest.mock.Mock()
+        fake.invoke.side_effect = RuntimeError("401 UNAUTHENTICATED")
+        with patch.object(api, "ChatGoogleGenerativeAI", return_value=fake) as factory:
+            with self.assertRaises(RuntimeError):
+                api.RagRuntime().complete(api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="test")]))
+        self.assertEqual(1, factory.call_count)
 
 
 if __name__ == "__main__":

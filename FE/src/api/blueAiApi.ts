@@ -40,8 +40,50 @@ export interface LoginCredentials {
 export interface ConversationResponse {
   id: string;
   title: string;
+  contextMode: ConversationContextMode;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ConversationContextMode = 'CURRENT_CONVERSATION' | 'LINKED_CONVERSATIONS' | 'RELEVANT_HISTORY';
+
+export interface ConversationLinkResponse {
+  id: string;
+  sourceConversationId: string;
+  sourceConversationTitle: string;
+  sourceSnapshotAt: string;
+  createdAt: string;
+}
+
+export interface ConversationContextSettingsResponse {
+  mode: ConversationContextMode;
+  links: ConversationLinkResponse[];
+}
+
+export type MemoryScope = 'USER' | 'CONVERSATION';
+export type MemoryStatus = 'PROPOSED' | 'CONFIRMED' | 'REPLACED';
+
+export interface UserMemoryResponse {
+  key: string;
+  content: string;
+  scope: MemoryScope;
+  status: MemoryStatus;
+  conversationId?: string;
+  sourceMessageId?: string;
+  expiresAt?: string;
+  replacedByMemoryKey?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertUserMemoryInput {
+  content: string;
+  scope?: MemoryScope;
+  conversationId?: string;
+  sourceMessageId?: string;
+  expiresAt?: string;
+  status?: Exclude<MemoryStatus, 'REPLACED'>;
+  replacesMemoryKey?: string;
 }
 
 export interface ConversationMessageResponse {
@@ -49,6 +91,7 @@ export interface ConversationMessageResponse {
   role: 'USER' | 'ASSISTANT';
   content: string;
   createdAt: string;
+  evidence?: Pick<RagAnswerResponse, 'sources' | 'contextSources'> | null;
 }
 
 export interface RagSourceResponse {
@@ -65,6 +108,12 @@ export interface RagAnswerResponse {
   userMessage: ConversationMessageResponse;
   assistantMessage: ConversationMessageResponse;
   sources: RagSourceResponse[];
+  contextSources?: Array<{
+    type: 'LINKED_CONVERSATION' | 'RELATED_HISTORY' | 'USER_MEMORY' | string;
+    conversationId?: string;
+    title: string;
+    memoryKey?: string;
+  }>;
 }
 
 export interface DocumentResponse {
@@ -338,6 +387,62 @@ export class BlueAiApi {
     );
   }
 
+  async getConversationContext(conversationId: string): Promise<ConversationContextSettingsResponse> {
+    return this.authorizedRequest<ConversationContextSettingsResponse>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/context`,
+      { method: 'GET' },
+    );
+  }
+
+  async updateConversationContext(
+    conversationId: string,
+    mode: ConversationContextMode,
+  ): Promise<ConversationContextSettingsResponse> {
+    return this.authorizedRequest<ConversationContextSettingsResponse>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/context`,
+      { method: 'PUT', body: JSON.stringify({ mode }) },
+    );
+  }
+
+  async createConversationLink(conversationId: string, sourceConversationId: string): Promise<ConversationLinkResponse> {
+    return this.authorizedRequest<ConversationLinkResponse>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/context-links`,
+      { method: 'POST', body: JSON.stringify({ sourceConversationId }) },
+    );
+  }
+
+  async refreshConversationLink(conversationId: string, linkId: string): Promise<ConversationLinkResponse> {
+    return this.authorizedRequest<ConversationLinkResponse>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/context-links/${encodeURIComponent(linkId)}/refresh`,
+      { method: 'POST' },
+    );
+  }
+
+  async deleteConversationLink(conversationId: string, linkId: string): Promise<void> {
+    return this.authorizedRequest<void>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/context-links/${encodeURIComponent(linkId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async listMemories(): Promise<UserMemoryResponse[]> {
+    return this.authorizedRequest<UserMemoryResponse[]>('/api/v1/me/memories', { method: 'GET' });
+  }
+
+  async upsertMemory(memoryKey: string, input: UpsertUserMemoryInput): Promise<UserMemoryResponse> {
+    return this.authorizedRequest<UserMemoryResponse>(
+      `/api/v1/me/memories/${encodeURIComponent(memoryKey)}`,
+      { method: 'PUT', body: JSON.stringify(input) },
+    );
+  }
+
+  async deleteMemory(memoryKey: string): Promise<void> {
+    return this.authorizedRequest<void>(
+      `/api/v1/me/memories/${encodeURIComponent(memoryKey)}`,
+      { method: 'DELETE' },
+    );
+  }
+
   async listDocuments(): Promise<DocumentResponse[]> {
     return this.authorizedRequest<DocumentResponse[]>('/api/v1/documents', { method: 'GET' });
   }
@@ -572,8 +677,27 @@ export function ragSourceToCitation(source: RagSourceResponse): Citation {
   };
 }
 
+export function conversationMessageToChatMessage(message: ConversationMessageResponse): ChatMessage {
+  if (message.role === 'ASSISTANT' && message.evidence) {
+    return ragAnswerToChatMessage({
+      userMessage: message,
+      assistantMessage: message,
+      ...message.evidence,
+    });
+  }
+  const createdAt = new Date(message.createdAt);
+  return {
+    id: message.id,
+    sender: message.role === 'USER' ? 'user' : 'assistant',
+    content: message.role === 'USER' ? message.content : normalizeAssistantContent(message.content),
+    timestamp: Number.isNaN(createdAt.getTime()) ? '' : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    // Legacy messages did not persist evidence. Never invent provenance for them.
+  };
+}
+
 export function ragAnswerToChatMessage(response: RagAnswerResponse): ChatMessage {
   const citations = (response.sources || []).map(ragSourceToCitation);
+  const contextSources = response.contextSources || [];
   const hasUnapprovedSource = citations.some(citation => citation.status === 'scope_mismatch');
   const createdAt = new Date(response.assistantMessage.createdAt);
   return {
@@ -586,10 +710,11 @@ export function ragAnswerToChatMessage(response: RagAnswerResponse): ChatMessage
     // No verified source is not an error: the assistant is expected to say the
     // knowledge base does not cover the question. Red is reserved for real failures.
     confidence: citations.length === 0
-      ? 'ungrounded'
+      ? contextSources.length > 0 ? 'context' : 'ungrounded'
       : hasUnapprovedSource ? 'inferred' : 'confirmed',
     citations,
-    toolsUsed: ['RAG_Retrieval_API', 'LLM_Chat_API'],
+    contextSources,
+    toolsUsed: citations.length > 0 ? ['RAG_Retrieval_API', 'LLM_Chat_API'] : ['LLM_Chat_API'],
   };
 }
 

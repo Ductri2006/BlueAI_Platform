@@ -54,6 +54,23 @@ def _embedding_model() -> str:
     return os.getenv("GEMINI_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
 
 
+def _chat_models() -> list[str]:
+    primary = os.getenv("GEMINI_CHAT_MODEL", DEFAULT_CHAT_MODEL).strip()
+    fallbacks = os.getenv("GEMINI_CHAT_FALLBACK_MODELS", "gemini-3.6-flash")
+    configured = [primary, *(item.strip() for item in fallbacks.split(","))]
+    # At most two 12-second provider attempts fit inside Java's 30-second read
+    # timeout. Java owns request retries; nesting SDK retries would multiply cost.
+    return list(dict.fromkeys(model for model in configured if model))[:2]
+
+
+def _is_transient_completion_error(error: Exception) -> bool:
+    message = str(error).upper()
+    return any(marker in message for marker in (
+        "429", "RESOURCE_EXHAUSTED", "500", "502", "503", "504", "UNAVAILABLE", "HIGH DEMAND",
+        "TIMEOUT", "TIMED OUT", "CONNECTION RESET",
+    ))
+
+
 def _index_dir() -> Path:
     return Path(os.getenv("RAG_INDEX_DIR", ".rag-index"))
 
@@ -327,34 +344,47 @@ class RagRuntime:
         return len(chunks)
 
     def complete(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
-        configured_model = os.getenv("GEMINI_CHAT_MODEL", DEFAULT_CHAT_MODEL)
-        # The Java client sends an OpenAI-compatible model name, which may not
-        # be a valid Gemini model. The RAG service owns the Gemini model choice.
-        model_name = configured_model
-        llm = ChatGoogleGenerativeAI(
-            model=model_name,
-            temperature=request.temperature,
-            max_tokens=2048,
-            retries=2,
-            request_timeout=60,
-        )
         message_types = {
             "system": SystemMessage,
             "user": HumanMessage,
             "assistant": AIMessage,
         }
-        response = llm.invoke([
+        messages = [
             message_types[message.role](content=message.content)
             for message in request.messages
-        ])
-        content = _extract_text(response.content)
-        if not content.strip():
-            raise RuntimeError("Gemini returned an empty response.")
-        return ChatCompletionResponse(
-            id=f"chatcmpl-{uuid.uuid4()}",
-            model=model_name,
-            choices=[CompletionChoice(message=ChatMessage(role="assistant", content=content.strip()))],
-        )
+        ]
+        models = _chat_models()
+        for index, model_name in enumerate(models):
+            try:
+                # The Java client sends an OpenAI-compatible model name, which
+                # may not be a valid Gemini model. This service owns the model
+                # choices and only fails over on temporary provider errors.
+                llm = ChatGoogleGenerativeAI(
+                    model=model_name,
+                    temperature=request.temperature,
+                    max_tokens=2048,
+                    max_retries=1,
+                    timeout=12,
+                )
+                response = llm.invoke(messages)
+                content = _extract_text(response.content)
+                if not content.strip():
+                    raise RuntimeError("Gemini returned an empty response.")
+                return ChatCompletionResponse(
+                    id=f"chatcmpl-{uuid.uuid4()}",
+                    model=model_name,
+                    choices=[CompletionChoice(message=ChatMessage(role="assistant", content=content.strip()))],
+                )
+            except Exception as error:
+                has_fallback = index + 1 < len(models)
+                if not has_fallback or not _is_transient_completion_error(error):
+                    raise
+                LOGGER.warning(
+                    "Gemini chat model %s is temporarily unavailable; trying configured fallback %s.",
+                    model_name,
+                    models[index + 1],
+                )
+        raise RuntimeError("No Gemini chat model is configured.")
 
 
 runtime = RagRuntime()
