@@ -88,3 +88,32 @@ UI nghiệp vụ ở đợt push này; kết quả UI trước đó được lư
 
 Khuyến nghị: giữ thay đổi ở feature branch để review; xử lý dependency và các
 kiểm tra production còn thiếu trước khi quyết định phát hành.
+
+## Cập nhật sau bản nâng thư viện RAG (23/09/2026)
+
+Phần cảnh báo Python ở mục 1 phía trên ghi lại trạng thái **trước** bản nâng
+thư viện; kết quả mới nhất của đúng nhóm dependency này như sau:
+
+- `pypdf 6.0.0` → `6.19.0`; `fastapi 0.116.1` → `0.141.1`;
+  ghim thêm `starlette 1.6.0` để phụ thuộc gián tiếp không quay về bản cũ.
+- Dựng image RAG từ đầu bằng `docker build --pull --no-cache`. Trong container
+  tạm từ image vừa dựng, `pip check` đạt; `pip-audit` quét 91 package cài đặt
+  và trả về **0 package có advisory** tại thời điểm kiểm tra.
+- 38 bài Python unittest đạt trên image mới, gồm PDF hợp lệ được trích xuất
+  thành text và bài HTTP kiểm tra health, retrieval, chat, xác thực worker và
+  input lỗi qua FastAPI/Starlette. Các downstream call trong bài HTTP được mock;
+  đó không phải bài test provider thật.
+- Đã dựng lại đúng dịch vụ `rag-ai` trong Compose local, giữ nguyên volume index.
+  `/health` và `/ready` thành công, `indexPresent=true`, worker được cấu hình,
+  container ở trạng thái healthy và 38 bài test đạt trên image Compose đó.
+- CI được thêm job chạy Python unittest, `pip check`, `pip-audit` cho mỗi push/PR
+  để phát hiện lại dependency có advisory. Cần xác nhận job thành công trên
+  GitHub sau khi push commit này.
+
+Trong lúc dựng image, Debian `trixie-updates` báo chữ ký của nguồn cập nhật
+không hợp lệ theo thời gian tại máy kiểm tra. `apt-get update` vẫn trả mã 0
+nhưng dùng metadata có sẵn cho nguồn đó; cài `libgomp1` và build hoàn thành.
+Vì vậy **không coi đây là xác nhận sạch lỗi OS package**. Cần dựng lại/kiểm tra
+OS package khi nguồn Debian hợp lệ và thực hiện scan image riêng trước production.
+Các giới hạn production khác trong mục trên vẫn còn; lần nâng thư viện này không
+bao gồm thử tải tài liệu PDF thật trên UI hoặc câu trả lời Gemini thật.
