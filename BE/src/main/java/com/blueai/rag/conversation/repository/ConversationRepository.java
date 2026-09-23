@@ -10,5 +10,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, Stri
 
     List<Conversation> findByOwner_IdOrderByUpdatedAtDesc(String ownerId);
 
+    List<Conversation> findTop50ByOwner_IdOrderByUpdatedAtDesc(String ownerId);
+
     Optional<Conversation> findByIdAndOwner_Id(String conversationId, String ownerId);
 }

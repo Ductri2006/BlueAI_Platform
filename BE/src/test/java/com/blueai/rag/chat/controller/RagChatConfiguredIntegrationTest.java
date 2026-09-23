@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -46,6 +47,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -114,6 +116,9 @@ class RagChatConfiguredIntegrationTest {
         registry.add("app.rag.llm-base-url", () -> "http://rag-stub.test");
         registry.add("app.rag.llm-api-key", () -> "configured-test-key");
         registry.add("app.rag.llm-model", () -> "configured-test-model");
+        registry.add("app.rag.llm-max-attempts", () -> "3");
+        registry.add("app.rag.llm-retry-initial-delay", () -> "1ms");
+        registry.add("app.rag.llm-retry-max-delay", () -> "2ms");
         registry.add("app.rag.allow-shared-demo-knowledge", () -> "true");
     }
 
@@ -474,6 +479,48 @@ class RagChatConfiguredIntegrationTest {
 
         ragStub.verify();
         org.junit.jupiter.api.Assertions.assertEquals(2, messageRepository.count());
+    }
+
+    @Test
+    void askRetriesTransientLlmFailureAndReturnsGroundedAnswer() throws Exception {
+        String accessToken = registerAndGetAccessToken();
+        User user = userRepository.findByEmail("configured-rag@example.com").orElseThrow();
+        RagDocument document = new RagDocument(
+                user,
+                "sales-playbook.pdf",
+                "test/sales-playbook.pdf",
+                "application/pdf",
+                512,
+                1_000,
+                150
+        );
+        document.markReady(1);
+        String documentId = documentRepository.saveAndFlush(document).getId();
+        String conversationId = createConversation(accessToken);
+
+        ragStub.expect(once(), requestTo("http://rag-stub.test/v1/retrieval/search"))
+                .andRespond(withSuccess("""
+                        {"matches":[{"documentId":"%s","chunkId":"sales-1","content":"Ưu tiên báo giá trước thứ Sáu.","score":0.96}]}
+                        """.formatted(documentId), MediaType.APPLICATION_JSON));
+        ragStub.expect(once(), requestTo("http://rag-stub.test/v1/chat/completions"))
+                .andRespond(withStatus(HttpStatus.BAD_GATEWAY));
+        ragStub.expect(once(), requestTo("http://rag-stub.test/v1/chat/completions"))
+                .andRespond(withSuccess("""
+                        {"choices":[{"message":{"role":"assistant","content":"Ưu tiên gửi báo giá trước thứ Sáu. [S1]"}}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        mockMvc.perform(post("/api/v1/conversations/{conversationId}/ask", conversationId)
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"Khi nào cần gửi báo giá?\"}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.assistantMessage.content")
+                        .value("Ưu tiên gửi báo giá trước thứ Sáu. [S1]"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].documentId")
+                        .value(documentId));
+
+        ragStub.verify();
+        assertThat(messageRepository.count()).isEqualTo(2);
     }
 
     @Test

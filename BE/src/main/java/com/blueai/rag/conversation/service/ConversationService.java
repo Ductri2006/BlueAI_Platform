@@ -10,6 +10,8 @@ import com.blueai.rag.conversation.model.Conversation;
 import com.blueai.rag.conversation.repository.ConversationRepository;
 import com.blueai.rag.conversation.repository.ConversationMessageRepository;
 import com.blueai.rag.conversation.repository.ConversationSummaryRepository;
+import com.blueai.rag.conversation.repository.ConversationLinkRepository;
+import com.blueai.rag.memory.repository.UserMemoryRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,17 +27,23 @@ public class ConversationService {
     private final ConversationRepository conversationRepository;
     private final ConversationMessageRepository messageRepository;
     private final ConversationSummaryRepository summaryRepository;
+    private final ConversationLinkRepository linkRepository;
+    private final UserMemoryRepository memoryRepository;
 
     public ConversationService(
             UserRepository userRepository,
             ConversationRepository conversationRepository,
             ConversationMessageRepository messageRepository,
-            ConversationSummaryRepository summaryRepository
+            ConversationSummaryRepository summaryRepository,
+            ConversationLinkRepository linkRepository,
+            UserMemoryRepository memoryRepository
     ) {
         this.userRepository = userRepository;
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.summaryRepository = summaryRepository;
+        this.linkRepository = linkRepository;
+        this.memoryRepository = memoryRepository;
     }
 
     @Transactional
@@ -80,6 +88,12 @@ public class ConversationService {
                         "CONVERSATION_NOT_FOUND",
                         "Conversation was not found."
                 ));
+        // These rows retain references or snapshots of conversation content.
+        // Remove them before deleting messages/conversations to prevent stale
+        // context from being available after a user deletes its source.
+        linkRepository.deleteByTargetConversation_IdOrSourceConversation_Id(conversationId, conversationId);
+        memoryRepository.deleteBySourceMessage_Conversation_Id(conversationId);
+        memoryRepository.deleteByConversation_Id(conversationId);
         summaryRepository.deleteByConversation_Id(conversationId);
         messageRepository.deleteByConversation_Id(conversationId);
         conversationRepository.delete(conversation);

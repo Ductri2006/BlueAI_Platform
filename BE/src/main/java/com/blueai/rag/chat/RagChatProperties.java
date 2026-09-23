@@ -2,6 +2,8 @@ package com.blueai.rag.chat;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.Duration;
+
 @ConfigurationProperties(prefix = "app.rag")
 public class RagChatProperties {
 
@@ -11,6 +13,9 @@ public class RagChatProperties {
     private String llmChatPath = "/v1/chat/completions";
     private String llmApiKey = "";
     private String llmModel = "";
+    private int llmMaxAttempts = 3;
+    private Duration llmRetryInitialDelay = Duration.ofMillis(250);
+    private Duration llmRetryMaxDelay = Duration.ofSeconds(2);
     private boolean allowSharedDemoKnowledge;
 
     public String getRetrievalBaseUrl() {
@@ -61,6 +66,36 @@ public class RagChatProperties {
         this.llmModel = llmModel;
     }
 
+    public int getLlmMaxAttempts() {
+        return llmMaxAttempts;
+    }
+
+    public void setLlmMaxAttempts(int llmMaxAttempts) {
+        this.llmMaxAttempts = Math.max(1, Math.min(llmMaxAttempts, 5));
+    }
+
+    public Duration getLlmRetryInitialDelay() {
+        return llmRetryInitialDelay;
+    }
+
+    public void setLlmRetryInitialDelay(Duration llmRetryInitialDelay) {
+        this.llmRetryInitialDelay = requirePositiveDuration(
+                llmRetryInitialDelay,
+                Duration.ofMillis(250)
+        );
+    }
+
+    public Duration getLlmRetryMaxDelay() {
+        return llmRetryMaxDelay;
+    }
+
+    public void setLlmRetryMaxDelay(Duration llmRetryMaxDelay) {
+        this.llmRetryMaxDelay = requirePositiveDuration(
+                llmRetryMaxDelay,
+                Duration.ofSeconds(2)
+        );
+    }
+
     public boolean isAllowSharedDemoKnowledge() {
         return allowSharedDemoKnowledge;
     }
@@ -77,5 +112,11 @@ public class RagChatProperties {
         return llmBaseUrl != null && !llmBaseUrl.isBlank()
                 && llmApiKey != null && !llmApiKey.isBlank()
                 && llmModel != null && !llmModel.isBlank();
+    }
+
+    private Duration requirePositiveDuration(Duration candidate, Duration fallback) {
+        return candidate == null || candidate.isZero() || candidate.isNegative()
+                ? fallback
+                : candidate;
     }
 }
