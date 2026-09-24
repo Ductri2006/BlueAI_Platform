@@ -1,4 +1,5 @@
 import asyncio
+import io
 import unittest
 from unittest.mock import patch
 
@@ -37,6 +38,33 @@ class FakeClient:
 
 
 class IngestionTest(unittest.IsolatedAsyncioTestCase):
+    def test_extracts_text_from_a_valid_pdf(self):
+        # Build a tiny PDF in memory so this exercises the installed pypdf
+        # version without relying on an external fixture or service.
+        stream = b"BT /F1 12 Tf 50 250 Td (BlueAI PDF smoke test) Tj ET"
+        objects = [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] "
+            b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream),
+        ]
+        pdf = io.BytesIO(b"%PDF-1.4\n")
+        pdf.seek(0, io.SEEK_END)
+        offsets = [0]
+        for number, value in enumerate(objects, start=1):
+            offsets.append(pdf.tell())
+            pdf.write(b"%d 0 obj\n%s\nendobj\n" % (number, value))
+        xref_offset = pdf.tell()
+        pdf.write(b"xref\n0 6\n0000000000 65535 f \n")
+        for offset in offsets[1:]:
+            pdf.write(b"%010d 00000 n \n" % offset)
+        pdf.write(b"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % xref_offset)
+
+        text = ingestion.extract_text(pdf.getvalue(), "application/pdf", "guide.pdf")
+        self.assertIn("BlueAI PDF smoke test", text)
+
     def test_extracts_utf8_text(self):
         self.assertEqual("Xin chào", ingestion.extract_text("Xin chào".encode(), "text/plain", "note.txt"))
 

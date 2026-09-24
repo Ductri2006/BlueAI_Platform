@@ -3,6 +3,8 @@ package com.blueai.rag.conversation.model;
 import com.blueai.auth.model.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
@@ -43,6 +45,15 @@ public class Conversation {
     @Column(name = "dialog_state_json", columnDefinition = "longtext")
     private String dialogStateJson;
 
+    @Enumerated(EnumType.STRING)
+    @Column(
+            name = "context_mode",
+            nullable = false,
+            length = 32,
+            columnDefinition = "varchar(32) default 'CURRENT_CONVERSATION'"
+    )
+    private ConversationContextMode contextMode = ConversationContextMode.CURRENT_CONVERSATION;
+
     protected Conversation() {
     }
 
@@ -60,6 +71,9 @@ public class Conversation {
         }
         createdAt = now;
         updatedAt = now;
+        if (contextMode == null) {
+            contextMode = ConversationContextMode.CURRENT_CONVERSATION;
+        }
     }
 
     @PreUpdate
@@ -73,6 +87,10 @@ public class Conversation {
 
     public void updateDialogState(String dialogStateJson) {
         this.dialogStateJson = dialogStateJson;
+    }
+
+    public void updateContextMode(ConversationContextMode contextMode) {
+        this.contextMode = contextMode;
     }
 
     public String getId() {
@@ -93,5 +111,9 @@ public class Conversation {
 
     public String getDialogStateJson() {
         return dialogStateJson;
+    }
+
+    public ConversationContextMode getContextMode() {
+        return contextMode;
     }
 }

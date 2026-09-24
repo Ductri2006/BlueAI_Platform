@@ -7,6 +7,7 @@ services:
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       GEMINI_CHAT_MODEL: ${GEMINI_CHAT_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_CHAT_FALLBACK_MODELS: ${GEMINI_CHAT_FALLBACK_MODELS:-gemini-3.6-flash}
       GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-models/gemini-embedding-001}
       JAVA_API_BASE_URL: http://auth-api:8080
       JAVA_WORKER_API_KEY: ${APP_WORKER_API_KEY:-local-worker-api-key-change-before-production}
@@ -91,11 +92,16 @@ services:
       APP_DOCUMENT_STORAGE_DIR: /app/storage/documents
       APP_RAG_RETRIEVAL_BASE_URL: ${APP_RAG_RETRIEVAL_BASE_URL:-http://rag-ai:8000}
       APP_RAG_RETRIEVAL_SEARCH_PATH: ${APP_RAG_RETRIEVAL_SEARCH_PATH:-/v1/retrieval/search}
-      APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE: "${APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE:-false}"
+      # Keep unreviewed SYNTHETIC_DEMO records out of the main application.
+      # Tests enable them explicitly through the Spring test profile.
+      APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE: "false"
       APP_LLM_BASE_URL: ${APP_LLM_BASE_URL:-http://rag-ai:8000}
       APP_LLM_CHAT_PATH: ${APP_LLM_CHAT_PATH:-/v1/chat/completions}
       APP_LLM_API_KEY: ${APP_LLM_API_KEY:-internal-rag-service}
       APP_LLM_MODEL: ${APP_LLM_MODEL:-gemini-3.5-flash-lite}
+      APP_LLM_MAX_ATTEMPTS: ${APP_LLM_MAX_ATTEMPTS:-3}
+      APP_LLM_RETRY_INITIAL_DELAY: ${APP_LLM_RETRY_INITIAL_DELAY:-250ms}
+      APP_LLM_RETRY_MAX_DELAY: ${APP_LLM_RETRY_MAX_DELAY:-2s}
     ports:
       - "8080:8080"
     volumes:

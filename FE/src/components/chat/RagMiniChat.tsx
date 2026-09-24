@@ -1,8 +1,10 @@
 import React, { useRef, useState } from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import { Layers, Send, Sparkles } from 'lucide-react';
 import { blueAiApi, ragAnswerToChatMessage } from '../../api/blueAiApi';
 import type { ChatMessage } from '../../types';
+import type { ConversationContextMode } from '../../api/blueAiApi';
 import { Button } from '../ui/Button';
+import { ConversationContextPanel } from './ConversationContextPanel';
 
 interface RagMiniChatProps {
   title: string;
@@ -14,6 +16,9 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [persistedConversationId, setPersistedConversationId] = useState<string>();
+  const [contextMode, setContextMode] = useState<ConversationContextMode>('CURRENT_CONVERSATION');
+  const [isContextOpen, setIsContextOpen] = useState(false);
   const conversationId = useRef<string | undefined>(undefined);
 
   const send = async () => {
@@ -29,7 +34,10 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
     setLoading(true);
     try {
       if (!conversationId.current) {
-        conversationId.current = (await blueAiApi.createConversation(conversationTitle)).id;
+        const conversation = await blueAiApi.createConversation(conversationTitle);
+        conversationId.current = conversation.id;
+        setPersistedConversationId(conversation.id);
+        setContextMode(conversation.contextMode);
       }
       const answer = await blueAiApi.askQuestion(conversationId.current, question);
       setMessages(current => [...current, ragAnswerToChatMessage(answer)]);
@@ -47,10 +55,21 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
   };
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden flex flex-col min-h-[360px]">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 font-bold text-sm">
-        <Sparkles className="w-4 h-4 text-cobalt-600" />
-        {title}
+    <div className="relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden flex flex-col min-h-[360px]">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 font-bold text-sm">
+        <div className="flex min-w-0 items-center gap-2">
+          <Sparkles className="w-4 h-4 shrink-0 text-cobalt-600" />
+          <span className="truncate">{title}</span>
+        </div>
+        <button
+          onClick={() => setIsContextOpen(true)}
+          disabled={!persistedConversationId}
+          className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-cobalt-50 hover:text-cobalt-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-cyan-950/30 dark:hover:text-cyan-300"
+          title={persistedConversationId ? `Context: ${contextMode}` : 'Gửi tin nhắn đầu tiên để tạo phiên và cấu hình context'}
+          aria-label="Quản lý context và ghi nhớ"
+        >
+          <Layers className="h-4 w-4" />
+        </button>
       </div>
       <div className="flex-1 p-4 space-y-3 overflow-y-auto">
         {messages.length === 0 && <p className="text-sm text-slate-500">Chưa có hội thoại. Câu trả lời sẽ được lấy từ RAG API và kèm nguồn khi có căn cứ.</p>}
@@ -61,6 +80,11 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
               {!!message.citations?.length && (
                 <div className="mt-2 pt-2 border-t border-current/20 text-xs opacity-80">
                   Nguồn: {message.citations.map(citation => citation.title).join(', ')}
+                </div>
+              )}
+              {!!message.contextSources?.length && (
+                <div className="mt-2 pt-2 border-t border-current/20 text-xs opacity-80">
+                  Context: {message.contextSources.map(source => source.title).join(', ')}
                 </div>
               )}
             </div>
@@ -80,6 +104,12 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
           <Send className="w-4 h-4" />
         </Button>
       </div>
+      <ConversationContextPanel
+        conversationId={persistedConversationId}
+        isOpen={isContextOpen}
+        onClose={() => setIsContextOpen(false)}
+        onModeChange={setContextMode}
+      />
     </div>
   );
 };

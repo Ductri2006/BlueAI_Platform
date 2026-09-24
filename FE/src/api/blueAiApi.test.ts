@@ -3,6 +3,7 @@ import {
   BlueAiApi,
   normalizeAssistantContent,
   ragAnswerToChatMessage,
+  conversationMessageToChatMessage,
   type RagAnswerResponse,
 } from './blueAiApi';
 
@@ -21,6 +22,7 @@ describe('BlueAiApi', () => {
         return jsonResponse({
           id: 'conversation-1',
           title: 'RAG test',
+          contextMode: 'CURRENT_CONVERSATION',
           createdAt: '2026-09-04T10:00:00Z',
           updatedAt: '2026-09-04T10:00:00Z',
         }, 201);
@@ -132,6 +134,51 @@ describe('BlueAiApi', () => {
     expect((uploadInit.headers as Headers).has('Content-Type')).toBe(false);
   });
 
+  it('manages conversation context links and scoped memories through authenticated routes', async () => {
+    const requests: Array<{ path: string; method?: string; body?: string }> = [];
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const path = new URL(String(input)).pathname;
+      requests.push({ path, method: init?.method, body: init?.body as string | undefined });
+      if (path.endsWith('/context')) return jsonResponse({ mode: 'LINKED_CONVERSATIONS', links: [] });
+      if (path.endsWith('/context-links')) {
+        return jsonResponse({ id: 'link-1', sourceConversationId: 'source-1', sourceConversationTitle: 'Nguồn', sourceSnapshotAt: '2026-09-22T10:00:00Z', createdAt: '2026-09-22T10:00:00Z' }, 201);
+      }
+      if (path.endsWith('/refresh')) {
+        return jsonResponse({ id: 'link-1', sourceConversationId: 'source-1', sourceConversationTitle: 'Nguồn', sourceSnapshotAt: '2026-09-22T10:01:00Z', createdAt: '2026-09-22T10:00:00Z' });
+      }
+      if (path.endsWith('/me/memories')) return jsonResponse([]);
+      if (path.includes('/me/memories/')) {
+        return jsonResponse({ key: 'preferred-language', content: 'Trả lời tiếng Việt', scope: 'USER', status: 'CONFIRMED', createdAt: '2026-09-22T10:00:00Z', updatedAt: '2026-09-22T10:00:00Z' });
+      }
+      return new Response(null, { status: 204 });
+    });
+    const api = new BlueAiApi({ baseUrl: 'http://api.test', accessToken: 'context-token', fetchImpl: fetchImpl as typeof fetch });
+
+    await api.getConversationContext('target-1');
+    await api.updateConversationContext('target-1', 'LINKED_CONVERSATIONS');
+    await api.createConversationLink('target-1', 'source-1');
+    await api.refreshConversationLink('target-1', 'link-1');
+    await api.deleteConversationLink('target-1', 'link-1');
+    await api.listMemories();
+    await api.upsertMemory('preferred-language', { content: 'Trả lời tiếng Việt', scope: 'USER' });
+    await api.deleteMemory('preferred-language');
+
+    expect(requests.map(request => [request.method, request.path])).toEqual([
+      ['GET', '/api/v1/conversations/target-1/context'],
+      ['PUT', '/api/v1/conversations/target-1/context'],
+      ['POST', '/api/v1/conversations/target-1/context-links'],
+      ['POST', '/api/v1/conversations/target-1/context-links/link-1/refresh'],
+      ['DELETE', '/api/v1/conversations/target-1/context-links/link-1'],
+      ['GET', '/api/v1/me/memories'],
+      ['PUT', '/api/v1/me/memories/preferred-language'],
+      ['DELETE', '/api/v1/me/memories/preferred-language'],
+    ]);
+    expect(JSON.parse(requests[1].body || '{}')).toEqual({ mode: 'LINKED_CONVERSATIONS' });
+    expect(JSON.parse(requests[2].body || '{}')).toEqual({ sourceConversationId: 'source-1' });
+    expect(JSON.parse(requests[6].body || '{}')).toEqual({ content: 'Trả lời tiếng Việt', scope: 'USER' });
+    for (const call of fetchImpl.mock.calls) expect((call[1]?.headers as Headers).get('Authorization')).toBe('Bearer context-token');
+  });
+
   it('saves, previews, and publishes a Bot Studio draft through authenticated routes', async () => {
     const requests: Array<{ path: string; method?: string; body?: string }> = [];
     const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -214,6 +261,28 @@ describe('normalizeAssistantContent', () => {
 });
 
 describe('ragAnswerToChatMessage', () => {
+  it('restores evidence and context when loading persisted messages', () => {
+    const message = conversationMessageToChatMessage({
+      id: 'saved', role: 'ASSISTANT', content: 'Hướng dẫn [S1]', createdAt: '2026-09-23T00:00:00Z',
+      evidence: {
+        sources: [{ documentId: 'kb', filename: 'KB.csv', chunkId: 'kb:1', excerpt: 'Bật Data Roaming', approvalStatus: 'READY' }],
+        contextSources: [{ type: 'LINKED_CONVERSATION', title: 'Hikari', conversationId: 'source' }],
+      },
+    });
+    expect(message.citations?.[0].snippet).toBe('Bật Data Roaming');
+    expect(message.contextSources?.[0].title).toBe('Hikari');
+    expect(message.confidence).toBe('confirmed');
+  });
+
+  it('does not invent citations for legacy history or normalize user text', () => {
+    const legacy = conversationMessageToChatMessage({
+      id: 'old', role: 'ASSISTANT', content: 'Old [S1]', createdAt: '', evidence: null,
+    });
+    expect(legacy.citations).toBeUndefined();
+    expect(legacy.confidence).toBeUndefined();
+    const content = "[{'type':'text','text':'literal user content'}]";
+    expect(conversationMessageToChatMessage({ id: 'u', role: 'USER', content, createdAt: '' }).content).toBe(content);
+  });
   it('maps verified backend sources into evidence drawer citations', () => {
     const response: RagAnswerResponse = {
       userMessage: {
@@ -247,6 +316,20 @@ describe('ragAnswerToChatMessage', () => {
       title: 'policy.pdf',
       snippet: 'Đoạn chính sách được truy xuất.',
     });
+  });
+
+  it('keeps context provenance separate from document citations', () => {
+    const message = ragAnswerToChatMessage({
+      userMessage: { id: 'u', role: 'USER', content: 'q', createdAt: '2026-09-22T10:00:00Z' },
+      assistantMessage: { id: 'a', role: 'ASSISTANT', content: 'a', createdAt: '2026-09-22T10:00:01Z' },
+      sources: [],
+      contextSources: [{ type: 'LINKED_CONVERSATION', conversationId: 'conversation-source', title: 'Báo giá khách hàng A' }],
+    });
+
+    expect(message.citations).toEqual([]);
+    expect(message.contextSources).toEqual([{ type: 'LINKED_CONVERSATION', conversationId: 'conversation-source', title: 'Báo giá khách hàng A' }]);
+    expect(message.confidence).toBe('context');
+    expect(message.toolsUsed).toEqual(['LLM_Chat_API']);
   });
 
   it('marks unapproved synthetic sources as demo evidence', () => {

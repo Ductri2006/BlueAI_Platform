@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import api
+from fastapi.testclient import TestClient
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
 
@@ -30,6 +31,42 @@ class StubVectorStore:
 
 
 class RagApiTest(unittest.TestCase):
+    def test_http_contract_after_fastapi_starlette_upgrade(self):
+        match = api.RetrievalMatch(
+            documentId="doc-1", chunkId="chunk-1", content="Grounded text",
+            score=0.9, filename="guide.pdf", sourceType="ENTERPRISE_DOCUMENT",
+            approvalStatus="READY",
+        )
+        answer = api.ChatCompletionResponse(
+            id="chat-test", model="mock-model",
+            choices=[api.CompletionChoice(message=api.ChatMessage(role="assistant", content="Answer"))],
+        )
+        with patch.object(api, "start_worker", return_value=None), TestClient(api.app) as client:
+            self.assertEqual(200, client.get("/health").status_code)
+            with patch.object(api.runtime, "search", return_value=[match]) as search:
+                response = client.post("/v1/retrieval/search", json={
+                    "userId": "user-1", "query": "policy", "limit": 4,
+                })
+            self.assertEqual(200, response.status_code)
+            self.assertEqual("doc-1", response.json()["matches"][0]["documentId"])
+            search.assert_called_once_with("user-1", "policy", 4)
+            self.assertEqual(422, client.post("/v1/retrieval/search", json={"query": "policy"}).status_code)
+
+            with patch.object(api.runtime, "complete", return_value=answer):
+                response = client.post("/v1/chat/completions", json={
+                    "messages": [{"role": "user", "content": "Hello"}],
+                })
+            self.assertEqual(200, response.status_code)
+            self.assertEqual("Answer", response.json()["choices"][0]["message"]["content"])
+
+            with patch.dict("os.environ", {
+                "JAVA_API_BASE_URL": "http://auth-api:8080", "JAVA_WORKER_API_KEY": "worker-key",
+            }), patch.object(api, "request_run") as request_run:
+                self.assertEqual(401, client.post("/v1/internal/ingest/run").status_code)
+                response = client.post("/v1/internal/ingest/run", headers={"X-Worker-API-Key": "worker-key"})
+                self.assertEqual(202, response.status_code)
+                request_run.assert_called_once_with()
+
     def test_health(self):
         response = api.health()
         self.assertEqual("ok", response["status"])
@@ -212,6 +249,34 @@ class RagApiTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 api.RagRuntime().complete(request)
 
+    def test_completion_falls_back_after_a_transient_model_failure(self):
+        attempted_models = []
+
+        class FakeLlm:
+            def __init__(self, model):
+                self.model = model
+
+            def invoke(self, _messages):
+                if self.model == "primary-model":
+                    raise RuntimeError("503 UNAVAILABLE: high demand")
+                return AIMessage(content="fallback ok")
+
+        def fake_factory(*, model, **_kwargs):
+            attempted_models.append(model)
+            return FakeLlm(model)
+
+        request = api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="hello")])
+        with patch.dict("os.environ", {
+            "GEMINI_CHAT_MODEL": "primary-model",
+            "GEMINI_CHAT_FALLBACK_MODELS": "fallback-model",
+        }):
+            with patch.object(api, "ChatGoogleGenerativeAI", side_effect=fake_factory):
+                response = api.RagRuntime().complete(request)
+
+        self.assertEqual(["primary-model", "fallback-model"], attempted_models)
+        self.assertEqual("fallback-model", response.model)
+        self.assertEqual("fallback ok", response.choices[0].message.content)
+
     def test_openai_compatible_completion_contract(self):
         expected = api.ChatCompletionResponse(
             id="chatcmpl-test",
@@ -225,6 +290,26 @@ class RagApiTest(unittest.TestCase):
         with patch.object(api.runtime, "complete", return_value=expected):
             response = api.chat_completions(request)
         self.assertEqual("answer", response.choices[0].message.content)
+
+    def test_completion_budget_has_no_nested_sdk_retries(self):
+        fake = unittest.mock.Mock()
+        fake.invoke.return_value = AIMessage(content="ok")
+        with patch.object(api, "ChatGoogleGenerativeAI", return_value=fake) as factory:
+            api.RagRuntime().complete(api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="test")]))
+        self.assertEqual(1, factory.call_args.kwargs["max_retries"])
+        self.assertEqual(12, factory.call_args.kwargs["timeout"])
+
+    def test_model_list_deduplicates_and_bounds_provider_attempts(self):
+        with patch.dict("os.environ", {"GEMINI_CHAT_MODEL": "primary", "GEMINI_CHAT_FALLBACK_MODELS": "primary, backup, third"}):
+            self.assertEqual(["primary", "backup"], api._chat_models())
+
+    def test_authentication_failure_does_not_try_fallback(self):
+        fake = unittest.mock.Mock()
+        fake.invoke.side_effect = RuntimeError("401 UNAUTHENTICATED")
+        with patch.object(api, "ChatGoogleGenerativeAI", return_value=fake) as factory:
+            with self.assertRaises(RuntimeError):
+                api.RagRuntime().complete(api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="test")]))
+        self.assertEqual(1, factory.call_count)
 
 
 if __name__ == "__main__":

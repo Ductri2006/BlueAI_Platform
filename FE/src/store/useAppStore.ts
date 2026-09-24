@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { AIStreamStatus, ChatMessage, ChatSession, Citation, CustomerQueueItem, UserRole } from '../types';
-import { blueAiApi, BlueAiApiError, normalizeAssistantContent, ragAnswerToChatMessage } from '../api/blueAiApi';
+import {
+  blueAiApi,
+  BlueAiApiError,
+  conversationMessageToChatMessage,
+  ragAnswerToChatMessage,
+  type ConversationContextMode,
+  type ConversationMessageResponse,
+} from '../api/blueAiApi';
 
 export interface AppState {
   activeRole: UserRole;
@@ -15,6 +22,7 @@ export interface AppState {
   createNewSession: () => void;
   deleteSession: (id: string) => void;
   togglePinSession: (id: string) => void;
+  updateSessionContextMode: (id: string, mode: ConversationContextMode) => void;
   streamStatus: AIStreamStatus;
   currentStreamActivity: string;
   sendMessage: (text: string) => void;
@@ -46,7 +54,7 @@ export interface AppState {
 
 const state: Omit<AppState,
   'setActiveRole' | 'toggleDarkMode' | 'toggleSidebar' | 'setActiveSessionId' |
-  'createNewSession' | 'deleteSession' | 'togglePinSession' | 'sendMessage' |
+  'createNewSession' | 'deleteSession' | 'togglePinSession' | 'updateSessionContextMode' | 'sendMessage' |
   'openEvidence' | 'closeEvidence' | 'setActiveQueueItem' | 'setSalesComposerText' |
   'insertToSalesComposer' | 'openHITLModal' | 'closeHITLModal' | 'approveHITL' | 'showToast'
 > = {
@@ -75,14 +83,8 @@ function notify() {
   listeners.forEach(listener => listener());
 }
 
-function toChatMessage(message: { id: string; role: 'USER' | 'ASSISTANT'; content: string; createdAt: string }): ChatMessage {
-  const createdAt = new Date(message.createdAt);
-  return {
-    id: message.id,
-    sender: message.role === 'USER' ? 'user' : 'assistant',
-    content: normalizeAssistantContent(message.content),
-    timestamp: Number.isNaN(createdAt.getTime()) ? '' : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  };
+function toChatMessage(message: ConversationMessageResponse): ChatMessage {
+  return conversationMessageToChatMessage(message);
 }
 
 async function hydrateFromApi() {
@@ -94,11 +96,13 @@ async function hydrateFromApi() {
       const updatedAt = new Date(conversation.updatedAt);
       return {
         id: conversation.id,
+        conversationId: conversation.id,
         title: conversation.title,
         role: 'employee' as UserRole,
         category: 'today' as const,
         updatedAt: Number.isNaN(updatedAt.getTime()) ? '' : updatedAt.toLocaleString(),
         messages: messages.map(toChatMessage),
+        contextMode: conversation.contextMode,
       };
     }));
     // A session created while hydration was still in flight must survive it,
@@ -148,7 +152,7 @@ export function useAppStore(): AppState {
   };
 
   const deleteSession = (id: string) => {
-    const backendId = apiConversationIds.get(id);
+    const backendId = state.sessions.find(session => session.id === id)?.conversationId || apiConversationIds.get(id);
     state.sessions = state.sessions.filter(session => session.id !== id);
     apiConversationIds.delete(id);
     if (state.activeSessionId === id) state.activeSessionId = state.sessions[0]?.id || '';
@@ -187,6 +191,8 @@ export function useAppStore(): AppState {
         const conversation = await blueAiApi.createConversation(session.title);
         conversationId = conversation.id;
         apiConversationIds.set(sessionId, conversationId);
+        session.conversationId = conversation.id;
+        session.contextMode = conversation.contextMode;
       }
       state.streamStatus = 'tool_calling';
       state.currentStreamActivity = 'Đang tổng hợp câu trả lời có căn cứ...';
@@ -233,6 +239,11 @@ export function useAppStore(): AppState {
     deleteSession,
     togglePinSession: id => {
       state.sessions = state.sessions.map(session => session.id === id ? { ...session, isPinned: !session.isPinned } : session);
+      notify();
+    },
+    updateSessionContextMode: (id, mode) => {
+      const session = state.sessions.find(item => item.id === id);
+      if (session) session.contextMode = mode;
       notify();
     },
     sendMessage,
