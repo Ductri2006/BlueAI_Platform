@@ -1,6 +1,6 @@
 package com.blueai.rag.conversation.service;
 
-import com.blueai.auth.BlueAiAuthApplication;
+import com.blueai.BlueAiAuthApplication;
 import com.blueai.auth.model.User;
 import com.blueai.auth.repository.UserRepository;
 import com.blueai.rag.chat.service.RagRestClientFactory;
