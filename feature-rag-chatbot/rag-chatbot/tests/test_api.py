@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import api
@@ -28,6 +29,56 @@ class StubVectorStore:
     def similarity_search_with_score(self, _query, k):
         self.k = k
         return self.results
+
+
+class PurgeableVectorStore:
+    def __init__(self):
+        self.docstore = SimpleNamespace(_dict={
+            "vector-1": _document("doc-1", "secret one", owner="user-1"),
+            "vector-2": _document("doc-1", "secret two", owner="user-1"),
+            "vector-3": _document("doc-2", "keep me", owner="user-1"),
+        })
+        self.deleted = []
+        self.saved = 0
+        self.fail_next_save = False
+
+    def delete(self, ids):
+        self.deleted.extend(ids)
+        for vector_id in ids:
+            self.docstore._dict.pop(vector_id, None)
+
+    def save_local(self, _directory):
+        if self.fail_next_save:
+            self.fail_next_save = False
+            raise OSError("injected durable save failure")
+        self.saved += 1
+        directory = Path(_directory)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "index.faiss").write_bytes(b"fake-faiss")
+        (directory / "index.pkl").write_text(",".join(sorted(self.docstore._dict)), encoding="utf-8")
+
+    @classmethod
+    def from_disk(cls, directory):
+        store = cls()
+        ids = [item for item in Path(directory, "index.pkl").read_text(encoding="utf-8").split(",") if item]
+        store.docstore._dict = {
+            vector_id: _document("doc-2" if vector_id == "vector-3" else "doc-1", vector_id)
+            for vector_id in ids
+        }
+        return store
+
+
+class IngestionVectorStore(PurgeableVectorStore):
+    def __init__(self):
+        super().__init__()
+        self.docstore._dict = {}
+        self.next_id = 0
+
+    def add_embeddings(self, text_embeddings, metadatas):
+        for (text, _vector), metadata in zip(text_embeddings, metadatas):
+            vector_id = f"ingest-{self.next_id}"
+            self.next_id += 1
+            self.docstore._dict[vector_id] = Document(page_content=text, metadata=dict(metadata))
 
 
 class RagApiTest(unittest.TestCase):
@@ -192,6 +243,70 @@ class RagApiTest(unittest.TestCase):
         runtime = api.RagRuntime()
         runtime._vectorstore = StubVectorStore([(_document("doc-a", "content", owner="user-1"), 0.1)])
         self.assertEqual([], runtime.search("user-1", "   \n  ", 5))
+
+    def test_document_purge_compacts_faiss_docstore_and_is_idempotent(self):
+        runtime = api.RagRuntime()
+        store = PurgeableVectorStore()
+        runtime._vectorstore = store
+        with tempfile.TemporaryDirectory() as directory, patch.dict("os.environ", {"RAG_INDEX_DIR": directory}):
+            self.assertEqual(2, runtime.purge_document("doc-1"))
+            self.assertEqual(["vector-1", "vector-2"], store.deleted)
+            self.assertEqual(1, store.saved)
+            self.assertEqual(0, runtime.purge_document("doc-1"))
+            self.assertEqual(1, store.saved)
+            self.assertIn("vector-3", store.docstore._dict)
+
+    def test_document_purge_save_failure_restores_durable_view_and_retry_cleans_disk(self):
+        runtime = api.RagRuntime()
+        store = PurgeableVectorStore()
+        durable_store = PurgeableVectorStore()
+        with tempfile.TemporaryDirectory() as directory, patch.dict("os.environ", {"RAG_INDEX_DIR": directory}):
+            store.save_local(directory)
+            store.fail_next_save = True
+            with patch.object(api.FAISS, "load_local", return_value=durable_store):
+                with self.assertRaises(OSError):
+                    runtime._vectorstore = store
+                    runtime.purge_document("doc-1")
+
+            self.assertIs(runtime._vectorstore, durable_store)
+            self.assertIn("vector-1", durable_store.docstore._dict)
+            self.assertEqual(2, runtime.purge_document("doc-1"))
+            self.assertNotIn("doc-1", Path(directory, "index.pkl").read_text(encoding="utf-8"))
+
+            restarted = api.RagRuntime()
+            with patch.object(api.FAISS, "load_local", return_value=PurgeableVectorStore.from_disk(directory)):
+                self.assertEqual(0, restarted.purge_document("doc-1"))
+            self.assertNotIn("doc-1", restarted._vectorstore.docstore._dict)
+
+    def test_add_user_document_replaces_existing_chunks_on_retry(self):
+        runtime = api.RagRuntime()
+        store = IngestionVectorStore()
+        fake_embeddings = unittest.mock.Mock()
+        fake_embeddings.embed_documents.return_value = [[0.1]]
+        runtime._vectorstore = store
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.dict("os.environ", {"RAG_INDEX_DIR": directory}), \
+                patch.object(runtime, "_embeddings", return_value=fake_embeddings):
+            first = runtime.add_user_document("doc-retry", "user-1", "USER_DOCUMENT", "retry.txt", "retry content", 1200, 0)
+            second = runtime.add_user_document("doc-retry", "user-1", "USER_DOCUMENT", "retry.txt", "retry content", 1200, 0)
+
+        self.assertEqual(first, second)
+        self.assertEqual(first, sum(
+            1 for document in store.docstore._dict.values()
+            if document.metadata.get("document_id") == "doc-retry"
+        ))
+
+    def test_document_purge_endpoint_requires_worker_key(self):
+        with patch.dict("os.environ", {"JAVA_WORKER_API_KEY": "worker-key"}, clear=True), \
+                patch.object(api.runtime, "purge_document", return_value=3) as purge:
+            with self.assertRaises(api.HTTPException) as error:
+                api.purge_document("doc-1", x_worker_api_key="wrong")
+            self.assertEqual(401, error.exception.status_code)
+            self.assertEqual(
+                {"status": "purged", "documentId": "doc-1", "removedChunks": 3},
+                api.purge_document("doc-1", x_worker_api_key="worker-key"),
+            )
+            purge.assert_called_once_with("doc-1")
 
     def test_index_metadata_detects_embedding_model_change(self):
         with tempfile.TemporaryDirectory() as directory:

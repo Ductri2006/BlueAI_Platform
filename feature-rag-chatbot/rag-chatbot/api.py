@@ -4,7 +4,9 @@ import json
 import logging
 import os
 import re
+import shutil
 import threading
+import tempfile
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -336,12 +338,128 @@ class RagRuntime:
         vectors = self._embeddings().embed_documents(texts)
         with self._lock:
             vectorstore = self._get_vectorstore()
+            # Java may retry the same claim after the durable index was saved but
+            # before its result PATCH completed. Replace this document's chunks
+            # while holding the same lock used by search/purge so a retry cannot
+            # accumulate duplicate vectors. Embedding remains outside the lock.
+            self._delete_document_vectors(vectorstore, document_id)
             vectorstore.add_embeddings(list(zip(texts, vectors)), metadatas=metadatas)
             index_dir = _index_dir()
             index_dir.mkdir(parents=True, exist_ok=True)
-            vectorstore.save_local(str(index_dir))
+            self._save_vectorstore_atomically(vectorstore, index_dir)
             self._write_index_model(index_dir)
         return len(chunks)
+
+    @staticmethod
+    def _delete_document_vectors(vectorstore: FAISS, document_id: str) -> list[str]:
+        docstore = getattr(vectorstore, "docstore", None)
+        documents = getattr(docstore, "_dict", {})
+        ids = [
+            vector_id
+            for vector_id, document in documents.items()
+            if str(document.metadata.get("document_id") or "") == document_id
+        ]
+        if ids:
+            delete = getattr(vectorstore, "delete", None)
+            if not callable(delete):
+                raise RuntimeError("The FAISS backend does not support safe document replacement.")
+            delete(ids)
+        return ids
+
+    @staticmethod
+    def _save_vectorstore_atomically(vectorstore: FAISS, index_dir: Path) -> None:
+        """Stage FAISS files outside the live index and swap each file with rollback.
+
+        FAISS.save_local writes more than one file. Staging prevents a failed save
+        from mutating the durable directory; the short file swap is serialized by
+        RagRuntime's lock and rolls back if any replacement fails.
+        """
+        index_dir.parent.mkdir(parents=True, exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix=f".{index_dir.name}-", dir=index_dir.parent))
+        backup_dir = temp_dir / ".backup"
+        try:
+            vectorstore.save_local(str(temp_dir))
+            staged_files = [path for path in temp_dir.iterdir() if path.is_file()]
+            if not staged_files:
+                raise RuntimeError("FAISS save produced no durable index files.")
+            index_dir.mkdir(parents=True, exist_ok=True)
+            backup_dir.mkdir()
+            backups: list[tuple[Path, Path]] = []
+            installed: list[Path] = []
+            try:
+                for staged in staged_files:
+                    target = index_dir / staged.name
+                    if target.exists():
+                        backup = backup_dir / staged.name
+                        os.replace(target, backup)
+                        backups.append((target, backup))
+                for staged in staged_files:
+                    target = index_dir / staged.name
+                    os.replace(staged, target)
+                    installed.append(target)
+            except Exception:
+                for target in installed:
+                    target.unlink(missing_ok=True)
+                for target, backup in reversed(backups):
+                    os.replace(backup, target)
+                raise
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def _reload_durable_index_after_failure(self, index_dir: Path) -> None:
+        """Discard a mutated FAISS object and reload only from durable files."""
+        self._vectorstore = None
+        if not index_dir.joinpath("index.faiss").exists():
+            return
+        try:
+            self._vectorstore = FAISS.load_local(
+                str(index_dir),
+                self._embeddings(),
+                allow_dangerous_deserialization=True,
+                distance_strategy=DistanceStrategy.COSINE,
+            )
+        except Exception:
+            self._vectorstore = None
+            LOGGER.exception("Could not reload the durable FAISS index after a failed mutation.")
+
+    def purge_document(self, document_id: str) -> int:
+        """Remove every FAISS/docstore entry for a Java document tombstone.
+
+        The operation is serialized with search and ingestion, saves the compacted
+        index only after FAISS accepts the deletion, and is idempotent when the
+        document is already absent. A failure leaves the in-memory and on-disk
+        index untouched so the Java retention loop can retry it.
+        """
+        with self._lock:
+            index_dir = _index_dir()
+            if self._vectorstore is None:
+                if not index_dir.joinpath("index.faiss").exists():
+                    return 0
+                self._vectorstore = self._get_vectorstore()
+            vectorstore = self._vectorstore
+            docstore = getattr(vectorstore, "docstore", None)
+            documents = getattr(docstore, "_dict", {})
+            ids = [
+                vector_id
+                for vector_id, document in documents.items()
+                if str(document.metadata.get("document_id") or "") == document_id
+            ]
+            if not ids:
+                return 0
+            delete = getattr(vectorstore, "delete", None)
+            if not callable(delete):
+                raise RuntimeError("The FAISS backend does not support safe document deletion.")
+            delete(ids)
+            try:
+                self._save_vectorstore_atomically(vectorstore, index_dir)
+                self._write_index_model(index_dir)
+            except Exception:
+                # delete() mutates the in-memory FAISS object before persistence.
+                # Never report success from that object after save failure: restore
+                # the durable view or force the next retry to reload/fail closed.
+                self._reload_durable_index_after_failure(index_dir)
+                raise
+            return len(ids)
 
     def complete(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         message_types = {
@@ -435,6 +553,22 @@ def trigger_ingest(x_worker_api_key: str | None = Header(default=None)) -> dict[
         raise HTTPException(status_code=401, detail="Worker API key is invalid.")
     request_run()
     return {"status": "queued"}
+
+
+@app.post("/v1/internal/documents/{document_id}/purge")
+def purge_document(document_id: str, x_worker_api_key: str | None = Header(default=None)) -> dict[str, object]:
+    """Idempotently compact one deleted document out of FAISS and its docstore."""
+    expected_key = os.getenv("JAVA_WORKER_API_KEY", "")
+    if not expected_key:
+        raise HTTPException(status_code=503, detail="Document worker is not configured.")
+    if not hmac.compare_digest(x_worker_api_key or "", expected_key):
+        raise HTTPException(status_code=401, detail="Worker API key is invalid.")
+    try:
+        removed_chunks = runtime.purge_document(document_id)
+    except Exception as exception:
+        LOGGER.warning("Could not purge document %s from the vector store: %s", document_id, exception)
+        raise HTTPException(status_code=503, detail="Document vector purge unavailable.") from exception
+    return {"status": "purged", "documentId": document_id, "removedChunks": removed_chunks}
 
 
 @app.get("/ready")

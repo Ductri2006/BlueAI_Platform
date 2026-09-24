@@ -72,7 +72,9 @@ public class ConversationMessage {
         if (id == null) {
             id = UUID.randomUUID().toString();
         }
-        createdAt = Instant.now();
+        createdAt = conversation == null
+                ? Instant.now()
+                : conversation.nextMessageTimestamp(Instant.now());
     }
 
     public String getId() {

@@ -122,13 +122,27 @@ def _extract_csv_text(content: bytes) -> str:
 
 async def run_worker_once(client: httpx.AsyncClient, base_url: str, api_key: str, indexer: Indexer) -> int:
     headers = {"X-Worker-Api-Key": api_key}
+    purge_response = await client.post(
+        f"{base_url}/api/v1/internal/documents/purge",
+        params={"limit": 100},
+        headers=headers,
+    )
+    # A rolling deployment may briefly run an older Java API without the purge
+    # endpoint. Keep ingestion compatible during that window, but surface any
+    # other failure so the loop's bounded telemetry records it.
+    if getattr(purge_response, "status_code", 200) not in (200, 404):
+        purge_response.raise_for_status()
     response = await client.post(f"{base_url}/api/v1/internal/documents/claim", params={"limit": 5}, headers=headers)
     response.raise_for_status()
     documents = response.json()
     for document in documents:
         document_id = document["id"]
+        attempt_id = document["attemptId"]
+        attempt_headers = {**headers, "X-Worker-Attempt-Id": attempt_id}
         try:
-            content_response = await client.get(f"{base_url}/api/v1/internal/documents/{document_id}/content", headers=headers)
+            content_response = await client.get(
+                f"{base_url}/api/v1/internal/documents/{document_id}/content", headers=attempt_headers
+            )
             content_response.raise_for_status()
             text = extract_text(content_response.content, document["contentType"], document["originalFilename"])
             chunk_count = await asyncio.to_thread(
@@ -141,13 +155,13 @@ async def run_worker_once(client: httpx.AsyncClient, base_url: str, api_key: str
                 document["requestedChunkSize"],
                 document["requestedChunkOverlap"],
             )
-            result = {"status": "READY", "producedChunkCount": chunk_count}
+            result = {"attemptId": attempt_id, "status": "READY", "producedChunkCount": chunk_count}
             LOGGER.info("Indexed document %s into %s chunks", document_id, chunk_count)
         except Exception as exception:
-            result = {"status": "FAILED", "failureReason": str(exception)[:1000]}
+            result = {"attemptId": attempt_id, "status": "FAILED", "failureReason": str(exception)[:1000]}
             LOGGER.warning("Document %s failed: %s", document_id, exception)
         result_response = await client.patch(
-            f"{base_url}/api/v1/internal/documents/{document_id}/result", headers=headers, json=result,
+            f"{base_url}/api/v1/internal/documents/{document_id}/result", headers=attempt_headers, json=result,
         )
         result_response.raise_for_status()
     return len(documents)

@@ -1,6 +1,7 @@
 package com.blueai.auth.service;
 
 import com.blueai.auth.config.JwtProperties;
+import com.blueai.auth.dto.ChangePasswordRequest;
 import com.blueai.auth.dto.AuthResponse;
 import com.blueai.auth.dto.LoginRequest;
 import com.blueai.auth.dto.RegisterRequest;
@@ -10,6 +11,7 @@ import com.blueai.auth.model.RefreshToken;
 import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.RefreshTokenRepository;
+import com.blueai.auth.repository.PasswordResetTokenRepository;
 import com.blueai.auth.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -40,22 +42,28 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtEncoder jwtEncoder;
     private final JwtProperties jwtProperties;
+    private final AuthAuditLogService auditLogService;
 
     public AuthService(
             UserRepository userRepository,
             RefreshTokenRepository refreshTokenRepository,
+            PasswordResetTokenRepository passwordResetTokenRepository,
             PasswordEncoder passwordEncoder,
             JwtEncoder jwtEncoder,
-            JwtProperties jwtProperties
+            JwtProperties jwtProperties,
+            AuthAuditLogService auditLogService
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtEncoder = jwtEncoder;
         this.jwtProperties = jwtProperties;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
@@ -68,6 +76,7 @@ public class AuthService {
 
         User user = new User(email, passwordEncoder.encode(request.password()), request.fullName().trim());
         userRepository.saveAndFlush(user);
+        auditLogService.recordAfterCommit("REGISTRATION", "SUCCESS", null, user.getId());
         return issueSession(user, UUID.randomUUID().toString());
     }
 
@@ -77,12 +86,22 @@ public class AuthService {
         if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
             throw invalidCredentials();
         }
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(this::invalidCredentials);
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            auditLogService.record("LOGIN", "FAILURE", null, null);
             throw invalidCredentials();
         }
-        ensureActive(user);
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            auditLogService.record("LOGIN", "FAILURE", null, user.getId());
+            throw invalidCredentials();
+        }
+        try {
+            ensureActive(user);
+        } catch (ApiException exception) {
+            auditLogService.record("LOGIN", "FAILURE", null, user.getId());
+            throw exception;
+        }
+        auditLogService.recordAfterCommit("LOGIN", "SUCCESS", user.getId(), user.getId());
         return issueSession(user, UUID.randomUUID().toString());
     }
 
@@ -98,6 +117,7 @@ public class AuthService {
 
         if (current.getRevokedAt() != null) {
             refreshTokenRepository.revokeFamily(current.getUser().getId(), current.getFamilyId(), now);
+            auditLogService.record("REFRESH_TOKEN_REUSE", "FAILURE", current.getUser().getId(), current.getUser().getId());
             throw new ApiException(
                     HttpStatus.UNAUTHORIZED,
                     "REFRESH_TOKEN_REUSED",
@@ -106,6 +126,7 @@ public class AuthService {
         }
         if (current.isExpired(now)) {
             current.revoke(now, null);
+            auditLogService.record("REFRESH", "FAILURE", current.getUser().getId(), current.getUser().getId());
             throw new ApiException(
                     HttpStatus.UNAUTHORIZED,
                     "REFRESH_TOKEN_EXPIRED",
@@ -114,21 +135,43 @@ public class AuthService {
         }
 
         User user = current.getUser();
-        ensureActive(user);
+        try {
+            ensureActive(user);
+        } catch (ApiException exception) {
+            auditLogService.record("REFRESH", "FAILURE", user.getId(), user.getId());
+            throw exception;
+        }
         SessionTokens next = createSessionTokens(user, current.getFamilyId());
         current.revoke(now, next.refreshTokenEntity().getId());
         refreshTokenRepository.save(current);
+        auditLogService.recordAfterCommit("REFRESH", "SUCCESS", user.getId(), user.getId());
         return next.response();
     }
 
     @Transactional
     public void logout(String rawRefreshToken) {
         refreshTokenRepository.findByTokenHash(hashToken(rawRefreshToken))
-                .ifPresent(token -> refreshTokenRepository.revokeFamily(
-                        token.getUser().getId(),
-                        token.getFamilyId(),
-                        Instant.now()
-                ));
+                .ifPresentOrElse(token -> {
+                    refreshTokenRepository.revokeFamily(token.getUser().getId(), token.getFamilyId(), Instant.now());
+                    auditLogService.recordAfterCommit("LOGOUT", "SUCCESS", token.getUser().getId(), token.getUser().getId());
+                }, () -> auditLogService.record("LOGOUT", "NOOP", null, null));
+    }
+
+    @Transactional
+    public void changePassword(String userId, ChangePasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "USER_NOT_FOUND", "User no longer exists."));
+        ensureActive(user);
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            auditLogService.record("PASSWORD_CHANGE", "FAILURE", userId, userId);
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
+        }
+        validatePasswordLength(request.newPassword());
+        user.changePassword(passwordEncoder.encode(request.newPassword()));
+        Instant changedAt = Instant.now();
+        refreshTokenRepository.revokeAllForUser(userId, changedAt);
+        passwordResetTokenRepository.revokeActiveForUser(userId);
+        auditLogService.recordAfterCommit("PASSWORD_CHANGE", "SUCCESS", userId, userId);
     }
 
     @Transactional(readOnly = true)
@@ -177,6 +220,7 @@ public class AuthService {
                 .id(UUID.randomUUID().toString())
                 .claim("email", user.getEmail())
                 .claim("roles", List.of(user.getRole().name()))
+                .claim("authVersion", user.getAuthVersion())
                 .claim("type", "access")
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).type("JWT").build();
@@ -185,7 +229,7 @@ public class AuthService {
     }
 
     private void ensureActive(User user) {
-        if (user.getStatus() != UserStatus.ACTIVE) {
+        if (user.getStatus() != UserStatus.ACTIVE || user.isDeleted()) {
             throw new ApiException(HttpStatus.FORBIDDEN, "USER_DISABLED", "User account is disabled.");
         }
     }
