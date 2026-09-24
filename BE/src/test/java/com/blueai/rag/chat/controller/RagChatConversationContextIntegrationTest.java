@@ -303,6 +303,71 @@ class RagChatConversationContextIntegrationTest {
         ragStub.verify();
     }
 
+    @Test
+    void persistsAndReloadsConfirmedUserMemoryWithoutLeakingItAcrossOwners() throws Exception {
+        String ownerToken = registerAndGetAccessToken("memory-context-owner@example.com");
+        String ownerConversationId = createConversation(ownerToken, "Khách Sao Mai");
+
+        mockMvc.perform(put("/api/v1/me/memories/{memoryKey}", "customer-crm")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Khách Sao Mai có mã CRM CM-4821 và ưu tiên liên hệ qua email.","scope":"USER","status":"CONFIRMED"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.key")
+                        .value("customer-crm"));
+
+        ragStub.expect(once(), requestTo("http://rag-context-stub.test/v1/retrieval/search"))
+                .andRespond(withSuccess("{\"matches\":[]}", MediaType.APPLICATION_JSON));
+        ragStub.expect(once(), requestTo("http://rag-context-stub.test/v1/chat/completions"))
+                .andExpect(jsonPath("$.messages[0].content", containsString("customer-crm")))
+                .andExpect(jsonPath("$.messages[0].content", containsString("CM-4821")))
+                .andRespond(withSuccess("""
+                        {"choices":[{"message":{"role":"assistant","content":"Mã CRM đã lưu là CM-4821; khách ưu tiên liên hệ qua email."}}]}
+                        """, MediaType.APPLICATION_JSON));
+        ragStub.expect(once(), requestTo("http://rag-context-stub.test/v1/chat/completions"))
+                .andExpect(jsonPath("$.messages[0].content", not(containsString("CM-4821"))))
+                .andRespond(withSuccess("""
+                        {"choices":[{"message":{"role":"assistant","content":"Chưa ghi nhận mã CRM cho tài khoản này."}}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        mockMvc.perform(post("/api/v1/conversations/{id}/ask", ownerConversationId)
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"Bạn còn nhớ mã CRM và cách liên hệ khách Sao Mai không?\"}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                        "$.assistantMessage.content").value(
+                        "Mã CRM đã lưu là CM-4821; khách ưu tiên liên hệ qua email."))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                        "$.contextSources[0].type").value("USER_MEMORY"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                        "$.contextSources[0].memoryKey").value("customer-crm"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/v1/conversations/{id}/messages", ownerConversationId)
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                        "$[1].evidence.contextSources[0].type").value("USER_MEMORY"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                        "$[1].evidence.contextSources[0].memoryKey").value("customer-crm"));
+
+        String otherToken = registerAndGetAccessToken("memory-context-other@example.com");
+        String otherConversationId = createConversation(otherToken, "Khách hàng");
+
+        mockMvc.perform(post("/api/v1/conversations/{id}/ask", otherConversationId)
+                        .header("Authorization", "Bearer " + otherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\":\"Bạn còn nhớ mã CRM của khách hàng không?\"}"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                        "$.contextSources").isEmpty());
+
+        ragStub.verify();
+    }
+
     private void cleanDatabase() {
         linkRepository.deleteAll();
         memoryRepository.deleteAll();
