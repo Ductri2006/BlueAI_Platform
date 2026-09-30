@@ -124,6 +124,9 @@ class RetrievalRequest(BaseModel):
     userId: str = Field(min_length=1)
     query: str = Field(min_length=1)
     limit: int = Field(default=6, ge=1, le=20)
+    # Optional allowlist used by machine integrations. Legacy callers retain
+    # their owner-scoped behavior when this is omitted.
+    allowedDocumentIds: list[str] | None = Field(default=None, max_length=100)
 
 
 class RetrievalMatch(BaseModel):
@@ -155,10 +158,17 @@ class CompletionChoice(BaseModel):
     message: ChatMessage
 
 
+class CompletionUsage(BaseModel):
+    prompt_tokens: int = Field(ge=0)
+    completion_tokens: int = Field(ge=0)
+    total_tokens: int = Field(ge=0)
+
+
 class ChatCompletionResponse(BaseModel):
     id: str
     model: str
     choices: list[CompletionChoice]
+    usage: CompletionUsage | None = None
 
 
 def _select_diverse(
@@ -270,9 +280,11 @@ class RagRuntime:
         return self._vectorstore
 
 
-    def search(self, user_id: str, query: str, limit: int) -> list[RetrievalMatch]:
+    def search(self, user_id: str, query: str, limit: int, allowed_document_ids: list[str] | None = None) -> list[RetrievalMatch]:
         normalized_query = _normalize_query(query)
         if not normalized_query:
+            return []
+        if allowed_document_ids is not None and not allowed_document_ids:
             return []
 
         candidates = min(
@@ -283,9 +295,14 @@ class RagRuntime:
         per_document_limit = _int_env("RAG_MAX_CHUNKS_PER_DOCUMENT", 3, 1, 20)
 
         with self._lock:
-            results = self._get_vectorstore().similarity_search_with_score(
-                normalized_query, k=candidates
-            )
+            store = self._get_vectorstore()
+            # For machine tasks the caller's document allowlist must be applied
+            # before top-k selection; otherwise unauthorized neighbors can fill
+            # the candidate window. Search the indexed vectors and filter below.
+            if allowed_document_ids is not None and store.index.ntotal > 100_000:
+                raise RuntimeError("Integration retrieval index exceeds the 100,000-vector allowlist scan limit.")
+            search_k = store.index.ntotal if allowed_document_ids is not None else candidates
+            results = store.similarity_search_with_score(normalized_query, k=search_k)
 
         visible: list[RetrievalMatch] = []
         seen_chunks: set[str] = set()
@@ -294,6 +311,9 @@ class RagRuntime:
             source_type = str(metadata.get("source_type") or "UNKNOWN")
             if source_type == "USER_DOCUMENT" and metadata.get("owner_id") != user_id:
                 continue
+            document_id = str(metadata.get("document_id") or metadata.get("source") or "unknown")
+            if allowed_document_ids is not None and document_id not in allowed_document_ids:
+                continue
             relevance = _relevance_from_distance(distance)
             if relevance < minimum_relevance:
                 continue
@@ -301,7 +321,6 @@ class RagRuntime:
             if fingerprint in seen_chunks:
                 continue
             seen_chunks.add(fingerprint)
-            document_id = str(metadata.get("document_id") or metadata.get("source") or "unknown")
             chunk_id = str(metadata.get("record_id") or f"{document_id}:{index}")
             visible.append(RetrievalMatch(
                 documentId=document_id,
@@ -488,10 +507,20 @@ class RagRuntime:
                 content = _extract_text(response.content)
                 if not content.strip():
                     raise RuntimeError("Gemini returned an empty response.")
+                metadata = response.usage_metadata or {}
+                usage = None
+                if all(key in metadata and metadata[key] is not None
+                       for key in ("input_tokens", "output_tokens", "total_tokens")):
+                    usage = CompletionUsage(
+                        prompt_tokens=metadata["input_tokens"],
+                        completion_tokens=metadata["output_tokens"],
+                        total_tokens=metadata["total_tokens"],
+                    )
                 return ChatCompletionResponse(
                     id=f"chatcmpl-{uuid.uuid4()}",
                     model=model_name,
                     choices=[CompletionChoice(message=ChatMessage(role="assistant", content=content.strip()))],
+                    usage=usage,
                 )
             except Exception as error:
                 has_fallback = index + 1 < len(models)
@@ -584,7 +613,11 @@ def readiness() -> dict[str, str]:
 @app.post("/v1/retrieval/search", response_model=RetrievalResponse)
 def retrieval_search(request: RetrievalRequest) -> RetrievalResponse:
     try:
-        return RetrievalResponse(matches=runtime.search(request.userId, request.query.strip(), request.limit))
+        if request.allowedDocumentIds is None:
+            matches = runtime.search(request.userId, request.query.strip(), request.limit)
+        else:
+            matches = runtime.search(request.userId, request.query.strip(), request.limit, request.allowedDocumentIds)
+        return RetrievalResponse(matches=matches)
     except Exception as exception:
         raise HTTPException(status_code=503, detail=f"RAG retrieval unavailable: {exception}") from exception
 

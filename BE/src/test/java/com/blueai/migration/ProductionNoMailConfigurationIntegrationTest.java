@@ -1,27 +1,15 @@
 package com.blueai.migration;
 
 import com.blueai.BlueAiAuthApplication;
-import com.blueai.auth.service.PasswordResetDelivery;
-import com.blueai.auth.service.SmtpPasswordResetDelivery;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Starts the production validation path with a fake SMTP endpoint. This
- * verifies that the mail property contract matches the auth configuration
- * without sending mail or putting a reset token in logs.
- */
-@SpringBootTest(properties = {
-        "app.auth.password-reset.enabled=true",
-        "app.auth.password-reset.mail-from=no-reply@blueai.test",
-        "app.auth.password-reset.frontend-url=https://app.blueai.test/reset-password",
-        "spring.mail.host=localhost",
-        "spring.mail.port=2525",
-        "spring.mail.test-connection=false",
+@SpringBootTest(classes = BlueAiAuthApplication.class, properties = {
         "spring.datasource.url=jdbc:h2:mem:blueai-auth-prod-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
         "spring.datasource.username=sa",
         "app.widget.protection.redis-enabled=true",
@@ -38,13 +26,12 @@ import static org.assertj.core.api.Assertions.assertThat;
         "app.bootstrap-admin.password="
 })
 @ActiveProfiles({"test", "prod"})
-class ProductionMailConfigurationIntegrationTest {
+class ProductionNoMailConfigurationIntegrationTest {
 
-    @Autowired
-    private PasswordResetDelivery passwordResetDelivery;
+    @Autowired ApplicationContext context;
 
     @Test
-    void productionProfileBuildsSmtpDeliveryFromTheSharedPropertyContract() {
-        assertThat(passwordResetDelivery).isInstanceOf(SmtpPasswordResetDelivery.class);
+    void productionProfileStartsWithoutSmtpOrPasswordResetConfiguration() {
+        assertThat(context).isNotNull();
     }
 }

@@ -239,6 +239,43 @@ class RagApiTest(unittest.TestCase):
         runtime.search("user-1", "query", 6)
         self.assertGreaterEqual(store.k, 48)
 
+    def test_integration_allowlist_expands_search_before_top_k_filtering(self):
+        unauthorized = [(_document(f"private-{i}", f"private {i}", owner="other"), 0.01) for i in range(250)]
+        authorized = [(_document("granted", "granted evidence", owner="user-1"), 0.3)]
+
+        class IndexedStore(StubVectorStore):
+            def __init__(self, results):
+                super().__init__(results)
+                self.index = SimpleNamespace(ntotal=len(results))
+
+            def similarity_search_with_score(self, query, k):
+                self.k = k
+                return self.results[:k]
+
+        store = IndexedStore(unauthorized + authorized)
+        runtime = api.RagRuntime()
+        runtime._vectorstore = store
+        matches = runtime.search("user-1", "query", 1, ["granted"])
+
+        self.assertEqual(store.index.ntotal, store.k)
+        self.assertEqual(["granted"], [match.documentId for match in matches])
+
+    def test_empty_integration_allowlist_skips_vector_search(self):
+        store = StubVectorStore([])
+        runtime = api.RagRuntime()
+        runtime._vectorstore = store
+        self.assertEqual([], runtime.search("user-1", "query", 1, []))
+        self.assertIsNone(store.k)
+
+    def test_integration_allowlist_fails_closed_when_index_exceeds_scan_limit(self):
+        class LargeIndexedStore(StubVectorStore):
+            index = SimpleNamespace(ntotal=100_001)
+
+        runtime = api.RagRuntime()
+        runtime._vectorstore = LargeIndexedStore([])
+        with self.assertRaisesRegex(RuntimeError, "100,000-vector"):
+            runtime.search("user-1", "query", 1, ["granted"])
+
     def test_retrieval_ignores_blank_query(self):
         runtime = api.RagRuntime()
         runtime._vectorstore = StubVectorStore([(_document("doc-a", "content", owner="user-1"), 0.1)])
@@ -347,12 +384,15 @@ class RagApiTest(unittest.TestCase):
                     {"type": "reasoning", "reasoning": "suy nghi noi bo"},
                     {"type": "text", "text": "Chinh sach hoan tien la 7 ngay. [S1]",
                      "extras": {"signature": "El4KXAERTTIPWM4oUT1zee1BHK2xUEDa"}},
-                ])
+                ], usage_metadata={"input_tokens": 120, "output_tokens": 24, "total_tokens": 160})
 
         request = api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="hoan tien?")])
         with patch.object(api, "ChatGoogleGenerativeAI", return_value=FakeLlm()):
             response = api.RagRuntime().complete(request)
         self.assertEqual("Chinh sach hoan tien la 7 ngay. [S1]", response.choices[0].message.content)
+        self.assertEqual(120, response.usage.prompt_tokens)
+        self.assertEqual(24, response.usage.completion_tokens)
+        self.assertEqual(160, response.usage.total_tokens)
 
     def test_completion_rejects_a_response_without_text_blocks(self):
         class ThinkingOnlyLlm:

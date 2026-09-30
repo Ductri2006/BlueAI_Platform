@@ -149,6 +149,22 @@ export interface SystemMetricsResponse {
   generatedAt: string;
 }
 
+export interface GeminiUsageTotals {
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface GeminiUsageReport {
+  last24Hours: GeminiUsageTotals;
+  last7Days: GeminiUsageTotals;
+  lifetime: GeminiUsageTotals;
+  daily: Array<GeminiUsageTotals & { date: string }>;
+  recent: Array<Omit<GeminiUsageTotals, 'requests'> & { id: string; model: string; recordedAt: string }>;
+  generatedAt: string;
+}
+
 export type StudioBotStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type StudioDialogNodeType = 'WELCOME' | 'ROUTE' | 'FALLBACK' | 'FOLDER';
 export type StudioDialogNextStep = 'WAIT_FOR_REPLY' | 'SKIP_USER_INPUT' | 'JUMP_TO';
@@ -455,6 +471,10 @@ export class BlueAiApi {
 
   async getSystemMetrics(): Promise<SystemMetricsResponse> {
     return this.authorizedRequest<SystemMetricsResponse>('/api/v1/system/metrics', { method: 'GET' });
+  }
+
+  async getGeminiUsage(): Promise<GeminiUsageReport> {
+    return this.authorizedRequest<GeminiUsageReport>('/api/v1/system/gemini-usage', { method: 'GET' });
   }
 
   async listStudioBots(): Promise<StudioBotSummary[]> {

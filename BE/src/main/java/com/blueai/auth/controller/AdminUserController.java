@@ -3,6 +3,7 @@ package com.blueai.auth.controller;
 import com.blueai.auth.dto.CreateManagedUserRequest;
 import com.blueai.auth.dto.AuthAuditLogResponse;
 import com.blueai.auth.dto.PageResponse;
+import com.blueai.auth.dto.AdminSetPasswordRequest;
 import com.blueai.auth.dto.PurgeAuthRecordsRequest;
 import com.blueai.auth.dto.PurgeAuthRecordsResponse;
 import com.blueai.auth.dto.UpdateUserStatusRequest;
@@ -80,6 +81,16 @@ public class AdminUserController {
             @Valid @RequestBody UpdateUserStatusRequest request
     ) {
         return adminUserService.updateStatus(jwt.getSubject(), userId, request.status());
+    }
+
+    @PostMapping("/users/{userId}/password")
+    ResponseEntity<Void> setPassword(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable String userId,
+            @Valid @RequestBody AdminSetPasswordRequest request
+    ) {
+        adminUserService.setPassword(jwt.getSubject(), userId, request.newPassword());
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/users/{userId}")

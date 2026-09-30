@@ -18,6 +18,7 @@ import com.blueai.studio.repository.BotReleaseRepository;
 import com.blueai.studio.repository.BotRepository;
 import com.blueai.studio.repository.BotSessionRepository;
 import com.blueai.studio.repository.BotTurnRepository;
+import com.blueai.system.service.GeminiUsageService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -65,6 +66,9 @@ class RagChatConfiguredIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private GeminiUsageService geminiUsageService;
 
     @Autowired
     private ConversationMessageRepository messageRepository;
@@ -435,6 +439,7 @@ class RagChatConfiguredIntegrationTest {
 
     @Test
     void askCallsConfiguredRetrieverAndLlmAndReturnsVerifiedSource() throws Exception {
+        long previousUsageCount = geminiUsageService.report().lifetime().requests();
         String accessToken = registerAndGetAccessToken();
         User user = userRepository.findByEmail("configured-rag@example.com").orElseThrow();
         RagDocument document = new RagDocument(
@@ -462,7 +467,8 @@ class RagChatConfiguredIntegrationTest {
                 .andExpect(jsonPath("$.model").value("configured-test-model"))
                 .andExpect(jsonPath("$.messages[0].content").value(org.hamcrest.Matchers.containsString("refund-policy.pdf")))
                 .andRespond(withSuccess("""
-                        {"choices":[{"message":{"role":"assistant","content":"Mã QR chưa quét có thể được xem xét hoàn tiền. [S1]"}}]}
+                        {"model":"gemini-test","choices":[{"message":{"role":"assistant","content":"Mã QR chưa quét có thể được xem xét hoàn tiền. [S1]"}}],
+                         "usage":{"prompt_tokens":140,"completion_tokens":32,"total_tokens":190}}
                         """, MediaType.APPLICATION_JSON));
 
         mockMvc.perform(post("/api/v1/conversations/{conversationId}/ask", conversationId)
@@ -479,6 +485,10 @@ class RagChatConfiguredIntegrationTest {
 
         ragStub.verify();
         org.junit.jupiter.api.Assertions.assertEquals(2, messageRepository.count());
+        assertThat(geminiUsageService.report().lifetime().requests()).isEqualTo(previousUsageCount + 1);
+        assertThat(geminiUsageService.report().recent().getFirst().model()).isEqualTo("gemini-test");
+        assertThat(geminiUsageService.report().recent().getFirst().promptTokens()).isEqualTo(140);
+        assertThat(geminiUsageService.report().recent().getFirst().totalTokens()).isEqualTo(190);
     }
 
     @Test

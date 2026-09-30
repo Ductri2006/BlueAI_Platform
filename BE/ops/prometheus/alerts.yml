@@ -28,41 +28,55 @@ groups:
         expr: |
           sum(rate(http_server_requests_seconds_count{
             job="auth-api",
-            uri=~"/api/v1/auth/(login|password-reset/request)",
+            uri="/api/v1/auth/login",
             status="429"
           }[5m])) > 0.1
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: BlueAI login/password-reset 429 burst detected
-          description: Auth endpoints are returning more than 6 HTTP 429 responses per minute; inspect edge/WAF and credential-abuse telemetry.
+          summary: BlueAI login 429 burst detected
+          description: Login is returning more than 6 HTTP 429 responses per minute; inspect edge/WAF and credential-abuse telemetry.
+
+      - alert: BlueAiLogin401Burst
+        expr: |
+          sum(rate(http_server_requests_seconds_count{
+            job="auth-api",
+            uri="/api/v1/auth/login",
+            status="401"
+          }[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BlueAI login 401 burst detected
+          description: Login is rejecting more than 6 requests per minute; inspect credential-stuffing attempts and edge rate limits.
 
       - alert: BlueAiAuthEndpoint5xxRate
         expr: |
           (
             sum(rate(http_server_requests_seconds_count{
               job="auth-api",
-              uri=~"/api/v1/auth/(login|password-reset/request)",
+              uri="/api/v1/auth/login",
               status=~"5.."
             }[5m]))
             /
             clamp_min(sum(rate(http_server_requests_seconds_count{
               job="auth-api",
-              uri=~"/api/v1/auth/(login|password-reset/request)"
+              uri="/api/v1/auth/login"
             }[5m])), 0.000001)
           ) > 0.05
           and
           sum(rate(http_server_requests_seconds_count{
             job="auth-api",
-            uri=~"/api/v1/auth/(login|password-reset/request)"
+            uri="/api/v1/auth/login"
           }[5m])) > 0.01
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: BlueAI login/password-reset 5xx rate is above 5%
-          description: Auth endpoint 5xx ratio is {{ $value | humanizePercentage }}; inspect bcrypt saturation, database and dependencies.
+          summary: BlueAI login 5xx rate is above 5%
+          description: Login 5xx ratio is {{ $value | humanizePercentage }}; inspect bcrypt saturation, database and dependencies.
 
       - alert: BlueAiHighApiLatency
         expr: |

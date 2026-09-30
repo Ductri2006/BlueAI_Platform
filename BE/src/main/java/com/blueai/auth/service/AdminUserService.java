@@ -8,6 +8,9 @@ import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.UserRepository;
 import com.blueai.auth.repository.RefreshTokenRepository;
+import com.blueai.auth.repository.PasswordResetTokenRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -20,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
 import java.time.Instant;
+import java.util.UUID;
 
 @Service
 public class AdminUserService {
@@ -29,17 +33,23 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final EntityManager entityManager;
     private final AuthAuditLogService auditLogService;
 
     public AdminUserService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             RefreshTokenRepository refreshTokenRepository,
+            PasswordResetTokenRepository passwordResetTokenRepository,
+            EntityManager entityManager,
             AuthAuditLogService auditLogService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
+        this.entityManager = entityManager;
         this.auditLogService = auditLogService;
     }
 
@@ -94,6 +104,44 @@ public class AdminUserService {
         UserResponse response = UserResponse.from(userRepository.saveAndFlush(user));
         auditLogService.recordAfterCommit("ADMIN_USER_CREATED", "SUCCESS", administratorId, user.getId());
         return response;
+    }
+
+    @Transactional
+    public void setPassword(String administratorId, String userId, String newPassword) {
+        if (!isCanonicalUserId(userId)) {
+            auditLogService.record("ADMIN_PASSWORD_SET", "FAILURE", administratorId, null);
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_USER_ID", "User ID is invalid.");
+        }
+        User user = entityManager.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE);
+        if (user == null) {
+            auditLogService.record("ADMIN_PASSWORD_SET", "FAILURE", administratorId, userId);
+            throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User was not found.");
+        }
+        if (user.isDeleted() || user.getStatus() != UserStatus.ACTIVE) {
+            auditLogService.record("ADMIN_PASSWORD_SET", "FAILURE", administratorId, userId);
+            throw new ApiException(HttpStatus.CONFLICT, "USER_NOT_ACTIVE", "Only active accounts can receive a new password.");
+        }
+        if (newPassword.getBytes(StandardCharsets.UTF_8).length > 72) {
+            auditLogService.record("ADMIN_PASSWORD_SET", "FAILURE", administratorId, userId);
+            throw new ApiException(HttpStatus.BAD_REQUEST, "PASSWORD_TOO_LONG", "Password must not exceed 72 UTF-8 bytes.");
+        }
+
+        user.changePassword(passwordEncoder.encode(newPassword));
+        entityManager.flush();
+        refreshTokenRepository.revokeAllForUser(userId, Instant.now());
+        passwordResetTokenRepository.revokeActiveForUser(userId);
+        auditLogService.recordAfterCommit("ADMIN_PASSWORD_SET", "SUCCESS", administratorId, userId);
+    }
+
+    private boolean isCanonicalUserId(String userId) {
+        if (userId == null || userId.length() != 36) {
+            return false;
+        }
+        try {
+            return UUID.fromString(userId).toString().equalsIgnoreCase(userId);
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     @Transactional

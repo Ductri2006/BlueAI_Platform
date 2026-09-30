@@ -4,6 +4,7 @@ export type UserRole =
   | 'knowledge_owner' // Quản lý tài liệu (Tài liệu nội bộ / RAG Admin)
   | 'studio'          // Thiết kế và phát hành chatbot
   | 'admin'           // Quản trị viên hệ thống (System & Security Admin)
+  | 'gemini_usage'    // Theo dõi token Gemini
   | 'reseller'        // Đại lý B2B (Cổng đại lý)
   | 'b2c_customer';   // Khách hàng B2C (Cổng hỗ trợ khách hàng)
 

@@ -24,12 +24,16 @@ khi nó tốn connection, Redis hoặc quota AI.
 4. Trong lần deploy đầu tiên, đặt email và mật khẩu bootstrap admin. Khi admin
    đã tồn tại, đặt **cả hai** `APP_BOOTSTRAP_ADMIN_EMAIL` và
    `APP_BOOTSTRAP_ADMIN_PASSWORD` thành chuỗi rỗng để không còn bootstrap.
-5. Cấu hình SMTP và password reset trong `.env`: production yêu cầu
-   `APP_RESET_ENABLED=true`, `APP_RESET_FRONTEND_URL` HTTPS,
-   `APP_RESET_MAIL_FROM`, `SMTP_HOST` và thông tin xác thực relay phù hợp.
-   Không in `docker compose config` ra terminal/log vì cấu hình đã render chứa
-   `SMTP_PASSWORD` và webhook; dùng `ops/deploy.ps1 -Action Validate` hoặc
+5. Tài khoản đăng nhập bằng email và mật khẩu do ADMIN cấp. Không cấu hình SMTP,
+   self-service password reset/change hoặc Google/Gmail SSO. `GOOGLE_API_KEY`
+   trong `.env` phục vụ Gemini AI, không phải credential đăng nhập. Không in
+   `docker compose config` ra terminal/log vì cấu hình đã render chứa các
+   secret như JWT và webhook; dùng `ops/deploy.ps1 -Action Validate` hoặc
    `docker compose ... config --quiet`.
+
+Khi nâng cấp deployment cũ, xóa `APP_RESET_*`/`SMTP_*` khỏi secret bundle sau
+khi bundle Java mới pass staging; thu hồi credential SMTP đã cấp riêng cho
+reset nếu không còn consumer khác. Không tái sử dụng route self-service cũ.
 
 Không dùng lại key đã từng lộ trong Git. Việc revoke/rotate tại OpenAI hoặc
 provider phải được thực hiện trong dashboard của provider trước khi deploy.
@@ -74,6 +78,20 @@ docker compose -f compose.yaml -f compose.production.yaml ps
 
 Lệnh `config --quiet` phải hoàn thành trước. Nó sẽ dừng ngay nếu thiếu biến bắt
 buộc mà không in giá trị secret đã render.
+
+Compose có restart policy `unless-stopped` cho MySQL, Redis, RAG, Java API và
+frontend. Java healthcheck gọi `/actuator/health` trên loopback; frontend probe
+`/index.html` và đợi Java `service_healthy` lúc khởi động. Cả hai image Alpine
+phải có `wget`; xác nhận command này khi build/test image release. Healthcheck
+không gọi Gemini và không chứng minh provider/worker hoạt động. Container bị
+`unhealthy` cũng không tự restart chỉ vì healthcheck fail: restart policy áp
+dụng khi process thoát. Smoke staging và cảnh báo vẫn là gate bắt buộc.
+
+Nginx giữ body limit 1 MB cho API thông thường và 21 MB cho đúng route
+`/api/v1/documents`, phù hợp file tối đa 20 MB cộng multipart overhead của Java.
+TLS/CDN/WAF phía trước cần cùng giới hạn upload; thử file 2 MB, gần 20 MB và
+file vượt giới hạn qua domain thật trước khi mở traffic.
+
 `SPRING_PROFILES_ACTIVE=prod` kích hoạt production gate của backend. Backend
 từ chối khởi động nếu còn một trong các lỗi sau:
 
@@ -85,12 +103,19 @@ từ chối khởi động nếu còn một trong các lỗi sau:
 - Rate-limit hoặc TTL widget không hợp lệ.
 
 Thông báo lỗi chỉ nêu tên biến cần sửa, không in secret.
+Image backend trong release phải hỗ trợ `POST /api/v1/admin/users/{userId}/password`,
+không còn route self-service password reset/change và không yêu cầu SMTP/reset
+trong production startup gate. Triển khai image backend và Compose override đã
+kiểm thử như một bundle; không trộn image cũ với Compose mới vì ứng dụng có thể
+không khởi động hoặc lộ route ngoài hợp đồng. Trước khi mở traffic, xác nhận
+staging security E2E pass: route ADMIN hoạt động và các route self-service cũ
+trả 403/404. Nếu gate không đạt, dừng rollout và rollback cả bundle.
 
 ## 4. Ba lớp chống lạm dụng
 
 | Lớp | Vai trò | Cấu hình trong repo |
 |---|---|---|
-| Edge Nginx | Chặn flood trước Java/Redis/AI | `FE/nginx.conf`: 20 session request/phút/IP và 90 message request/phút/IP, cộng giới hạn connection. Preflight `OPTIONS` không bị tính quota. |
+| Edge Nginx | Chặn flood trước Java/Redis/AI | `FE/nginx.conf`: login 10 request/phút/IP, burst 5; widget 20 session request/phút/IP và 90 message request/phút/IP, cộng giới hạn connection. Preflight `OPTIONS` không bị tính quota. |
 | Backend + Redis | Quota chính xác, shared giữa replica; idempotency, duplicate replay và lock session | `WidgetRateLimiter`, `WidgetConversationContextStore`, `WidgetSessionRequestCoordinator` |
 | CDN/WAF | Chống bot/DDoS/challenge trước khi tới container | Cấu hình trên Cloudflare/API Gateway/WAF của hạ tầng |
 
@@ -102,13 +127,11 @@ thích lại” vẫn đi vào hội thoại bình thường.
 
 Tại CDN/WAF, tạo rule theo **method và path**, không dựa vào `Origin`:
 
-- **Bắt buộc:** `POST /api/v1/auth/password-reset/request` phải có edge
-  rate-limit/WAF trước FE/API, tối thiểu theo source IP và nên thêm ASN/device
-  reputation. Baseline vận hành: tối đa 5 request/10 phút/IP, burst tối đa 2;
-  tune bằng staging và không dùng email làm key duy nhất. `POST
-  /api/v1/auth/login` cũng bắt buộc edge limit/challenge, baseline 10
-  request/5 phút/IP với lockout/challenge tăng dần. Cả hai route phải trả JSON
-  `429` cùng `Retry-After`, không redirect sang HTML.
+- `POST /api/v1/auth/login` đã có Nginx edge limit theo source IP, trả JSON
+  `429` và `Retry-After: 60`, không chuyển request bị chặn tới Java. CDN/WAF
+  phía trước vẫn cần rule theo IP và nên thêm ASN/device reputation. Baseline
+  vận hành: 10 request/5 phút/IP với challenge tăng dần; tune bằng staging.
+  Edge trả JSON `429` cùng `Retry-After`, không redirect sang HTML.
 - `POST /api/v1/widget/*/sessions`: rate limit/challenge theo IP; ngưỡng WAF
   nên cao hơn 10/phút của backend để edge chỉ xử lý flood.
 - `POST /api/v1/runtime/sessions/*/messages`: rate limit/challenge theo IP;
@@ -119,12 +142,10 @@ Tại CDN/WAF, tạo rule theo **method và path**, không dựa vào `Origin`:
 - Không cache response POST, không cache token widget, và không biến WAF
   challenge thành redirect HTML cho API client.
 
-Throttle password-reset hiện tại là per-email trong memory: random-email flood
-vẫn có thể đẩy request vào bcrypt và state không được chia sẻ giữa replicas.
-Đây không phải lớp chống abuse đủ dùng; edge rule trên là production gate bắt
-buộc. WAF/CDN phải xuất counter/log cho `429` và upstream `5xx` theo hai route
-auth vào hệ thống cảnh báo. Alert backend trong repo chỉ thấy request đã qua
-edge; không được coi là thay thế telemetry của WAF.
+Release contract yêu cầu đóng public password-reset endpoint. WAF/CDN phải
+xuất counter/log cho login `429` và upstream `5xx` vào hệ thống cảnh báo. Alert
+backend trong repo chỉ thấy request đã qua edge; không được coi là thay thế
+telemetry của WAF.
 
 Các thao tác CDN/WAF cần tài khoản hạ tầng và domain thật nên không thể được
 tự động áp vào repo này. Lưu rule cùng ticket/change record để có thể audit và
@@ -159,10 +180,9 @@ Tạo alert tối thiểu:
 - `redis_fallback > 0`: shared protection đã mất; kiểm tra Redis ngay.
 - `rate_limited` hoặc `duplicate_blocked` tăng đột biến: kiểm tra bot/WAF,
   không vội siết quota nếu đó là campaign hợp lệ.
-- Tỷ lệ `429` trên login/password-reset tăng: kiểm tra credential stuffing,
-  random-email flood và WAF rule; phân biệt traffic bị chặn ở edge với traffic
-  bị backend từ chối.
-- Bất kỳ burst `5xx` trên login/password-reset: page on-call; kiểm tra bcrypt,
+- Login `401`/`429` tăng: kiểm tra credential stuffing và WAF rule; phân biệt
+  traffic bị chặn ở edge với traffic bị backend từ chối.
+- Bất kỳ burst `5xx` trên login: page on-call; kiểm tra bcrypt,
   database, dependency và rollback nếu có tương quan với rollout.
 - `request_in_progress` tăng: client retry quá sớm hoặc latency AI tăng.
 - `/actuator/health` không `UP`, RAG `/ready` lỗi, hoặc provider trả 429/5xx.
@@ -183,17 +203,17 @@ và kiểm tra theo thứ tự:
    được.
 7. Dùng nhiều request đồng thời cho cùng session: chỉ một turn mới được ghi.
 
-Không đưa password-reset/login flood vào E2E tự động: test đó tự tạo đúng tải
-bcrypt mà rule đang cần ngăn. Edge owner phải verify rule bằng WAF dry-run,
-vendor counter hoặc một canary staging được phê duyệt; đối chiếu `429` và
-`Retry-After` từ edge với alert telemetry. Backend security E2E chỉ kiểm tra
-auth/data-isolation và không thay thế gate này.
 8. Gửi `X-Forwarded-For` giả từ ngoài proxy: không đổi quota client. Test cả
    source trong trusted CIDR và source ngoài CIDR.
 9. Dừng Redis có chủ ý ở staging: log/metric `redis_fallback` xuất hiện; khôi
    phục Redis rồi xác nhận metric không tiếp tục tăng và shared state hoạt động.
 10. Xác nhận auth-api/MySQL/RAG không có host port trong `docker compose ps`;
     `/actuator/metrics` không đi qua frontend public.
+
+Không đưa login flood vào E2E tự động: test đó tự tạo đúng tải bcrypt mà rule
+đang cần ngăn. Edge owner verify rule bằng WAF dry-run, vendor counter hoặc
+một canary staging được phê duyệt; đối chiếu `429` và `Retry-After` từ edge với
+alert telemetry. Backend security E2E chỉ kiểm tra auth/data-isolation.
 
 Chỉ merge/deploy production sau khi lưu kết quả staging, snapshot cấu hình WAF
 và kế hoạch rollback image/config trước đó.
@@ -331,9 +351,10 @@ pwsh -File .\ops\check-monitoring.ps1 `
   -ExternalBaseUrl https://app.staging.example.com
 ```
 
-Alert rules ở `ops/prometheus/alerts.yml`: scrape down, auth login/password-reset
-429 burst, auth endpoint 5xx >5%, tổng 5xx >5%, p95 >2s, Redis fallback và
-burst abuse. Rule p95 yêu cầu application/migration agent
+Alert rules ở `ops/prometheus/alerts.yml`: scrape down, login 401/429 burst,
+login 5xx >5%, tổng 5xx >5%, p95 >2s, Redis fallback và burst abuse.
+WAF phải cảnh báo riêng `429` chặn tại edge vì backend không nhận được các
+request đó. Rule p95 yêu cầu application/migration agent
 bật HTTP server request histogram để có
 `http_server_requests_seconds_bucket`; trước khi metric này xuất hiện, p95
 alert chưa được coi là đã verify. Alertmanager gửi firing/resolved tới
@@ -396,9 +417,10 @@ Script kiểm tra anonymous/invalid bearer 401, USER admin/operational metrics
 allowed/denied CORS headers, token/header assertions, và data isolation: user B không thấy, không
 GET được và không DELETE được conversation của user A. Không in token hay
 secret response ra output. Nó cũng kiểm tra paging/filter cho admin users và
-conversation search, soft-delete conversation, và yêu cầu public worker route
-trả 403/404 tại edge. Script này tuyệt đối không gửi `WORKER_API_KEY` qua
-staging ingress.
+conversation search, soft-delete conversation, và yêu cầu cả ba endpoint
+self-service password-reset request/confirm và password/change trả 403/404.
+Public worker route phải trả 403/404 tại edge; script không gửi
+`WORKER_API_KEY` qua staging ingress.
 
 Worker auth/retry chạy riêng từ private Docker network, không qua frontend:
 
@@ -410,29 +432,44 @@ pwsh -File .\ops\worker-private-e2e.ps1
 ```
 
 `worker-private-e2e.ps1` kiểm tra wrong key 401, đúng key nhưng `limit=0`
-400 trước khi claim, và stale attempt 409 nếu có `WORKER_DOCUMENT_ID`. Nếu
-public probe trả 401 thay vì 403/404, đó là residual ingress gap. Trạng thái
-hiện tại đã biết: `FE/nginx.conf` dùng generic `/api` proxy và **không chặn**
-`/api/v1/internal/**`, nên request không có key vẫn có thể được chuyển tiếp tới
-API và public security E2E sẽ fail ở assertion 403/404. Đây là blocker có chủ ý
-cho tới khi edge/WAF rule chặn path này hoặc có thay đổi FE được phê duyệt và
-triển khai. Phạm vi BE/ops này không tự sửa FE; dừng rollout nếu gate còn fail
-và không dùng worker secret để “chứng minh” public route.
+400 trước khi claim, và stale attempt 409 nếu có `WORKER_DOCUMENT_ID`.
+`FE/nginx.conf` trả 404 cho `/api/v1/internal` và `/api/v1/internal/**` trước
+generic API proxy, cũng như `/actuator` và `/actuator/**`. Nếu public probe vẫn
+trả 401 thay vì 403/404, kiểm tra image FE, CDN/WAF và đường đi trực tiếp tới
+API; dừng rollout và không gửi worker secret qua public ingress để thử.
 
-Các ca đổi/reset password và soft-delete user là destructive nên mặc định tắt.
-Chỉ bật trên staging cô lập với account throwaway và cleanup bắt buộc:
+CI chạy `node BE/ops/test-nginx-ingress.mjs` từ repo root để kiểm tra Nginx
+thật với backend giả trong Docker network riêng: private boundary, upload
+2/20 MB, body quá lớn, IP giả, login 429/JSON/Retry-After và OPTIONS miễn quota.
+Script tự dọn container/network test; không dùng credential hoặc gọi Gemini.
+`node BE/ops/test-production-compose.mjs` kiểm tra Compose bằng credential giả
+và không in cấu hình chứa secret. Job MySQL 8.4 chạy
+`MySqlMigrationIntegrationTest` với database disposable `blueai_migration_test`,
+kiểm tra schema mới tới V5, nâng V6 giữ dữ liệu cũ, ghi usage/index và migrate
+lặp không làm thay đổi schema. Test không bật nếu thiếu biến
+`MYSQL_MIGRATION_TEST_URL`; không trỏ test này tới database ứng dụng.
+
+ADMIN cấp user qua `POST /api/v1/admin/users` và đặt lại mật khẩu qua
+`POST /api/v1/admin/users/{userId}/password` với body
+`{"newPassword":"..."}`. Kiểm tra live bằng account throwaway trên staging:
 
 ```powershell
 $env:RUN_ACCOUNT_MUTATION_E2E = 'true'
-# Nếu staging mailbox/test harness trả raw token ngoài band:
-$env:PASSWORD_RESET_TOKEN = '...'
 node .\ops\security-e2e.mjs
 ```
 
-Flow tạo user throwaway, đổi password và xác nhận mật khẩu cũ bị từ chối; reset
-request chỉ chấp nhận generic response và invalid token nếu không có mailbox
-token. Sau đó admin soft-delete user và kiểm tra `includeDeleted=false/true`.
-Không chạy cờ này trên production hoặc user thật.
+Flow xác nhận USER bị 403 khi gọi route ADMIN, ADMIN nhận 204 không có body hay
+password/token, access JWT và refresh token cũ bị từ chối, mật khẩu cũ không
+đăng nhập được, còn mật khẩu mới đăng nhập và gọi `/auth/me` được. `finally`
+soft-delete user throwaway, kiểm tra `includeDeleted=false/true` và login sau
+xóa bị từ chối. Không chạy cờ này trên production hoặc user thật.
+
+Khi user thật quên mật khẩu, helpdesk xác minh danh tính theo quy trình nội bộ;
+ADMIN cấp mật khẩu mới bằng route trên qua kênh quản trị HTTPS, truyền mật khẩu
+cho user qua kênh bảo mật đã duyệt và kiểm tra audit event `ADMIN_PASSWORD_SET`.
+Không đưa mật khẩu vào URL, shell history, ticket hay log. Thao tác này làm
+access JWT và refresh token cũ mất hiệu lực; user phải đăng nhập lại. Hiện
+không có self-service đổi mật khẩu cho user.
 
 Alertmanager reads `ALERTMANAGER_WEBHOOK_URL` from the deployment `.env` as an
 environment-backed Compose secret, mounted read-only at

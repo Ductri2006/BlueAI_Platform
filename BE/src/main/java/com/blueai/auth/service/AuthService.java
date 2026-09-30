@@ -1,7 +1,6 @@
 package com.blueai.auth.service;
 
 import com.blueai.auth.config.JwtProperties;
-import com.blueai.auth.dto.ChangePasswordRequest;
 import com.blueai.auth.dto.AuthResponse;
 import com.blueai.auth.dto.LoginRequest;
 import com.blueai.auth.dto.RegisterRequest;
@@ -11,8 +10,9 @@ import com.blueai.auth.model.RefreshToken;
 import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.RefreshTokenRepository;
-import com.blueai.auth.repository.PasswordResetTokenRepository;
 import com.blueai.auth.repository.UserRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -42,28 +42,28 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtEncoder jwtEncoder;
     private final JwtProperties jwtProperties;
     private final AuthAuditLogService auditLogService;
+    private final EntityManager entityManager;
 
     public AuthService(
             UserRepository userRepository,
             RefreshTokenRepository refreshTokenRepository,
-            PasswordResetTokenRepository passwordResetTokenRepository,
             PasswordEncoder passwordEncoder,
             JwtEncoder jwtEncoder,
             JwtProperties jwtProperties,
-            AuthAuditLogService auditLogService
+            AuthAuditLogService auditLogService,
+            EntityManager entityManager
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
-        this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtEncoder = jwtEncoder;
         this.jwtProperties = jwtProperties;
         this.auditLogService = auditLogService;
+        this.entityManager = entityManager;
     }
 
     @Transactional
@@ -91,7 +91,18 @@ public class AuthService {
             auditLogService.record("LOGIN", "FAILURE", null, null);
             throw invalidCredentials();
         }
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        String verifiedPasswordHash = user.getPasswordHash();
+        long verifiedAuthVersion = user.getAuthVersion();
+        // Keep BCrypt outside the row lock, including for invalid passwords.
+        if (!passwordEncoder.matches(request.password(), verifiedPasswordHash)) {
+            auditLogService.record("LOGIN", "FAILURE", null, user.getId());
+            throw invalidCredentials();
+        }
+        // Refresh bypasses the persistence-context snapshot. Keep the lock until
+        // the session insert commits so an admin reset cannot revoke too early.
+        entityManager.refresh(user, LockModeType.PESSIMISTIC_WRITE);
+        if (verifiedAuthVersion != user.getAuthVersion()
+                || !verifiedPasswordHash.equals(user.getPasswordHash())) {
             auditLogService.record("LOGIN", "FAILURE", null, user.getId());
             throw invalidCredentials();
         }
@@ -155,23 +166,6 @@ public class AuthService {
                     refreshTokenRepository.revokeFamily(token.getUser().getId(), token.getFamilyId(), Instant.now());
                     auditLogService.recordAfterCommit("LOGOUT", "SUCCESS", token.getUser().getId(), token.getUser().getId());
                 }, () -> auditLogService.record("LOGOUT", "NOOP", null, null));
-    }
-
-    @Transactional
-    public void changePassword(String userId, ChangePasswordRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "USER_NOT_FOUND", "User no longer exists."));
-        ensureActive(user);
-        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
-            auditLogService.record("PASSWORD_CHANGE", "FAILURE", userId, userId);
-            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_CURRENT_PASSWORD", "Current password is invalid.");
-        }
-        validatePasswordLength(request.newPassword());
-        user.changePassword(passwordEncoder.encode(request.newPassword()));
-        Instant changedAt = Instant.now();
-        refreshTokenRepository.revokeAllForUser(userId, changedAt);
-        passwordResetTokenRepository.revokeActiveForUser(userId);
-        auditLogService.recordAfterCommit("PASSWORD_CHANGE", "SUCCESS", userId, userId);
     }
 
     @Transactional(readOnly = true)

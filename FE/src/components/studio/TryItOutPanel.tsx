@@ -15,7 +15,10 @@ interface TranscriptItem {
   role: 'assistant' | 'user';
   text: string;
   matchedIntent?: string;
+  matchedNode?: string;
   recognizedEntities?: Record<string, string>;
+  contextVariables?: Record<string, string>;
+  pendingEntity?: string;
   fallback?: boolean;
 }
 
@@ -81,7 +84,10 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
         role: 'assistant',
         text: response.message,
         matchedIntent: response.matchedIntent,
+        matchedNode: response.matchedNode,
         recognizedEntities: response.recognizedEntities,
+        contextVariables: response.context.variables,
+        pendingEntity: response.context.pendingEntity,
         fallback: response.fallback,
       }]);
     } catch (requestError) {
@@ -124,13 +130,18 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
             </div>
             <div className={`max-w-[82%] rounded-2xl px-3.5 py-3 text-sm leading-6 ${item.role === 'assistant' ? 'rounded-tl-md bg-slate-800' : 'rounded-tr-md bg-cobalt-600'}`}>
               <p className="whitespace-pre-wrap">{item.text}</p>
-              {item.role === 'assistant' && (item.matchedIntent || Object.keys(item.recognizedEntities || {}).length > 0 || item.fallback) && (
-                <div className="mt-2 flex flex-wrap gap-1.5 border-t border-white/10 pt-2 text-[10px] font-bold">
+              {item.role === 'assistant' && item.id !== 'welcome' && (
+                <div className="mt-3 space-y-1.5 border-t border-white/10 pt-2 text-[10px]">
+                  <div className="flex flex-wrap gap-1.5 font-bold">
                   {item.matchedIntent && <span className="rounded-full bg-cobalt-500/20 px-2 py-0.5 text-cobalt-200">#{item.matchedIntent}</span>}
+                  {item.matchedNode && <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-violet-200">Node: {item.matchedNode}</span>}
                   {Object.entries(item.recognizedEntities || {}).map(([name, value]) => (
                     <span key={name} className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-cyan-200">@{name}:{value}</span>
                   ))}
                   {item.fallback && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-amber-200">fallback</span>}
+                  </div>
+                  <p className="text-slate-400">Entity nhận diện ở câu này: {Object.keys(item.recognizedEntities || {}).length ? Object.entries(item.recognizedEntities || {}).map(([name, value]) => `@${name}=${value}`).join(', ') : 'không có'}</p>
+                  <p className="text-slate-400">Context sau câu này: {Object.keys(item.contextVariables || {}).length ? Object.entries(item.contextVariables || {}).map(([name, value]) => `@${name}=${value}`).join(', ') : 'không giữ entity'}{item.pendingEntity ? ` · Đang đợi @${item.pendingEntity}` : ''}</p>
                 </div>
               )}
             </div>
@@ -144,7 +155,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
         {error && <p className="mb-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</p>}
         {context && (
           <div className="mb-3 flex flex-wrap gap-1.5 text-[10px] text-slate-400">
-            <span className="font-bold uppercase tracking-wider">Context</span>
+            <span className="font-bold uppercase tracking-wider">Context cho câu tiếp theo</span>
             {context.waitingNode && <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-violet-200">node: {context.waitingNode}</span>}
             {context.pendingEntity && <span className="rounded bg-white/10 px-1.5 py-0.5">đợi @{context.pendingEntity}</span>}
             {Object.entries(context.variables || {}).map(([key, value]) => <span key={key} className="rounded bg-white/10 px-1.5 py-0.5">{key}={value}</span>)}

@@ -9,6 +9,7 @@ import { loadChatWorkspace } from './workspaceLoaders';
 const ChatWorkspace = lazy(() => loadChatWorkspace().then(module => ({ default: module.ChatWorkspace })));
 const KnowledgeDashboard = lazy(() => import('../dashboards/KnowledgeDashboard').then(module => ({ default: module.KnowledgeDashboard })));
 const AdminDashboard = lazy(() => import('../dashboards/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
+const GeminiUsagePage = lazy(() => import('../dashboards/GeminiUsagePage').then(module => ({ default: module.GeminiUsagePage })));
 const ChatbotStudio = lazy(() => import('../studio/ChatbotStudio').then(module => ({ default: module.ChatbotStudio })));
 const EvidenceDrawer = lazy(() => import('../chat/EvidenceDrawer').then(module => ({ default: module.EvidenceDrawer })));
 
@@ -34,6 +35,8 @@ export const AppShell: React.FC = () => {
         return isAdmin ? <KnowledgeDashboard /> : <ChatWorkspace />;
       case 'admin':
         return isAdmin ? <AdminDashboard /> : <ChatWorkspace />;
+      case 'gemini_usage':
+        return isAdmin ? <GeminiUsagePage /> : <ChatWorkspace />;
       case 'studio':
         return isAdmin ? <ChatbotStudio /> : <ChatWorkspace />;
       default:

@@ -42,6 +42,7 @@ services:
       interval: 3s
       timeout: 5s
       retries: 30
+    restart: unless-stopped
 
   # Redis holds only short-lived widget context, idempotency coordination and
   # shared rate-limit counters. It is intentionally not published to the host.
@@ -106,6 +107,12 @@ services:
       - "8080:8080"
     volumes:
       - blueai-auth-documents:/app/storage
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "3", "-O", "/dev/null", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     depends_on:
       mysql:
         condition: service_healthy
@@ -120,8 +127,15 @@ services:
       context: ../FE
     ports:
       - "3000:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "3", "-O", "/dev/null", "http://127.0.0.1/index.html"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
-      - auth-api
+      auth-api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

@@ -42,11 +42,7 @@ class ProductionSecurityConfigurationValidatorTest {
                 .withProperty("app.auth.public-registration-enabled", "false")
                 .withProperty("app.rag.allow-shared-demo-knowledge", "false")
                 .withProperty("app.bootstrap-admin.email", "ops@example.test")
-                .withProperty("app.bootstrap-admin.password", "admin-" + "x".repeat(48))
-                .withProperty("app.auth.password-reset.enabled", "true")
-                .withProperty("spring.mail.host", "smtp.example.test")
-                .withProperty("app.auth.password-reset.mail-from", "no-reply@example.test")
-                .withProperty("app.auth.password-reset.frontend-url", "https://app.example.test/reset-password");
+                .withProperty("app.bootstrap-admin.password", "admin-" + "x".repeat(48));
         JwtProperties jwtProperties = new JwtProperties();
         jwtProperties.setSecret(Base64.getEncoder().encodeToString(new byte[48]));
         CorsProperties corsProperties = new CorsProperties();
@@ -63,32 +59,8 @@ class ProductionSecurityConfigurationValidatorTest {
     }
 
     @Test
-    void rejectsNonHttpsAndMalformedPasswordResetFrontendUrls() {
-        for (String url : List.of(
-                "http://app.example.test/reset-password",
-                "https:app.example.test/reset-password",
-                "https://user:secret@app.example.test/reset-password",
-                "https://app.example.test/reset-password#token",
-                "https://app.example.test:70000/reset-password",
-                "https://app.example.test/reset path"
-        )) {
-            MockEnvironment environment = safeEnvironment()
-                    .withProperty("app.auth.password-reset.frontend-url", url);
-
-            assertThatThrownBy(() -> validator(
-                    safeWidgetProperties(), safeCorsProperties(), safeJwtProperties(), environment
-            ).validate())
-                    .as("frontend URL %s must be rejected", url)
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("APP_RESET_FRONTEND_URL must be an absolute HTTPS URL");
-        }
-    }
-
-    @Test
-    void acceptsHttpsPasswordResetFrontendUrlWithPathAndExistingQuery() {
-        MockEnvironment environment = safeEnvironment()
-                .withProperty("app.auth.password-reset.frontend-url", "HTTPS://app.example.test/reset?source=mail");
-
+    void acceptsProductionWithoutSmtpOrPasswordResetConfiguration() {
+        MockEnvironment environment = safeEnvironment();
         assertThatCode(() -> validator(
                 safeWidgetProperties(), safeCorsProperties(), safeJwtProperties(), environment
         ).validate()).doesNotThrowAnyException();
@@ -161,10 +133,6 @@ class ProductionSecurityConfigurationValidatorTest {
                 .withProperty("app.auth.public-registration-enabled", "false")
                 .withProperty("app.rag.allow-shared-demo-knowledge", "false")
                 .withProperty("app.bootstrap-admin.email", "")
-                .withProperty("app.bootstrap-admin.password", "")
-                .withProperty("app.auth.password-reset.enabled", "true")
-                .withProperty("spring.mail.host", "smtp.example.test")
-                .withProperty("app.auth.password-reset.mail-from", "no-reply@example.test")
-                .withProperty("app.auth.password-reset.frontend-url", "https://app.example.test/reset-password");
+                .withProperty("app.bootstrap-admin.password", "");
     }
 }

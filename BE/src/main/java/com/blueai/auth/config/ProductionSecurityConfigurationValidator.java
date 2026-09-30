@@ -92,7 +92,6 @@ public class ProductionSecurityConfigurationValidator implements SmartInitializi
             issues.add("APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE must be false");
         }
         validateBootstrapAdmin(issues);
-        validatePasswordResetMail(issues);
         validateForwardedHeaders(issues);
         validateWidgetLimits(issues);
 
@@ -115,40 +114,6 @@ public class ProductionSecurityConfigurationValidator implements SmartInitializi
         }
         if (!isBlank(email) && "admin@blueai.local".equalsIgnoreCase(email.trim())) {
             issues.add("APP_BOOTSTRAP_ADMIN_EMAIL must not use the development default");
-        }
-    }
-
-    private void validatePasswordResetMail(List<String> issues) {
-        if (!environment.getProperty("app.auth.password-reset.enabled", Boolean.class, false)) {
-            issues.add("APP_RESET_ENABLED must be true in production");
-        }
-        if (isBlank(environment.getProperty("spring.mail.host"))) {
-            issues.add("SMTP_HOST is required when password reset is enabled");
-        }
-        if (isBlank(environment.getProperty("app.auth.password-reset.mail-from"))) {
-            issues.add("APP_RESET_MAIL_FROM is required when password reset is enabled");
-        }
-        String frontendUrl = environment.getProperty("app.auth.password-reset.frontend-url");
-        if (!isSecurePasswordResetUrl(frontendUrl)) {
-            issues.add("APP_RESET_FRONTEND_URL must be an absolute HTTPS URL with a valid host and without user info or fragment");
-        }
-    }
-
-    private boolean isSecurePasswordResetUrl(String value) {
-        if (isBlank(value)) {
-            return false;
-        }
-        try {
-            URI uri = URI.create(value.trim());
-            int port = uri.getPort();
-            return "https".equalsIgnoreCase(uri.getScheme())
-                    && uri.isAbsolute()
-                    && uri.getHost() != null
-                    && uri.getUserInfo() == null
-                    && uri.getRawFragment() == null
-                    && (port == -1 || (port >= 1 && port <= 65_535));
-        } catch (IllegalArgumentException exception) {
-            return false;
         }
     }
 

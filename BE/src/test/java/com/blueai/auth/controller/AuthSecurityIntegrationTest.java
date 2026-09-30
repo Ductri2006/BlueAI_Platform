@@ -100,32 +100,16 @@ class AuthSecurityIntegrationTest {
     }
 
     @Test
-    void changingPasswordRequiresOldPasswordAndRevokesAllRefreshTokens() throws Exception {
+    void authenticatedUsersCannotChangeTheirOwnPassword() throws Exception {
         save("owner@example.test", "Owner", UserRole.USER);
         JsonNode login = login("owner@example.test", "StrongPassword123!");
 
         mockMvc.perform(post("/api/v1/auth/password/change")
                         .header("Authorization", "Bearer " + login.get("accessToken").asText())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"currentPassword\":\"wrong\",\"newPassword\":\"NewStrongPassword123!\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_CURRENT_PASSWORD"));
-        mockMvc.perform(post("/api/v1/auth/password/change")
-                        .header("Authorization", "Bearer " + login.get("accessToken").asText())
-                        .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentPassword\":\"StrongPassword123!\",\"newPassword\":\"NewStrongPassword123!\"}"))
-                .andExpect(status().isNoContent());
-        mockMvc.perform(post("/api/v1/auth/refresh")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"refreshToken\":\"%s\"}".formatted(login.get("refreshToken").asText())))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("REFRESH_TOKEN_REUSED"));
-        login("owner@example.test", "NewStrongPassword123!");
-        mockMvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"owner@example.test\",\"password\":\"StrongPassword123!\"}"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+                .andExpect(status().isNotFound());
+        login("owner@example.test", "StrongPassword123!");
     }
 
     @Test

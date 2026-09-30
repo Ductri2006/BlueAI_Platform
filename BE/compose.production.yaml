@@ -33,20 +33,6 @@ services:
       APP_BOOTSTRAP_ADMIN_FULL_NAME: "${APP_BOOTSTRAP_ADMIN_FULL_NAME:-BlueAI Administrator}"
       APP_CORS_ALLOWED_ORIGINS: "${APP_CORS_ALLOWED_ORIGINS:?Set APP_CORS_ALLOWED_ORIGINS to the admin UI origin}"
       APP_WIDGET_ALLOWED_ORIGINS: "${APP_WIDGET_ALLOWED_ORIGINS:?Set APP_WIDGET_ALLOWED_ORIGINS to widget host origins}"
-      # Password reset is required by the production startup validator. Keep
-      # SMTP credentials in the ignored deployment .env, never in this file.
-      APP_RESET_ENABLED: "${APP_RESET_ENABLED:?Set APP_RESET_ENABLED=true}"
-      APP_RESET_TOKEN_TTL: "${APP_RESET_TOKEN_TTL:-30m}"
-      APP_RESET_FRONTEND_URL: "${APP_RESET_FRONTEND_URL:?Set APP_RESET_FRONTEND_URL to the HTTPS reset page}"
-      APP_RESET_MAIL_FROM: "${APP_RESET_MAIL_FROM:?Set APP_RESET_MAIL_FROM to the verified sender address}"
-      SMTP_HOST: "${SMTP_HOST:?Set SMTP_HOST to the mail relay}"
-      SMTP_PORT: "${SMTP_PORT:-587}"
-      SMTP_USERNAME: "${SMTP_USERNAME:-}"
-      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
-      SMTP_AUTH: "${SMTP_AUTH:-true}"
-      SMTP_STARTTLS_ENABLE: "${SMTP_STARTTLS_ENABLE:-true}"
-      SMTP_STARTTLS_REQUIRED: "${SMTP_STARTTLS_REQUIRED:-true}"
-      SMTP_TEST_CONNECTION: "${SMTP_TEST_CONNECTION:-false}"
       # Retention is disabled unless explicitly opted in. User soft-delete
       # tombstones are never removed by these jobs.
       APP_RETENTION_ENABLED: "${APP_RETENTION_ENABLED:-false}"

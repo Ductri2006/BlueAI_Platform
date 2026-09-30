@@ -80,39 +80,73 @@ assert(userSearch.body.content.some((item) => item.email.toLowerCase() === proce
 const publicWorkerRoute = await request('/api/v1/internal/documents/claim?limit=0', { method: 'POST', headers: { accept: 'application/json' } });
 assert([403, 404].includes(publicWorkerRoute.response.status), `public worker route must be edge-blocked with 403/404, got ${publicWorkerRoute.response.status}; run ops/worker-private-e2e.ps1 on the Docker network instead`);
 
+const removedSelfService = [
+  ['/api/v1/auth/password-reset/request', { email: `retired-reset-${Date.now()}@staging.invalid` }],
+  ['/api/v1/auth/password-reset/confirm', { token: 'invalid-retired-reset-token', newPassword: 'Unused-E2e-Password-123!' }],
+  ['/api/v1/auth/password/change', {}],
+];
+for (const [path, body] of removedSelfService) {
+  const result = await request(path, { method: 'POST', headers: bearer(tokenA, { 'content-type': 'application/json' }), body: JSON.stringify(body) });
+  assert([403, 404].includes(result.response.status), `${path}: self-service password endpoint must be disabled with 403/404, got ${result.response.status}`);
+}
+
 if (process.env.RUN_ACCOUNT_MUTATION_E2E === 'true') {
   const throwawayEmail = `security-e2e-${Date.now()}@staging.invalid`;
   const initialPassword = `E2eInitial-${Date.now()}!a`;
-  const changedPassword = `E2eChanged-${Date.now()}!b`;
-  const resetPassword = `E2eReset-${Date.now()}!c`;
+  const newPassword = `E2eAdminReset-${Date.now()}!b`;
   let throwawayId = null;
   try {
     const createdUser = await request('/api/v1/admin/users', {
       method: 'POST', headers: bearer(adminToken, { 'content-type': 'application/json' }),
       body: JSON.stringify({ email: throwawayEmail, password: initialPassword, fullName: 'Security E2E throwaway', role: 'USER' }),
     });
+    throwawayId = createdUser.body?.id ?? null;
     status(createdUser, 201, 'throwaway user create'); json(createdUser, 'throwaway user create');
-    throwawayId = createdUser.body.id;
     assert(typeof throwawayId === 'string', 'throwaway user create: missing id');
 
-    const throwawayToken = await login(throwawayEmail, initialPassword, 'throwaway initial login');
-    const change = await request('/api/v1/auth/password/change', { method: 'POST', headers: bearer(throwawayToken, { 'content-type': 'application/json' }), body: JSON.stringify({ currentPassword: initialPassword, newPassword: changedPassword }) });
-    status(change, 204, 'throwaway password change');
-    await expectLoginFailure(throwawayEmail, initialPassword, 'throwaway old password rejected');
-    await login(throwawayEmail, changedPassword, 'throwaway changed-password login');
+    const throwawayLogin = await request('/api/v1/auth/login', {
+      method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({ email: throwawayEmail, password: initialPassword }),
+    });
+    status(throwawayLogin, 200, 'admin-issued throwaway login'); json(throwawayLogin, 'admin-issued throwaway login');
+    assert(!throwawayLogin.response.headers.has('set-cookie'), 'admin-issued throwaway login: tokens must not be cookies');
+    assert(typeof throwawayLogin.body.accessToken === 'string' && throwawayLogin.body.accessToken.length > 20, 'admin-issued throwaway access token missing');
+    assert(typeof throwawayLogin.body.refreshToken === 'string' && throwawayLogin.body.refreshToken.length > 20, 'admin-issued throwaway refresh token missing');
+    const throwawayToken = throwawayLogin.body.accessToken;
+    const throwawayRefreshToken = throwawayLogin.body.refreshToken;
+    const throwawayMe = await request('/api/v1/auth/me', { headers: bearer(throwawayToken) });
+    status(throwawayMe, 200, 'admin-issued throwaway /auth/me'); json(throwawayMe, 'admin-issued throwaway /auth/me');
+    assert(throwawayMe.body.email.toLowerCase() === throwawayEmail, 'admin-issued throwaway identity mismatch');
 
-    const resetRequest = await request('/api/v1/auth/password-reset/request', { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ email: throwawayEmail }) });
-    status(resetRequest, 202, 'throwaway password-reset request'); json(resetRequest, 'throwaway password-reset request');
-    assert(typeof resetRequest.body.message === 'string' && resetRequest.body.message.toLowerCase().includes('if the account exists'), 'password-reset request: non-generic response');
-    assert(!resetRequest.body.token && !resetRequest.body.rawToken, 'password-reset request: raw token leaked');
-    const invalidReset = await request('/api/v1/auth/password-reset/confirm', { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ token: 'invalid-e2e-token', newPassword: resetPassword }) });
-    status(invalidReset, 400, 'invalid password-reset token'); json(invalidReset, 'invalid password-reset token');
-    assert(invalidReset.body.code === 'INVALID_PASSWORD_RESET_TOKEN', 'invalid password-reset token: wrong error code');
-    if (process.env.PASSWORD_RESET_TOKEN) {
-      const reset = await request('/api/v1/auth/password-reset/confirm', { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ token: process.env.PASSWORD_RESET_TOKEN, newPassword: resetPassword }) });
-      status(reset, 204, 'throwaway password-reset confirm');
-      await login(throwawayEmail, resetPassword, 'throwaway reset-password login');
-    }
+    const passwordPath = `/api/v1/admin/users/${encodeURIComponent(throwawayId)}/password`;
+    const passwordBody = JSON.stringify({ newPassword });
+    const deniedReset = await request(passwordPath, {
+      method: 'POST', headers: bearer(tokenA, { 'content-type': 'application/json' }), body: passwordBody,
+    });
+    status(deniedReset, 403, 'USER cannot set another user password'); json(deniedReset, 'USER cannot set another user password');
+    assert(deniedReset.body.code === 'ACCESS_DENIED', 'USER password set: wrong error code');
+    assert(!deniedReset.text.includes(newPassword), 'USER password set error leaked the password');
+
+    const adminReset = await request(passwordPath, {
+      method: 'POST', headers: bearer(adminToken, { 'content-type': 'application/json' }), body: passwordBody,
+    });
+    status(adminReset, 204, 'ADMIN set throwaway password');
+    assert(adminReset.text === '' && adminReset.body === null, 'ADMIN password set response must not expose a password or token');
+    assert(!adminReset.response.headers.has('set-cookie'), 'ADMIN password set response must not set a cookie');
+
+    const oldAccess = await request('/api/v1/auth/me', { headers: bearer(throwawayToken) });
+    status(oldAccess, 401, 'old access JWT revoked after ADMIN password set');
+    const oldRefresh = await request('/api/v1/auth/refresh', {
+      method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({ refreshToken: throwawayRefreshToken }),
+    });
+    status(oldRefresh, 401, 'old refresh token revoked after ADMIN password set'); json(oldRefresh, 'old refresh token revoked');
+    assert(!oldRefresh.body.accessToken && !oldRefresh.body.refreshToken, 'old refresh token returned new credentials');
+    await expectLoginFailure(throwawayEmail, initialPassword, 'old password rejected after ADMIN password set');
+    const newToken = await login(throwawayEmail, newPassword, 'new admin-issued password login');
+    const newMe = await request('/api/v1/auth/me', { headers: bearer(newToken) });
+    status(newMe, 200, 'new access JWT after ADMIN password set'); json(newMe, 'new access JWT after ADMIN password set');
+    assert(newMe.body.email.toLowerCase() === throwawayEmail, 'new access JWT identity mismatch');
 
     const activeThrowawaySearch = await request(`/api/v1/admin/users?page=0&size=20&search=${encodeURIComponent(throwawayEmail)}`, { headers: bearer(adminToken) });
     status(activeThrowawaySearch, 200, 'active throwaway filter'); json(activeThrowawaySearch, 'active throwaway filter');
@@ -127,6 +161,7 @@ if (process.env.RUN_ACCOUNT_MUTATION_E2E === 'true') {
       const included = await request(`/api/v1/admin/users?page=0&size=20&search=${encodeURIComponent(throwawayEmail)}&includeDeleted=true`, { headers: bearer(adminToken) });
       status(included, 200, 'soft-deleted user includeDeleted'); json(included, 'soft-deleted user includeDeleted');
       assert(included.body.content.some((item) => item.id === throwawayId), 'includeDeleted did not expose the soft-deleted throwaway for admin audit');
+      await expectLoginFailure(throwawayEmail, newPassword, 'deleted throwaway login rejected');
     }
   }
 }
@@ -162,6 +197,18 @@ if (widgetKey) {
   assert(!deniedPreflight.response.headers.has('access-control-allow-origin'), 'denied widget preflight: ACAO must not be granted');
 }
 
+} finally {
+  if (conversationId) {
+    const ownerDelete = await request(`/api/v1/conversations/${encodeURIComponent(conversationId)}`, { method: 'DELETE', headers: bearer(tokenA) });
+    status(ownerDelete, 204, 'user A cleanup conversation');
+    const deletedGet = await request(`/api/v1/conversations/${encodeURIComponent(conversationId)}`, { headers: bearer(tokenA) });
+    status(deletedGet, 404, 'soft-deleted conversation hidden from get'); json(deletedGet, 'soft-deleted conversation hidden from get');
+    const deletedSearch = await request(`/api/v1/conversations/search?q=${encodeURIComponent(secretMarker)}&page=0&size=1`, { headers: bearer(tokenA) });
+    status(deletedSearch, 200, 'soft-deleted conversation hidden from search'); json(deletedSearch, 'soft-deleted conversation hidden from search');
+    assert(!deletedSearch.body.items.some((item) => item.id === conversationId), 'soft-deleted conversation still visible in search');
+  }
+}
+
 console.log(JSON.stringify({
   result: 'PASS',
   checks: [
@@ -176,18 +223,8 @@ console.log(JSON.stringify({
     'token/header assertions',
     widgetKey ? 'allowed/denied CORS preflight' : 'CORS skipped (WIDGET_PUBLIC_KEY not set)',
     'public worker route edge boundary 403/404 (no worker secret sent)',
-    process.env.RUN_ACCOUNT_MUTATION_E2E === 'true' ? 'throwaway password change/reset and soft-deleted-user checks' : 'account mutation checks skipped (RUN_ACCOUNT_MUTATION_E2E != true)',
+    'self-service password reset/change endpoints disabled (403/404)',
+    process.env.RUN_ACCOUNT_MUTATION_E2E === 'true' ? 'ADMIN password set, USER 403, old JWT/refresh/password revoked, new login, and soft-delete checks' : 'admin account mutation checks skipped (RUN_ACCOUNT_MUTATION_E2E != true)',
   ],
   target: baseUrl,
 }));
-} finally {
-  if (conversationId) {
-    const ownerDelete = await request(`/api/v1/conversations/${encodeURIComponent(conversationId)}`, { method: 'DELETE', headers: bearer(tokenA) });
-    status(ownerDelete, 204, 'user A cleanup conversation');
-    const deletedGet = await request(`/api/v1/conversations/${encodeURIComponent(conversationId)}`, { headers: bearer(tokenA) });
-    status(deletedGet, 404, 'soft-deleted conversation hidden from get'); json(deletedGet, 'soft-deleted conversation hidden from get');
-    const deletedSearch = await request(`/api/v1/conversations/search?q=${encodeURIComponent(secretMarker)}&page=0&size=1`, { headers: bearer(tokenA) });
-    status(deletedSearch, 200, 'soft-deleted conversation hidden from search'); json(deletedSearch, 'soft-deleted conversation hidden from search');
-    assert(!deletedSearch.body.items.some((item) => item.id === conversationId), 'soft-deleted conversation still visible in search');
-  }
-}

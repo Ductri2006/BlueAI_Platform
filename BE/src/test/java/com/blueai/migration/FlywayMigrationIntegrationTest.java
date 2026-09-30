@@ -42,7 +42,13 @@ class FlywayMigrationIntegrationTest {
             "studio_bot_sessions",
             "studio_bot_turns",
             "password_reset_tokens",
-            "auth_audit_logs"
+            "auth_audit_logs",
+            "ai_integration_clients",
+            "ai_integration_capabilities",
+            "ai_integration_document_grants",
+            "ai_task_ledger",
+            "ai_task_evidence",
+            "gemini_usage_events"
     );
 
     @Autowired
@@ -53,8 +59,20 @@ class FlywayMigrationIntegrationTest {
 
     @Test
     void appliesFullMigrationChainAndLeavesExpectedSchemaForHibernateValidation() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("4");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
         flyway.validate();
+
+        Set<String> usageColumns = jdbcTemplate.queryForList(
+                        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+                                + "WHERE LOWER(TABLE_SCHEMA) = 'public' "
+                                + "AND LOWER(TABLE_NAME) = 'gemini_usage_events' "
+                                + "AND IS_NULLABLE = 'NO'",
+                        String.class)
+                .stream()
+                .map(name -> name.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+        assertThat(usageColumns).containsExactlyInAnyOrder(
+                "id", "model", "prompt_tokens", "completion_tokens", "total_tokens", "recorded_at");
 
         Integer purgeAttemptColumnCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
@@ -103,7 +121,13 @@ class FlywayMigrationIntegrationTest {
                 "idx_rag_document_status_deleted_processing",
                 "idx_rag_document_deleted_at",
                 "idx_password_reset_user_expires",
-                "idx_auth_audit_created_at"
+                "idx_auth_audit_created_at",
+                "idx_ai_client_owner_active",
+                "idx_ai_document_grant_document",
+                "idx_ai_task_client_created",
+                "idx_ai_task_status_created",
+                "idx_ai_task_evidence_document",
+                "idx_gemini_usage_recorded_at"
         );
     }
 }

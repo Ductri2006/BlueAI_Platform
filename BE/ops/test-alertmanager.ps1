@@ -25,7 +25,7 @@ try {
     Set-Content -LiteralPath $envFixture -Value $envText -Encoding utf8NoBOM
 
     # Verify the .env-style file resolves production settings without printing
-    # rendered configuration (which contains SMTP/webhook secrets).
+    # rendered configuration (which contains the webhook secret).
     $renderedCompose = & docker compose --project-directory $composeRoot --env-file $envFixture `
       -f (Join-Path $composeRoot 'compose.yaml') -f (Join-Path $composeRoot 'compose.production.yaml') config --quiet
     if ($LASTEXITCODE -ne 0) { throw 'Production Compose could not resolve required settings from an env file.' }
@@ -34,11 +34,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Production Compose could not render the env-file configuration for assertions.' }
     $composeConfig = ($renderedCompose -join "`n") | ConvertFrom-Json
     $apiEnvironment = $composeConfig.services.'auth-api'.environment
-    foreach ($requiredSetting in @('APP_RESET_ENABLED', 'APP_RESET_FRONTEND_URL', 'APP_RESET_MAIL_FROM', 'SMTP_HOST', 'APP_RETENTION_ENABLED', 'APP_RETENTION_CONVERSATION', 'APP_DOCUMENT_RETENTION', 'APP_AUTH_RETENTION_SCHEDULED_ENABLED', 'APP_AUTH_RETENTION_RETENTION_DAYS')) {
+    foreach ($requiredSetting in @('APP_RETENTION_ENABLED', 'APP_RETENTION_CONVERSATION', 'APP_DOCUMENT_RETENTION', 'APP_AUTH_RETENTION_SCHEDULED_ENABLED', 'APP_AUTH_RETENTION_RETENTION_DAYS')) {
         if ($null -eq $apiEnvironment.$requiredSetting) { throw "Production auth-api config is missing required forwarded setting '$requiredSetting'." }
     }
-    if ($apiEnvironment.APP_RESET_ENABLED -ne 'true' -or $apiEnvironment.APP_RETENTION_ENABLED -ne 'false' -or $apiEnvironment.APP_AUTH_RETENTION_SCHEDULED_ENABLED -ne 'false') {
-        throw 'Production Compose did not preserve the required password-reset or fail-safe retention defaults.'
+    foreach ($removedSetting in @('APP_RESET_ENABLED', 'APP_RESET_TOKEN_TTL', 'APP_RESET_FRONTEND_URL', 'APP_RESET_MAIL_FROM', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_AUTH', 'SMTP_STARTTLS_ENABLE', 'SMTP_STARTTLS_REQUIRED', 'SMTP_TEST_CONNECTION')) {
+        if ($null -ne $apiEnvironment.PSObject.Properties[$removedSetting]) { throw "Production auth-api still forwards removed password-reset/mail setting '$removedSetting'." }
+    }
+    if ($apiEnvironment.APP_RETENTION_ENABLED -ne 'false' -or $apiEnvironment.APP_AUTH_RETENTION_SCHEDULED_ENABLED -ne 'false') {
+        throw 'Production Compose did not preserve fail-safe retention defaults.'
     }
 
     & docker network create $network | Out-Null

@@ -60,7 +60,12 @@ public class DialogRuntimeService {
 
         Map<String, String> recognizedEntities = extractEntities(snapshot.entities(), normalizedMessage);
         String classifiedIntent = classifyIntent(snapshot.intents(), normalizedMessage);
-        Map<String, String> variables = new HashMap<>(current.variables());
+        boolean continuingPendingSlot = current.pendingEntity() != null
+                && (classifiedIntent == null || classifiedIntent.equalsIgnoreCase(current.pendingIntent()));
+        // A completed turn must not donate its entities to a fresh request.
+        // Keep other slots only while the assistant is actively collecting one.
+        Map<String, String> variables = new HashMap<>(continuingPendingSlot ? current.variables() : Map.of());
+        if (continuingPendingSlot) variables.remove(current.pendingEntity());
         variables.putAll(recognizedEntities);
 
         if (current.pendingEntity() != null && !recognizedEntities.containsKey(current.pendingEntity())) {
@@ -98,11 +103,11 @@ public class DialogRuntimeService {
                 && waitingNode != null
                 && !isBlank(waitingNode.irrelevantResponseText())) {
             return new RuntimeResponse(
-                    render(waitingNode.irrelevantResponseText(), variables),
+                    render(waitingNode.irrelevantResponseText(), current.variables()),
                     current.lastIntent(),
                     Map.of(),
                     waitingNode.name(),
-                    new PreviewContext(null, null, current.lastIntent(), variables, waitingNode.name()),
+                    new PreviewContext(null, null, current.lastIntent(), current.variables(), waitingNode.name()),
                     true,
                     true
             );
@@ -396,7 +401,8 @@ public class DialogRuntimeService {
 
     private double similarity(String left, String right) {
         if (left.equals(right)) return 1;
-        if (left.length() >= 4 && right.length() >= 4 && (left.contains(right) || right.contains(left))) return 0.88;
+        if (left.length() >= 4 && right.length() >= 4
+                && (containsPhrase(left, right) || containsPhrase(right, left))) return 0.88;
         Set<String> leftTokens = tokens(left);
         Set<String> rightTokens = tokens(right);
         if (leftTokens.isEmpty() || rightTokens.isEmpty()) return 0;
