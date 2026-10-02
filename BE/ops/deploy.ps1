@@ -3,6 +3,7 @@ param(
     [ValidateSet('Validate', 'Deploy', 'Rollback')]
     [string]$Action = 'Validate',
     [string]$ComposeNetwork = 'blueai-auth_default',
+    [ValidateRange(0, 3600)][int]$AcceptanceTimeoutSeconds = 180,
     [string]$RollbackComposeDir,
     [switch]$NoBuild,
     [switch]$IUnderstandRollback,
@@ -27,21 +28,9 @@ function Invoke-Compose {
 
 function Wait-ForHealthy {
     param([int]$TimeoutSeconds = 180)
-    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
-    do {
-        try {
-            # Production intentionally publishes no auth-api port. Probe from
-            # the Compose network with a disposable curl client instead of
-            # going through FE/nginx (which blocks /actuator/**).
-            $response = & docker run --rm --network $ComposeNetwork curlimages/curl:8.12.1 --fail --silent --show-error --max-time 5 http://auth-api:8080/actuator/health | ConvertFrom-Json
-            if ($response.status -eq 'UP') {
-                Write-Host 'Health gate PASS: auth-api internal actuator health returned UP.'
-                return
-            }
-        } catch { }
-        Start-Sleep -Seconds 5
-    } while ([DateTime]::UtcNow -lt $deadline)
-    throw "Health gate failed: auth-api internal actuator health did not return status UP within $TimeoutSeconds seconds."
+    # /ready remains Compose's non-cyclic startup gate; /readiness is checked
+    # only after the stack has started and the worker can successfully poll API.
+    Wait-ForDeploymentAcceptance -ComposeNetwork $ComposeNetwork -TimeoutSeconds $TimeoutSeconds
 }
 
 try {
@@ -56,7 +45,7 @@ try {
         $upArgs = @('up', '-d', '--remove-orphans')
         if (-not $NoBuild) { $upArgs += '--build' }
         Invoke-Compose $upArgs
-        Wait-ForHealthy
+        Wait-ForHealthy -TimeoutSeconds $AcceptanceTimeoutSeconds
         Write-Host 'Deploy PASS. Run ops/security-e2e.mjs and the staging load test before promoting traffic.'
         return
     }
@@ -75,8 +64,8 @@ try {
     Assert-ImmutableRollbackComposeConfig -RenderedConfig ($renderedRollbackConfig -join "`n")
     & docker compose @rollbackArgs up -d --remove-orphans
     if ($LASTEXITCODE -ne 0) { throw 'Rollback start failed.' }
-    Wait-ForHealthy
-    Write-Host 'Rollback PASS. Previous approved compose bundle is healthy.'
+    Wait-ForHealthy -TimeoutSeconds $AcceptanceTimeoutSeconds
+    Write-Host 'Rollback PASS. Previous approved compose bundle passed post-start readiness and frontend ingress acceptance.'
 } finally {
     Pop-Location
 }

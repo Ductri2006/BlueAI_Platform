@@ -3,6 +3,8 @@ package com.blueai.auth.config;
 import com.blueai.studio.config.WidgetProtectionProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.support.PropertiesLoaderUtils;
 
 import java.util.Base64;
 import java.util.List;
@@ -64,6 +66,17 @@ class ProductionSecurityConfigurationValidatorTest {
         assertThatCode(() -> validator(
                 safeWidgetProperties(), safeCorsProperties(), safeJwtProperties(), environment
         ).validate()).doesNotThrowAnyException();
+    }
+
+    @Test
+    void missingDatabasePasswordCannotFallBackToAHardcodedCredential() throws Exception {
+        var defaults = PropertiesLoaderUtils.loadProperties(new ClassPathResource("application.properties"));
+        MockEnvironment environment = safeEnvironment();
+        environment.setProperty("spring.datasource.password",
+                new MockEnvironment().resolvePlaceholders(defaults.getProperty("spring.datasource.password")));
+        assertThatThrownBy(() -> validator(
+                safeWidgetProperties(), safeCorsProperties(), safeJwtProperties(), environment
+        ).validate()).isInstanceOf(IllegalStateException.class).hasMessageContaining("DB_PASSWORD");
     }
 
     @Test

@@ -32,7 +32,7 @@ function Invoke-PrivateWorkerRequest {
     }
     $bodyOption = if ($Body) { " -H 'Content-Type: application/json' --data-raw '$Body'" } else { '' }
     $curlScript = "curl -sS -X $Method -H 'Accept: application/json' $headers$bodyOption -w '`n%{http_code}' 'http://auth-api:8080$Path'"
-    $output = @(& docker run --rm --network $ComposeNetwork --env-file $script:workerEnvFile --entrypoint /bin/sh curlimages/curl:8.12.1 -c $curlScript)
+    $output = @(& docker run --rm --network $ComposeNetwork --env WORKER_API_KEY --entrypoint /bin/sh curlimages/curl:8.12.1 -c $curlScript)
     if ($LASTEXITCODE -ne 0 -or $output.Count -lt 1) { throw "Private worker probe failed for $Method $Path." }
     $code = [int]$output[-1]
     $bodyText = if ($output.Count -gt 1) { ($output[0..($output.Count - 2)] -join "`n") } else { '' }
@@ -41,12 +41,11 @@ function Invoke-PrivateWorkerRequest {
     [pscustomobject]@{ StatusCode = $code; BodyText = $bodyText; Body = $json }
 }
 
-$suffix = [guid]::NewGuid().ToString('N')
-$script:workerEnvFile = Join-Path ([IO.Path]::GetTempPath()) "blueai-worker-private-$suffix.env"
+$previousWorkerKey = [Environment]::GetEnvironmentVariable('WORKER_API_KEY', 'Process')
 try {
-    # The key is passed to a disposable private-network probe through an env file,
-    # never as a public URL/header and never written to output.
-    Set-Content -LiteralPath $script:workerEnvFile -Value "WORKER_API_KEY=$WorkerApiKey" -NoNewline -Encoding utf8NoBOM
+    # Docker inherits the value from process memory by variable name only. No
+    # secret-bearing temp file or literal key in the command line is created.
+    [Environment]::SetEnvironmentVariable('WORKER_API_KEY', $WorkerApiKey, 'Process')
     & docker network inspect $ComposeNetwork *> $null
     if ($LASTEXITCODE -ne 0) { throw "Docker network '$ComposeNetwork' does not exist or is not reachable." }
 
@@ -72,7 +71,5 @@ try {
 
     Write-Host 'PASS: worker API key checks ran only from the private Docker network; no worker secret crossed public ingress.'
 } finally {
-    if ($script:workerEnvFile -and (Test-Path -LiteralPath $script:workerEnvFile)) {
-        Remove-Item -LiteralPath $script:workerEnvFile -Force
-    }
+    [Environment]::SetEnvironmentVariable('WORKER_API_KEY', $previousWorkerKey, 'Process')
 }

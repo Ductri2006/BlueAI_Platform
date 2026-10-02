@@ -102,27 +102,28 @@ public class AdminUserService {
                 request.role()
         );
         UserResponse response = UserResponse.from(userRepository.saveAndFlush(user));
-        auditLogService.recordAfterCommit("ADMIN_USER_CREATED", "SUCCESS", administratorId, user.getId());
+        auditLogService.recordInTransaction("ADMIN_USER_CREATED", "SUCCESS", administratorId, user.getId());
         return response;
     }
 
-    @Transactional
+    // Validation guards precede mutation; their failure audit must still commit.
+    @Transactional(noRollbackFor = ApiException.class)
     public void setPassword(String administratorId, String userId, String newPassword) {
         if (!isCanonicalUserId(userId)) {
-            auditLogService.record("ADMIN_PASSWORD_SET", "FAILURE", administratorId, null);
+            auditLogService.recordInTransaction("ADMIN_PASSWORD_SET", "FAILURE", administratorId, null);
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_USER_ID", "User ID is invalid.");
         }
-        User user = entityManager.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE);
+        User user = lockUser(userId);
         if (user == null) {
-            auditLogService.record("ADMIN_PASSWORD_SET", "FAILURE", administratorId, userId);
+            auditLogService.recordInTransaction("ADMIN_PASSWORD_SET", "FAILURE", administratorId, userId);
             throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User was not found.");
         }
         if (user.isDeleted() || user.getStatus() != UserStatus.ACTIVE) {
-            auditLogService.record("ADMIN_PASSWORD_SET", "FAILURE", administratorId, userId);
+            auditLogService.recordInTransaction("ADMIN_PASSWORD_SET", "FAILURE", administratorId, userId);
             throw new ApiException(HttpStatus.CONFLICT, "USER_NOT_ACTIVE", "Only active accounts can receive a new password.");
         }
         if (newPassword.getBytes(StandardCharsets.UTF_8).length > 72) {
-            auditLogService.record("ADMIN_PASSWORD_SET", "FAILURE", administratorId, userId);
+            auditLogService.recordInTransaction("ADMIN_PASSWORD_SET", "FAILURE", administratorId, userId);
             throw new ApiException(HttpStatus.BAD_REQUEST, "PASSWORD_TOO_LONG", "Password must not exceed 72 UTF-8 bytes.");
         }
 
@@ -130,7 +131,7 @@ public class AdminUserService {
         entityManager.flush();
         refreshTokenRepository.revokeAllForUser(userId, Instant.now());
         passwordResetTokenRepository.revokeActiveForUser(userId);
-        auditLogService.recordAfterCommit("ADMIN_PASSWORD_SET", "SUCCESS", administratorId, userId);
+        auditLogService.recordInTransaction("ADMIN_PASSWORD_SET", "SUCCESS", administratorId, userId);
     }
 
     private boolean isCanonicalUserId(String userId) {
@@ -146,8 +147,10 @@ public class AdminUserService {
 
     @Transactional
     public UserResponse updateStatus(String administratorId, String userId, UserStatus status) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User was not found."));
+        User user = lockUser(userId);
+        if (user == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User was not found.");
+        }
         if (user.isDeleted()) {
             throw new ApiException(HttpStatus.CONFLICT, "USER_DELETED", "Deleted user accounts cannot be reactivated or changed.");
         }
@@ -158,22 +161,34 @@ public class AdminUserService {
         if (status == UserStatus.DISABLED) {
             refreshTokenRepository.revokeAllForUser(userId, Instant.now());
         }
-        auditLogService.recordAfterCommit("ADMIN_USER_STATUS_CHANGED", "SUCCESS", administratorId, userId);
+        auditLogService.recordInTransaction("ADMIN_USER_STATUS_CHANGED", "SUCCESS", administratorId, userId);
         return UserResponse.from(user);
     }
 
     @Transactional
     public UserResponse softDelete(String administratorId, String userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User was not found."));
+        User user = lockUser(userId);
+        if (user == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User was not found.");
+        }
         if (administratorId.equals(userId)) {
             throw new ApiException(HttpStatus.CONFLICT, "CANNOT_DELETE_SELF", "Administrators cannot delete their own account.");
         }
         if (!user.isDeleted()) {
             user.softDelete(Instant.now());
             refreshTokenRepository.revokeAllForUser(userId, Instant.now());
-            auditLogService.recordAfterCommit("ADMIN_USER_DELETED", "SUCCESS", administratorId, userId);
+            auditLogService.recordInTransaction("ADMIN_USER_DELETED", "SUCCESS", administratorId, userId);
         }
         return UserResponse.from(user);
+    }
+
+    private User lockUser(String userId) {
+        User user = entityManager.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE);
+        if (user != null) {
+            // Upgrading a preloaded entity's lock does not refresh its stale state.
+            // The database lock remains held through token revocations and commit.
+            entityManager.refresh(user, LockModeType.PESSIMISTIC_WRITE);
+        }
+        return user;
     }
 }

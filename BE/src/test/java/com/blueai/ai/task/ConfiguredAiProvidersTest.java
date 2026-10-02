@@ -5,6 +5,8 @@ import com.blueai.system.service.GeminiUsageService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.TransactionSystemException;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -26,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doThrow;
 
 class ConfiguredAiProvidersTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -47,6 +50,30 @@ class ConfiguredAiProvidersTest {
 
             assertEquals("Done.", provider.complete("system", "question", List.of(), deadline(Duration.ofSeconds(3))));
             verify(usage).record("gemini-test", 91, 14, 110);
+        }
+    }
+
+    @Test
+    void successfulCompletionSurvivesUsageTransactionFailures() throws Exception {
+        try (StubUpstream upstream = new StubUpstream()) {
+            upstream.chat(exchange -> respond(exchange, 200, """
+                    {"model":"gemini-test","choices":[{"message":{"content":"Paid answer preserved."}}],
+                     "usage":{"prompt_tokens":91,"completion_tokens":14,"total_tokens":110}}
+                    """));
+            for (var failure : List.of(new CannotCreateTransactionException("pool unavailable"),
+                    new TransactionSystemException("usage commit failed"))) {
+                RagChatProperties rag = new RagChatProperties();
+                rag.setLlmBaseUrl(upstream.baseUrl());
+                rag.setLlmChatPath("/chat");
+                rag.setLlmApiKey("test-secret");
+                rag.setLlmModel("test-model");
+                GeminiUsageService usage = mock(GeminiUsageService.class);
+                doThrow(failure).when(usage).record("gemini-test", 91, 14, 110);
+                ConfiguredAiProviders provider = new ConfiguredAiProviders(rag, MAPPER, new AiTaskProperties(), usage);
+                assertEquals("Paid answer preserved.",
+                        provider.complete("system", "question", List.of(), deadline(Duration.ofSeconds(3))));
+                verify(usage).record("gemini-test", 91, 14, 110);
+            }
         }
     }
 

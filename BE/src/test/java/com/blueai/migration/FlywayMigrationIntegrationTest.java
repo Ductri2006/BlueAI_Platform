@@ -59,7 +59,7 @@ class FlywayMigrationIntegrationTest {
 
     @Test
     void appliesFullMigrationChainAndLeavesExpectedSchemaForHibernateValidation() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("8");
         flyway.validate();
 
         Set<String> usageColumns = jdbcTemplate.queryForList(
@@ -126,6 +126,7 @@ class FlywayMigrationIntegrationTest {
                 "idx_ai_document_grant_document",
                 "idx_ai_task_client_created",
                 "idx_ai_task_status_created",
+                "idx_ai_task_status_expiry_client",
                 "idx_ai_task_evidence_document",
                 "idx_gemini_usage_recorded_at"
         );

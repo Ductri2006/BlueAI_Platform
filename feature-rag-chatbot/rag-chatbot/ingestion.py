@@ -17,6 +17,7 @@ Indexer = Callable[[str, str, str, str, str, int, int], int]
 # Set by the web app right after an upload so chunking starts immediately instead of
 # waiting for the next poll. The pull model itself is unchanged: the loop still claims.
 _run_requested = asyncio.Event()
+_worker_task: asyncio.Task | None = None
 
 _state: dict[str, object] = {
     "lastRunAt": None,
@@ -47,6 +48,7 @@ def worker_status() -> dict[str, object]:
     """Non-secret worker telemetry for /health, so a misconfigured worker is visible."""
     return {
         "configured": bool(os.getenv("JAVA_API_BASE_URL") and os.getenv("JAVA_WORKER_API_KEY")),
+        "running": _worker_task is not None and not _worker_task.done(),
         "javaApiBaseUrl": os.getenv("JAVA_API_BASE_URL") or "",
         "intervalSeconds": _interval(),
         **_state,
@@ -198,6 +200,9 @@ async def worker_loop(indexer: Indexer) -> None:
 
 
 def start_worker(indexer: Indexer) -> asyncio.Task | None:
+    global _worker_task
     if not os.getenv("JAVA_API_BASE_URL") or not os.getenv("JAVA_WORKER_API_KEY"):
+        _worker_task = None
         return None
-    return asyncio.create_task(worker_loop(indexer))
+    _worker_task = asyncio.create_task(worker_loop(indexer))
+    return _worker_task

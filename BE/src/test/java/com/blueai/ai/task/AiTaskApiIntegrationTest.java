@@ -44,7 +44,140 @@ class AiTaskApiIntegrationTest {
     @DynamicPropertySource static void database(DynamicPropertyRegistry registry){registry.add("spring.datasource.url",()->"jdbc:h2:mem:ai-task-api-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE");}
     @Autowired MockMvc mvc; @Autowired ObjectMapper mapper; @Autowired JdbcTemplate jdbc; @Autowired UserRepository users; @Autowired RagDocumentRepository documents;
     @MockitoBean ConfiguredAiProviders providers;
+    @Autowired AiTaskRecoveryService recovery;
     private User admin;
+
+    private static final String CLASSIFY_BODY = """
+            {"capability":"CLASSIFY","input":{"text":"hello"},"configuration":{"allowedLabels":["sales"]}}
+            """;
+    private static final String CLASSIFY_OUTPUT = """
+            {"label":"sales","abstain":false,"reason":"explicit"}
+            """;
+
+    @Test
+    void expiredClaimsReleaseAllSlotsAndReplayNeverInvokesTheProviderAgain() throws Exception {
+        String secret = createClient(List.of("CLASSIFY"), List.of());
+        String originalId = seedClaim(secret, "crashed:original", true);
+        String clientId = jdbc.queryForObject("select client_id from ai_task_ledger where id=?", String.class, originalId);
+        for (int i = 1; i < 4; i++) {
+            cloneClaim(originalId, "crashed:" + i);
+        }
+        reset(providers);
+        mvc.perform(post("/api/v1/ai/tasks").header("Authorization", "Bearer " + secret)
+                        .header("Idempotency-Key", "crashed:original").contentType(MediaType.APPLICATION_JSON).content(CLASSIFY_BODY))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.taskId").value(originalId))
+                .andExpect(jsonPath("$.status").value("FAILED")).andExpect(jsonPath("$.error.code").value("AI_TASK_EXPIRED"));
+        mvc.perform(get("/api/v1/ai/tasks/" + originalId).header("Authorization", "Bearer " + secret))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("FAILED"));
+        assertThat(jdbc.queryForObject("select count(*) from ai_task_ledger where client_id=? and status='PROCESSING'", Integer.class, clientId)).isZero();
+        verifyNoInteractions(providers);
+        when(providers.complete(anyString(), anyString(), anyList(), any())).thenReturn(CLASSIFY_OUTPUT);
+        mvc.perform(post("/api/v1/ai/tasks").header("Authorization", "Bearer " + secret)
+                        .header("Idempotency-Key", "fresh:after-crash").contentType(MediaType.APPLICATION_JSON).content(CLASSIFY_BODY))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("COMPLETED"));
+        verify(providers, times(1)).complete(anyString(), anyString(), anyList(), any());
+    }
+
+    @Test
+    void activeLeasesStillEnforceConcurrencyAndDuplicateRemainsProcessing() throws Exception {
+        String secret = createClient(List.of("CLASSIFY"), List.of());
+        String id = seedClaim(secret, "live:original", false);
+        for (int i = 1; i < 4; i++) cloneClaim(id, "live:" + i);
+        reset(providers);
+        mvc.perform(post("/api/v1/ai/tasks").header("Authorization", "Bearer " + secret)
+                        .header("Idempotency-Key", "live:new").contentType(MediaType.APPLICATION_JSON).content(CLASSIFY_BODY))
+                .andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.error.code").value("AI_CONCURRENCY_LIMIT"));
+        mvc.perform(post("/api/v1/ai/tasks").header("Authorization", "Bearer " + secret)
+                        .header("Idempotency-Key", "live:original").contentType(MediaType.APPLICATION_JSON).content(CLASSIFY_BODY))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.taskId").value(id));
+        mvc.perform(get("/api/v1/ai/tasks/" + id).header("Authorization", "Bearer " + secret))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("PROCESSING"));
+        assertThat(recovery.recoverExpiredTasks()).isZero();
+        verifyNoInteractions(providers);
+    }
+
+    @Test
+    void pollingRecoversOnlyTheAuthenticatedClientAndPreservesTerminalResults() throws Exception {
+        String ownerSecret = createClient(List.of("CLASSIFY"), List.of());
+        String foreignSecret = createClient(List.of("CLASSIFY"), List.of());
+        String id = seedClaim(ownerSecret, "poll:expired", true);
+        reset(providers);
+        mvc.perform(get("/api/v1/ai/tasks/" + id).header("Authorization", "Bearer " + foreignSecret))
+                .andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("select status from ai_task_ledger where id=?", String.class, id)).isEqualTo("PROCESSING");
+        String result = mvc.perform(get("/api/v1/ai/tasks/" + id).header("Authorization", "Bearer " + ownerSecret))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.error.code").value("AI_TASK_EXPIRED"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(recovery.recoverExpiredTasks()).isZero();
+        assertThat(jdbc.queryForObject("select response_json from ai_task_ledger where id=?", String.class, id)).isEqualTo(result);
+        verifyNoInteractions(providers);
+    }
+
+    @Test
+    void lateWorkerCannotOverwriteExpirationOrResurrectItsClaim() throws Exception {
+        String secret = createClient(List.of("CLASSIFY"), List.of());
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        when(providers.complete(anyString(), anyString(), anyList(), any())).thenAnswer(invocation -> {
+            entered.countDown();
+            if (!release.await(10, TimeUnit.SECONDS)) throw new AssertionError("provider was not released");
+            return CLASSIFY_OUTPUT;
+        });
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var request = executor.submit(() -> mvc.perform(post("/api/v1/ai/tasks").header("Authorization", "Bearer " + secret)
+                    .header("Idempotency-Key", "late:worker").contentType(MediaType.APPLICATION_JSON).content(CLASSIFY_BODY)).andReturn());
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+            String id = jdbc.queryForObject("select id from ai_task_ledger where idempotency_key='late:worker'", String.class);
+            jdbc.update("update ai_task_ledger set expires_at=? where id=?", java.time.Instant.now().minusSeconds(1), id);
+            assertThat(recovery.recoverExpiredTasks()).isEqualTo(1);
+            String durableFailure = jdbc.queryForObject("select response_json from ai_task_ledger where id=?", String.class, id);
+            release.countDown();
+            var response = request.get(10, TimeUnit.SECONDS).getResponse();
+            assertThat(response.getStatus()).isEqualTo(200);
+            assertThat(response.getContentAsString()).isEqualTo(durableFailure);
+            assertThat(jdbc.queryForObject("select status from ai_task_ledger where id=?", String.class, id)).isEqualTo("FAILED");
+            assertThat(jdbc.queryForObject("select count(*) from ai_task_evidence where task_id=?", Integer.class, id)).isZero();
+            mvc.perform(post("/api/v1/ai/tasks").header("Authorization", "Bearer " + secret)
+                            .header("Idempotency-Key", "late:worker").contentType(MediaType.APPLICATION_JSON).content(CLASSIFY_BODY))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.error.code").value("AI_TASK_EXPIRED"));
+            verify(providers, times(1)).complete(anyString(), anyString(), anyList(), any());
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    void overdueFinalizationFailsEvenWhenTheBackgroundSweepHasNotRun() throws Exception {
+        String secret = createClient(List.of("CLASSIFY"), List.of());
+        when(providers.complete(anyString(), anyString(), anyList(), any())).thenAnswer(invocation -> {
+            jdbc.update("update ai_task_ledger set expires_at=? where idempotency_key='overdue:finalize'", java.time.Instant.now().minusSeconds(1));
+            return CLASSIFY_OUTPUT;
+        });
+        mvc.perform(post("/api/v1/ai/tasks").header("Authorization", "Bearer " + secret)
+                        .header("Idempotency-Key", "overdue:finalize").contentType(MediaType.APPLICATION_JSON).content(CLASSIFY_BODY))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("FAILED"))
+                .andExpect(jsonPath("$.error.code").value("AI_TASK_EXPIRED"));
+    }
+
+    private String seedClaim(String secret, String key, boolean expired) throws Exception {
+        when(providers.complete(anyString(), anyString(), anyList(), any())).thenReturn(CLASSIFY_OUTPUT);
+        String response = mvc.perform(post("/api/v1/ai/tasks").header("Authorization", "Bearer " + secret)
+                        .header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON).content(CLASSIFY_BODY))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String id = mapper.readTree(response).path("taskId").asText();
+        java.time.Instant expiry = java.time.Instant.now().plusSeconds(expired ? -60 : 60);
+        jdbc.update("update ai_task_ledger set status='PROCESSING',response_json=null,error_code=null,completed_at=null,expires_at=? where id=?", expiry, id);
+        return id;
+    }
+
+    private void cloneClaim(String sourceId, String key) {
+        jdbc.update("""
+                insert into ai_task_ledger(id,client_id,idempotency_key,request_digest,capability,status,created_at,expires_at)
+                select ?,client_id,?,request_digest,capability,status,created_at,expires_at from ai_task_ledger where id=?
+                """, UUID.randomUUID().toString(), key, sourceId);
+    }
 
     @BeforeEach void setup(){
         jdbc.update("delete from ai_task_evidence");jdbc.update("delete from ai_task_ledger");jdbc.update("delete from ai_integration_document_grants");jdbc.update("delete from ai_integration_capabilities");jdbc.update("delete from ai_integration_clients");

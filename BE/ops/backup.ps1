@@ -12,7 +12,8 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $global:LASTEXITCODE = 0
-if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'PowerShell 7+ is required: native stdout redirection must preserve tar.gz bytes.' }
+. (Join-Path $PSScriptRoot 'deploy-helpers.ps1')
+Assert-ArchivePowerShellVersion
 
 if (-not $AgeRecipient -and -not $AllowPlaintextForRecoveryTesting) {
     throw 'Production backup requires -AgeRecipient (age public key). Use -AllowPlaintextForRecoveryTesting only for a disposable local recovery test.'
@@ -91,6 +92,9 @@ try {
     Write-Host 'Archiving the FAISS/RAG index...'
     & docker compose @composeArgs run --rm --no-deps -T --entrypoint sh rag-ai -c 'tar -C /app/.rag-index -czf - .' > $faissTar
     if ($LASTEXITCODE -ne 0 -or (Get-Item $faissTar).Length -lt 64) { throw 'FAISS index archive failed or is unexpectedly empty.' }
+
+    Assert-TarGzipArchive $documentsTar 'Uploaded documents archive'
+    Assert-TarGzipArchive $faissTar 'FAISS index archive'
 
     $suffix = if ($AgeRecipient) { '.age' } else { '' }
     $artifacts = @(

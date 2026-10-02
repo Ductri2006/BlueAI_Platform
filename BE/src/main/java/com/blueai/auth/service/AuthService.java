@@ -33,6 +33,7 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -76,11 +77,12 @@ public class AuthService {
 
         User user = new User(email, passwordEncoder.encode(request.password()), request.fullName().trim());
         userRepository.saveAndFlush(user);
-        auditLogService.recordAfterCommit("REGISTRATION", "SUCCESS", null, user.getId());
+        auditLogService.recordInTransaction("REGISTRATION", "SUCCESS", null, user.getId());
         return issueSession(user, UUID.randomUUID().toString());
     }
 
-    @Transactional
+    // Authentication failures intentionally commit their audit, never a session.
+    @Transactional(noRollbackFor = ApiException.class)
     public AuthResponse login(LoginRequest request) {
         String email = normalizeEmail(request.email());
         if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
@@ -88,14 +90,14 @@ public class AuthService {
         }
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) {
-            auditLogService.record("LOGIN", "FAILURE", null, null);
+            auditLogService.recordInTransaction("LOGIN", "FAILURE", null, null);
             throw invalidCredentials();
         }
         String verifiedPasswordHash = user.getPasswordHash();
         long verifiedAuthVersion = user.getAuthVersion();
         // Keep BCrypt outside the row lock, including for invalid passwords.
         if (!passwordEncoder.matches(request.password(), verifiedPasswordHash)) {
-            auditLogService.record("LOGIN", "FAILURE", null, user.getId());
+            auditLogService.recordInTransaction("LOGIN", "FAILURE", null, user.getId());
             throw invalidCredentials();
         }
         // Refresh bypasses the persistence-context snapshot. Keep the lock until
@@ -103,32 +105,33 @@ public class AuthService {
         entityManager.refresh(user, LockModeType.PESSIMISTIC_WRITE);
         if (verifiedAuthVersion != user.getAuthVersion()
                 || !verifiedPasswordHash.equals(user.getPasswordHash())) {
-            auditLogService.record("LOGIN", "FAILURE", null, user.getId());
+            auditLogService.recordInTransaction("LOGIN", "FAILURE", null, user.getId());
             throw invalidCredentials();
         }
         try {
             ensureActive(user);
         } catch (ApiException exception) {
-            auditLogService.record("LOGIN", "FAILURE", null, user.getId());
+            auditLogService.recordInTransaction("LOGIN", "FAILURE", null, user.getId());
             throw exception;
         }
-        auditLogService.recordAfterCommit("LOGIN", "SUCCESS", user.getId(), user.getId());
+        auditLogService.recordInTransaction("LOGIN", "SUCCESS", user.getId(), user.getId());
         return issueSession(user, UUID.randomUUID().toString());
     }
 
     @Transactional(noRollbackFor = ApiException.class)
     public AuthResponse refresh(String rawRefreshToken) {
+        String tokenHash = hashToken(rawRefreshToken);
+        User user = lockRefreshTokenOwner(tokenHash)
+                .orElseThrow(this::invalidRefreshToken);
         Instant now = Instant.now();
-        RefreshToken current = refreshTokenRepository.findByTokenHash(hashToken(rawRefreshToken))
-                .orElseThrow(() -> new ApiException(
-                        HttpStatus.UNAUTHORIZED,
-                        "INVALID_REFRESH_TOKEN",
-                        "Refresh token is invalid."
-                ));
+        RefreshToken current = refreshTokenRepository.findByTokenHash(tokenHash)
+                .orElseThrow(this::invalidRefreshToken);
+        // Also bypass a token loaded earlier by a surrounding transaction.
+        entityManager.refresh(current, LockModeType.PESSIMISTIC_WRITE);
 
         if (current.getRevokedAt() != null) {
             refreshTokenRepository.revokeFamily(current.getUser().getId(), current.getFamilyId(), now);
-            auditLogService.record("REFRESH_TOKEN_REUSE", "FAILURE", current.getUser().getId(), current.getUser().getId());
+            auditLogService.recordInTransaction("REFRESH_TOKEN_REUSE", "FAILURE", current.getUser().getId(), current.getUser().getId());
             throw new ApiException(
                     HttpStatus.UNAUTHORIZED,
                     "REFRESH_TOKEN_REUSED",
@@ -137,7 +140,7 @@ public class AuthService {
         }
         if (current.isExpired(now)) {
             current.revoke(now, null);
-            auditLogService.record("REFRESH", "FAILURE", current.getUser().getId(), current.getUser().getId());
+            auditLogService.recordInTransaction("REFRESH", "FAILURE", current.getUser().getId(), current.getUser().getId());
             throw new ApiException(
                     HttpStatus.UNAUTHORIZED,
                     "REFRESH_TOKEN_EXPIRED",
@@ -145,27 +148,50 @@ public class AuthService {
             );
         }
 
-        User user = current.getUser();
         try {
             ensureActive(user);
         } catch (ApiException exception) {
-            auditLogService.record("REFRESH", "FAILURE", user.getId(), user.getId());
+            auditLogService.recordInTransaction("REFRESH", "FAILURE", user.getId(), user.getId());
             throw exception;
         }
         SessionTokens next = createSessionTokens(user, current.getFamilyId());
         current.revoke(now, next.refreshTokenEntity().getId());
         refreshTokenRepository.save(current);
-        auditLogService.recordAfterCommit("REFRESH", "SUCCESS", user.getId(), user.getId());
+        auditLogService.recordInTransaction("REFRESH", "SUCCESS", user.getId(), user.getId());
         return next.response();
     }
 
     @Transactional
     public void logout(String rawRefreshToken) {
-        refreshTokenRepository.findByTokenHash(hashToken(rawRefreshToken))
-                .ifPresentOrElse(token -> {
-                    refreshTokenRepository.revokeFamily(token.getUser().getId(), token.getFamilyId(), Instant.now());
-                    auditLogService.recordAfterCommit("LOGOUT", "SUCCESS", token.getUser().getId(), token.getUser().getId());
-                }, () -> auditLogService.record("LOGOUT", "NOOP", null, null));
+        String tokenHash = hashToken(rawRefreshToken);
+        if (lockRefreshTokenOwner(tokenHash).isEmpty()) {
+            // Unauthenticated junk must not generate unbounded audit writes.
+            return;
+        }
+        refreshTokenRepository.findByTokenHash(tokenHash)
+                .ifPresent(token -> {
+                    String userId = token.getUser().getId();
+                    int revoked = refreshTokenRepository.revokeFamily(userId, token.getFamilyId(), Instant.now());
+                    if (revoked > 0) {
+                        auditLogService.recordInTransaction("LOGOUT", "SUCCESS", userId, userId);
+                    }
+                });
+    }
+
+    private Optional<User> lockRefreshTokenOwner(String tokenHash) {
+        return refreshTokenRepository.findOwnerIdByTokenHash(tokenHash).flatMap(ownerId -> {
+            User owner = entityManager.find(User.class, ownerId, LockModeType.PESSIMISTIC_WRITE);
+            if (owner == null) {
+                return Optional.empty();
+            }
+            // A managed owner may predate a concurrently committed password reset.
+            entityManager.refresh(owner, LockModeType.PESSIMISTIC_WRITE);
+            return Optional.of(owner);
+        });
+    }
+
+    private ApiException invalidRefreshToken() {
+        return new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", "Refresh token is invalid.");
     }
 
     @Transactional(readOnly = true)

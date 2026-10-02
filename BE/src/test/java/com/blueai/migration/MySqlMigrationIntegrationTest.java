@@ -37,13 +37,17 @@ class MySqlMigrationIntegrationTest {
         Flyway v5 = Flyway.configure()
                 .dataSource(url, username, password)
                 .locations("classpath:db/migration")
-                .placeholders(Map.of("text_type", "LONGTEXT", "long_text_type", "LONGTEXT"))
+                .placeholders(Map.of("text_type", "LONGTEXT", "long_text_type", "LONGTEXT",
+                        "idempotency_key_type", "VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"))
                 .target(MigrationVersion.fromVersion("5"))
                 .cleanDisabled(true)
                 .load();
         assertThat(v5.migrate().migrationsExecuted).isEqualTo(5);
         assertThat(v5.info().current().getVersion().getVersion()).isEqualTo("5");
         String userId = UUID.randomUUID().toString();
+        String clientId = UUID.randomUUID().toString();
+        String legacyTaskId = UUID.randomUUID().toString();
+        Instant legacyCreatedAt = Instant.now().minusSeconds(120).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         try (var connection = DriverManager.getConnection(url, username, password);
              var insert = connection.prepareStatement(
                      "INSERT INTO app_users (id,email,password_hash,full_name,role,status,created_at,updated_at) "
@@ -59,20 +63,62 @@ class MySqlMigrationIntegrationTest {
             assertThat(insert.executeUpdate()).isEqualTo(1);
         }
 
+        try (var connection = DriverManager.getConnection(url, username, password)) {
+            try (var client = connection.prepareStatement("""
+                    INSERT INTO ai_integration_clients (id,owner_id,name,credential_hash,created_at)
+                    VALUES (?,?,'Legacy migration client',?,?)
+                    """)) {
+                client.setString(1, clientId);
+                client.setString(2, userId);
+                client.setString(3, "0".repeat(64));
+                client.setTimestamp(4, Timestamp.from(legacyCreatedAt));
+                assertThat(client.executeUpdate()).isEqualTo(1);
+            }
+            try (var task = connection.prepareStatement("""
+                    INSERT INTO ai_task_ledger (id,client_id,idempotency_key,request_digest,capability,status,created_at)
+                    VALUES (?,?,'legacy:crashed',?,'CLASSIFY','PROCESSING',?)
+                    """)) {
+                task.setString(1, legacyTaskId);
+                task.setString(2, clientId);
+                task.setString(3, "0".repeat(64));
+                task.setTimestamp(4, Timestamp.from(legacyCreatedAt));
+                assertThat(task.executeUpdate()).isEqualTo(1);
+            }
+        }
+
+        Flyway v6 = Flyway.configure().dataSource(url, username, password)
+                .locations("classpath:db/migration")
+                .placeholders(Map.of("text_type", "LONGTEXT", "long_text_type", "LONGTEXT",
+                        "idempotency_key_type", "VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"))
+                .target(MigrationVersion.fromVersion("6")).cleanDisabled(true).load();
+        assertThat(v6.migrate().migrationsExecuted).isEqualTo(1);
+        v6.validate();
+
         Flyway latest = Flyway.configure()
                 .dataSource(url, username, password)
                 .locations("classpath:db/migration")
-                .placeholders(Map.of("text_type", "LONGTEXT", "long_text_type", "LONGTEXT"))
+                .placeholders(Map.of("text_type", "LONGTEXT", "long_text_type", "LONGTEXT",
+                        "idempotency_key_type", "VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"))
                 .cleanDisabled(true)
                 .load();
-        assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("6");
+        assertThat(latest.migrate().migrationsExecuted).isEqualTo(2);
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("8");
         latest.validate();
         assertThat(latest.info().pending()).isEmpty();
         assertThat(latest.migrate().migrationsExecuted).isZero();
 
         try (var connection = DriverManager.getConnection(url, username, password);
              var statement = connection.createStatement()) {
+            try (var task = connection.prepareStatement("SELECT status,idempotency_key,created_at,expires_at FROM ai_task_ledger WHERE id=?")) {
+                task.setString(1, legacyTaskId);
+                try (var result = task.executeQuery()) {
+                    assertThat(result.next()).isTrue();
+                    assertThat(result.getString("status")).isEqualTo("PROCESSING");
+                    assertThat(result.getString("idempotency_key")).isEqualTo("legacy:crashed");
+                    assertThat(result.getTimestamp("expires_at").toInstant()).isEqualTo(legacyCreatedAt);
+                    assertThat(result.getTimestamp("created_at")).isEqualTo(result.getTimestamp("expires_at"));
+                }
+            }
             try (var users = statement.executeQuery("SELECT id,auth_version FROM app_users")) {
                 assertThat(users.next()).isTrue();
                 assertThat(users.getString("id")).isEqualTo(userId);

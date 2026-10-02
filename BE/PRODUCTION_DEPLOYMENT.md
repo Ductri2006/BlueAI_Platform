@@ -221,7 +221,7 @@ và kế hoạch rollback image/config trước đó.
 ## 7. Deploy, rollback và secret rotation có kiểm soát
 
 Các thao tác dưới đây là script executable trong `ops/`; chạy bằng PowerShell
-7+ từ thư mục `BE`. Script không commit, in secret, hoặc ghi đè `.env` hiện
+7.4+ từ thư mục `BE`. Script không commit, in secret, hoặc ghi đè `.env` hiện
 hành.
 
 ```powershell
@@ -232,13 +232,28 @@ pwsh -File .\ops\deploy.ps1 -Action Rollback `
   -IUnderstandRollback
 ```
 
+Deploy và rollback chỉ báo PASS sau post-start acceptance: actuator nội bộ
+`auth-api` trả HTTP 200/status UP; RAG `/readiness` trả HTTP 200/status ready;
+frontend phục vụ HTML, proxy `/api/v1/auth/me` trả 401/JSON
+`AUTHENTICATION_REQUIRED`, và chặn actuator/private worker bằng 403/404.
+Các probe không có credential, chạy trong Compose network, không gọi paid
+provider và không cần mở port API/RAG. `/ready` vẫn là startup gate của Compose
+(kiểm tra cấu hình key, không chờ worker poll Java); `/health` vẫn là liveness.
+`/readiness` chỉ kiểm tra sau startup để tránh vòng chờ auth-api/rag-ai; endpoint
+kiểm tra worker running, recent successful poll và sustained polling failures.
+Timeout mặc định 180 giây (`-AcceptanceTimeoutSeconds`); lỗi acceptance làm
+script fail, không tự rollback. Giữ external ingress/traffic promotion đóng,
+điều tra hoặc chạy approved rollback; vẫn phải hoàn thành security/staging gates.
+
 Rollback dùng bundle compose/.env đã duyệt trước đó, không dùng source tree
 đang có thay đổi chưa review. Ba service ứng dụng (`auth-api`, `rag-ai`,
 `frontend`) trong bundle bắt buộc dùng image digest `sha256` bất biến và không
 có `build:`; script fail closed trước khi khởi động nếu thiếu điều kiện này.
 Giữ image cũ trên registry hoặc cache của host trong suốt rollback window.
-`pwsh -File .\ops\test-deploy-rollback.ps1` kiểm tra validator offline; test
-không kết nối Docker hay thay đổi stack.
+`pwsh -File .\ops\test-deploy-rollback.ps1` kiểm tra validator và cả deploy/
+rollback acceptance offline bằng Docker giả; test không kết nối Docker hay
+thay đổi stack. API UP không thể che RAG 503, frontend 502/SPA fallback,
+private ingress mở hoặc curl/native process lỗi.
 Compose/image rollback does not reverse Flyway migrations or restore database
 contents. For an incompatible schema/data change, prefer a reviewed forward
 migration; otherwise use the maintenance-window restore procedure below with a
@@ -246,8 +261,10 @@ verified backup and an explicit data-loss approval.
 
 ### Backup và restore
 
-Backup production bắt buộc dùng `age` recipient để dữ liệu không nằm plaintext
-trên đĩa. Script tạm dừng `auth-api` và `rag-ai`, giữ MySQL chạy để
+Backup production bắt buộc dùng `age` recipient để artifact lưu lâu dài được
+mã hóa. Dump/archive vẫn có plaintext trong thư mục staging tạm của host;
+chỉ chạy trên recovery host được bảo vệ (encrypted disk, restricted access),
+và kiểm tra cleanup sau sự cố/process crash. Script tạm dừng `auth-api` và `rag-ai`, giữ MySQL chạy để
 `mysqldump --single-transaction` có transaction nhất quán, rồi archive cả ba
 nguồn tại cùng snapshot: database `blueai_auth`, uploaded documents
 (`/app/storage`) và FAISS index (`/app/.rag-index`). Redis không backup vì chỉ
@@ -260,13 +277,30 @@ pwsh -File .\ops\restore.ps1 -BackupDir .\ops\backups\20260924T120000Z `
 pwsh -File .\ops\restore.ps1 -BackupDir .\ops\backups\20260924T120000Z `
   -AgeIdentity C:\secure\blueai-backup-key.txt -TestRestore
 pwsh -File .\ops\restore.ps1 -BackupDir .\ops\backups\20260924T120000Z `
-  -AgeIdentity C:\secure\blueai-backup-key.txt -Apply -IUnderstandDataLoss
+  -AgeIdentity C:\secure\blueai-backup-key.txt -Apply -IUnderstandDataLoss -KeepQuiesced
 ```
 
-`-DryRun` kiểm tra checksum, giải mã và cấu trúc SQL/tar; `-TestRestore` import
+`-DryRun` kiểm tra checksum, giải mã, cấu trúc SQL và toàn bộ tar/gzip stream
+(không dừng ở member đầu tiên); backup cũng validate archive trước khi lưu
+manifest thành công. Không có production mutation trong archive validation.
+`-TestRestore` import
 SQL vào MySQL disposable và kiểm tra table, không đụng production. Live restore
 dừng frontend/auth-api/rag-ai và thực hiện import dưới maintenance window.
-PowerShell 7+ bắt buộc để native stdout giữ nguyên byte của tar.gz. Plaintext
+PowerShell **7.4+** bắt buộc trước native stdout redirection để giữ nguyên byte
+của tar.gz (7.0–7.3 không được chấp nhận). Bind archive dùng Compose
+`--volume <absolute-source>:<container-target>:ro` như một argument, hỗ trợ
+đường dẫn có spaces; không dùng `compose run --mount`.
+SQL import, document extraction và FAISS extraction phải thành công, sau đó
+SQL table validation phải pass trước khi flag restore-success được đặt và
+service có thể start. Bất kỳ partial failure nào giữ API/RAG/frontend stopped,
+cảnh báo manual recovery; không chạy `start` trong `finally`. Không chỉ restart
+service để xử lý dữ liệu đã thay một phần: giữ traffic đóng, kiểm tra lỗi và
+phục hồi lại cả ba nguồn từ snapshot đã verify. SQL scratch trong container và
+host staging được cleanup khi script thoát bình thường hoặc throw; process
+kill/power loss vẫn cần operator kiểm tra. `-KeepQuiesced` giữ service stopped
+cả khi restore thành công (khuyến nghị); nếu bỏ flag, script chỉ start sau
+validation, còn external traffic phải đóng tới khi readiness/ingress/security
+smoke đạt. Plaintext
 chỉ được phép cho recovery test với `-AllowPlaintextForRecoveryTesting` và
 artifact plaintext không mang đuôi `.age`.
 
@@ -292,8 +326,21 @@ Smoke test offline:
 
 ```powershell
 pwsh -File .\ops\test-backup-restore.ps1
-# Thêm -RunDockerRestore để import fixture vào mysql:8.4 disposable.
+# Opt-in do main/operator chạy, không trỏ tới production:
+pwsh -File .\ops\test-backup-restore.ps1 -RunDockerRestore
 ```
+
+Default offline test mock toàn bộ Docker, thực sự gọi hai archive restore
+command qua argument parser giả (read-only bind có spaces), inject lỗi stop/
+SQL/documents/FAISS/final validation và xác nhận không resume traffic.
+Native-process stdout roundtrip độc lập với Docker mock kiểm tra đủ 256 giá trị
+byte qua redirection (không chỉ kiểm tra version hoặc hash fixture tạo bằng tar).
+`-RunDockerRestore` tạo Compose project/DB/document/FAISS volumes có tên GUID
+riêng, explicit fake env file, không host ports, không production config/key
+hay provider call. Test apply restore vào fixture SQL row/document/index,
+kiểm tra nội dung và stale/hidden files đã được thay, rồi `down --volumes`
+chỉ project fixture. Nếu cleanup lỗi, test fail và giữ fixture/config để manual
+cleanup. Mode này dùng `mysql:8.4` và `alpine:3.21`, không build application.
 
 ### Rotation
 
@@ -433,6 +480,13 @@ pwsh -File .\ops\worker-private-e2e.ps1
 
 `worker-private-e2e.ps1` kiểm tra wrong key 401, đúng key nhưng `limit=0`
 400 trước khi claim, và stale attempt 409 nếu có `WORKER_DOCUMENT_ID`.
+Key chỉ truyền từ process environment bằng `docker run --env WORKER_API_KEY`
+(tên variable, không literal key trong command line); không ghi temp `.env`
+hay file credential. `finally` khôi phục process variable cũ cả khi probe lỗi.
+Không bật shell tracing hoặc log/inspect environment của probe container.
+`pwsh -File .\ops\test-worker-private-e2e.ps1` kiểm tra offline với key giả:
+success/network failure/probe failure đều không tạo file secret và không để
+key tạm trong process environment; không cần Docker hay real key.
 `FE/nginx.conf` trả 404 cho `/api/v1/internal` và `/api/v1/internal/**` trước
 generic API proxy, cũng như `/actuator` và `/actuator/**`. Nếu public probe vẫn
 trả 401 thay vì 403/404, kiểm tra image FE, CDN/WAF và đường đi trực tiếp tới
@@ -445,8 +499,11 @@ Script tự dọn container/network test; không dùng credential hoặc gọi G
 `node BE/ops/test-production-compose.mjs` kiểm tra Compose bằng credential giả
 và không in cấu hình chứa secret. Job MySQL 8.4 chạy
 `MySqlMigrationIntegrationTest` với database disposable `blueai_migration_test`,
-kiểm tra schema mới tới V5, nâng V6 giữ dữ liệu cũ, ghi usage/index và migrate
-lặp không làm thay đổi schema. Test không bật nếu thiếu biến
+kiểm tra schema V5, nâng V6 giữ dữ liệu cũ rồi migrate/validate tới latest V8,
+ghi usage/index và migrate lặp không làm thay đổi schema. Engine-upgrade test
+riêng kiểm tra history/data từ Flyway 11.7.2 tới 11.20.3 trên MySQL 8.4; kết quả
+CI không thay thế maintenance/recovery prerequisites ở section 11.
+Test không bật nếu thiếu biến
 `MYSQL_MIGRATION_TEST_URL`; không trỏ test này tới database ứng dụng.
 
 ADMIN cấp user qua `POST /api/v1/admin/users` và đặt lại mật khẩu qua
@@ -495,21 +552,33 @@ delete user-owned domain records.
 
 ## 11. Flyway schema migration cho database hiện hữu
 
+Migration chain hiện tại là **V1–V8**, latest schema version **V8**. Trong
+`BE/pom.xml`, `flyway.version` pin **11.20.3**; giữ `flyway-core` và
+`flyway-mysql` cùng version này, không nâng riêng một module. Runner/CLI cho
+baseline/migrate phải dùng engine 11.20.3 và MySQL support module tương ứng;
+kiểm tra resolved dependencies và kết quả validate trước rollout.
+
 Database mới để ứng dụng chạy Flyway bình thường. Với database đã có schema từ
 trước khi Flyway được bật, **không** bật `baseline-on-migrate` và không khởi động
 ứng dụng lần đầu trực tiếp trên database đó: `V1__baseline_entity_schema.sql`
 tạo các bảng ban đầu nên Flyway sẽ dừng khi gặp bảng đã tồn tại. Quy trình nâng
 cấp yêu cầu maintenance window:
 
-1. Dừng mọi writer, tạo và kiểm tra backup có thể restore.
+1. Đóng traffic/task admission, dừng và drain mọi writer/worker cũ (kể cả
+   instance ngoài Compose stack và task đang chạy), rồi tạo và kiểm tra backup
+   có thể restore. Phải hoàn tất trước V7: migration backfill `expires_at` rồi
+   đặt `NOT NULL`; writer cũ không ghi field này không được chạy đồng thời.
+   Sau V7 **không rollback về image chứa writer cũ**. Chỉ dùng image đã xác
+   nhận tương thích V7/V8; nếu cần schema/data cũ, giữ maintenance và dùng
+   backup/restore đã duyệt, không chỉ rollback image.
 2. So sánh database với từng schema legacy đã được kiểm chứng (bảng, cột,
    kiểu, nullability, index/constraint). Chỉ dùng baseline ở **version cao nhất
    mà schema thực sự khớp**: dùng `baselineVersion=3` khi database khớp đầy đủ
    V1–V3; chỉ dùng `baselineVersion=1` khi database chỉ khớp V1. Không được
    đoán version, baseline mù, hoặc sửa tay `flyway_schema_history`; schema lệch
    phải được xử lý bằng migration forward có review.
-3. Dùng Flyway CLI cùng major/version tương thích với `flyway-core` của ứng dụng
-   và cùng kết nối/database đã kiểm tra để chạy một lần. Ví dụ, chọn đúng một
+3. Dùng Flyway CLI/runner 11.20.3 với module MySQL cùng version và cùng kết nối/
+   database đã kiểm tra để chạy một lần. Ví dụ, chọn đúng một
    lệnh sau theo kết quả preflight:
 
    ```text
@@ -525,15 +594,44 @@ cấp yêu cầu maintenance window:
    version đã baseline.
 4. Kiểm tra `flyway_schema_history` ghi đúng baseline version và trạng thái hợp
    lệ; sau đó triển khai ứng dụng. Với baseline V1, Flyway phải validate/chạy
-   V2, V3 rồi V4. Với baseline V3, Flyway chỉ chạy V4. Hibernate
-   `ddl-auto=validate` phải kiểm tra entity/schema sau đó.
+   V2–V8 theo thứ tự; với baseline V3, chạy V4–V8. Database mới chạy V1–V8.
+   Xác nhận history thành công tới V8, checksum/schema/index đúng và Hibernate
+   `ddl-auto=validate` pass trước readiness/security acceptance và mở traffic.
 5. Nếu preflight hoặc validate thất bại, dừng rollout và restore backup hoặc
    chuẩn bị migration forward đã review. Không xóa schema history, không chạy
-   `clean`, và không bật baseline tự động để vượt lỗi.
+   `clean`, không bật baseline tự động và **không chạy `repair` mù** để vượt
+   lỗi, bỏ failed migration hoặc chấp nhận checksum mới.
 
-Thực hiện rehearsal quy trình này trên bản restore/staging trước production.
-Fresh schema và migration chain V1–V4 được kiểm tra bởi
-`FlywayMigrationIntegrationTest`; test đó không thay thế preflight trên schema
-legacy thật. Rehearsal isolated-MySQL đã xác nhận schema legacy V1–V3 với
-`baselineVersion=3` rồi chạy V4; production vẫn chỉ được chọn baseline sau khi
-fingerprint/schema diff thực tế khớp mốc V1 hoặc V1–V3 tương ứng.
+### MySQL partial-migration recovery và UTC session prerequisites
+
+MySQL DDL như `ALTER TABLE`/`CREATE INDEX` gây implicit commit; toàn bộ Flyway
+migration nhiều statement không có transactional rollback. Atomic DDL của một
+statement không bảo đảm rollback cả V7/V8: nếu statement sau lỗi, statement
+trước có thể đã áp dụng. Vì vậy backup đã verify và rehearsal **partial
+migration recovery** trên bản restore/staging là gate bắt buộc. Rehearsal phải
+bao gồm failure giữa các statement, đối chiếu schema/data thật với
+`flyway_schema_history`, rồi phục hồi snapshot hoặc thực hiện remediation
+forward có review trước khi validate/migrate tiếp. Không retry mù khi còn DDL
+áp dụng một phần; `repair` chỉ chỉnh metadata, không undo DDL hay khôi phục
+data. Mọi history reconciliation phải có bằng chứng schema/checksum đã khớp,
+approval và rehearsal riêng. Xem [MySQL implicit commits](https://dev.mysql.com/doc/refman/8.4/en/implicit-commit.html).
+
+Yêu cầu mọi JDBC session của ứng dụng và migration runner ở UTC. Với
+Connector/J, cấu hình đồng thời `connectionTimeZone=UTC` và
+`forceConnectionTimeZoneToSession=true` trong URL/properties; giữ các option
+TLS/production đã duyệt. `serverTimezone=UTC` một mình chỉ là alias cấu hình
+connection timezone, **không ép MySQL session timezone**. Kiểm tra
+`SELECT @@session.time_zone` trên connection thật từ từng pool/runner, xác
+nhận UTC (`+00:00` hoặc UTC được server nhận diện), và kiểm tra expiry/recovery
+timestamp trên staging. Không coi JVM timezone hoặc `@@global.time_zone` là
+bằng chứng session UTC. Xem [Connector/J datetime properties](https://dev.mysql.com/doc/connector-j/en/connector-j-connp-props-datetime-types-processing.html).
+
+Đây là **staging/production prerequisites**, không phải xác nhận đã chạy
+migration, ép UTC session hay recovery rehearsal trên production. Trước
+promotion phải lưu kết quả rehearsal fresh V1–V8, legacy baseline V1 hoặc V3
+lên V8 theo schema fingerprint, data preservation, migrate/validate lặp lại,
+writer drain và partial-migration recovery. `FlywayMigrationIntegrationTest`,
+MySQL migration/engine-upgrade tests và CI verify là gate tự động, không thay
+thế preflight trên legacy schema thật hay production maintenance approval.
+Chỉ chọn baseline sau khi schema diff thực tế khớp mốc tương ứng; latest V8
+không phải lý do để baseline một database legacy thẳng lên V8.

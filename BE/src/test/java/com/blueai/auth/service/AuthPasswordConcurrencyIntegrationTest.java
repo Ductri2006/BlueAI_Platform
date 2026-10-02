@@ -32,6 +32,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -154,10 +155,16 @@ class AuthPasswordConcurrencyIntegrationTest {
                 return next;
             }));
             assertThat(refreshedBeforeCommit.await(10, TimeUnit.SECONDS)).isTrue();
-            Future<?> reset = executor.submit(() -> adminUserService.setPassword(admin.getId(), target.getId(), "NewPassword123!"));
-            assertThat(passwordEncoder.encoded.await(10, TimeUnit.SECONDS))
-                    .as("reset acquired the user row while refresh still holds its token row")
-                    .isTrue();
+            CountDownLatch resetStarted = new CountDownLatch(1);
+            Future<?> reset = executor.submit(() -> {
+                resetStarted.countDown();
+                adminUserService.setPassword(admin.getId(), target.getId(), "NewPassword123!");
+            });
+            assertThat(resetStarted.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(passwordEncoder.encoded.await(1, TimeUnit.SECONDS))
+                    .as("reset must wait for the refresh's owner row, not revoke before its session insert commits")
+                    .isFalse();
+            assertThatThrownBy(() -> reset.get(100, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
             commitRefresh.countDown();
             AuthResponse rotated = refresh.get(10, TimeUnit.SECONDS);
             reset.get(10, TimeUnit.SECONDS);
@@ -167,6 +174,46 @@ class AuthPasswordConcurrencyIntegrationTest {
             assertThat(refreshTokenRepository.findAll()).allMatch(token -> token.getRevokedAt() != null);
         } finally {
             commitRefresh.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    @Test
+    void refreshStartedDuringUncommittedResetCannotMintASessionAfterResetCommits() throws Exception {
+        User admin = save("reset-first-admin@example.test", UserRole.ADMIN);
+        User target = save("reset-first-user@example.test", UserRole.USER);
+        AuthResponse current = authService.login(new LoginRequest(target.getEmail(), "OldPassword123!"));
+        CountDownLatch resetBeforeCommit = new CountDownLatch(1);
+        CountDownLatch commitReset = new CountDownLatch(1);
+        CountDownLatch refreshStarted = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> reset = executor.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                adminUserService.setPassword(admin.getId(), target.getId(), "NewPassword123!");
+                resetBeforeCommit.countDown();
+                await(commitReset, "test did not release the reset transaction");
+            }));
+            assertThat(resetBeforeCommit.await(10, TimeUnit.SECONDS)).isTrue();
+            Future<ApiException> refresh = executor.submit(() -> {
+                refreshStarted.countDown();
+                try {
+                    authService.refresh(current.refreshToken());
+                    return null;
+                } catch (ApiException exception) {
+                    return exception;
+                }
+            });
+            assertThat(refreshStarted.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThatThrownBy(() -> refresh.get(100, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+            commitReset.countDown();
+            reset.get(10, TimeUnit.SECONDS);
+            assertThat(refresh.get(10, TimeUnit.SECONDS)).isNotNull();
+            assertThat(refreshTokenRepository.findAll()).allMatch(token -> token.getRevokedAt() != null);
+            AuthResponse fresh = authService.login(new LoginRequest(target.getEmail(), "NewPassword123!"));
+            assertThat(jwtDecoder.decode(fresh.accessToken()).getSubject()).isEqualTo(target.getId());
+        } finally {
+            commitReset.countDown();
             executor.shutdownNow();
             assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }

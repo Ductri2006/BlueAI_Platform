@@ -14,7 +14,8 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $global:LASTEXITCODE = 0
-if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'PowerShell 7+ is required: native stdout redirection must preserve tar.gz bytes.' }
+. (Join-Path $PSScriptRoot 'deploy-helpers.ps1')
+Assert-ArchivePowerShellVersion
 
 if ($Apply -and $DryRun) { throw 'Choose -Apply or -DryRun, not both.' }
 if ($Apply -and -not $IUnderstandDataLoss) {
@@ -35,6 +36,10 @@ $composeArgs = @()
 foreach ($file in $ComposeFile) { $composeArgs += @('-f', $file) }
 if (Test-Path $EnvFile) { $composeArgs += @('--env-file', $EnvFile) }
 $quiesced = $false
+$restoreSucceeded = $false
+$locationPushed = $false
+$mysqlContainer = $null
+$sqlCopyAttempted = $false
 $testContainer = $null
 
 function Invoke-Compose {
@@ -64,8 +69,7 @@ function Expand-BackupArtifact {
 
 function Assert-TarArchive {
     param([string]$Path, [string]$Label)
-    & tar -tzf $Path | Select-Object -First 1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "$Label is not a readable tar.gz archive." }
+    Assert-TarGzipArchive $Path $Label
 }
 
 function Copy-ToContainer {
@@ -115,7 +119,7 @@ try {
         & docker exec $testContainer sh -c 'exec mysql -uroot < /tmp/blueai-restore.sql'
         if ($LASTEXITCODE -ne 0) { throw 'MySQL dump could not be imported into the isolated restore database.' }
         $tableCount = (& docker exec $testContainer mysql -N -B -uroot -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'blueai_auth'").Trim()
-        if ([int]$tableCount -lt 1) { throw 'Isolated restore contains no blueai_auth tables.' }
+        if ($LASTEXITCODE -ne 0 -or $tableCount -notmatch '^\d+$' -or [int]$tableCount -lt 1) { throw 'Isolated restore table validation failed.' }
         Write-Host "PASS: isolated MySQL restore imported $tableCount tables; both file archives are readable."
     }
 
@@ -125,31 +129,51 @@ try {
     }
 
     Push-Location $beRoot
+    $locationPushed = $true
     Invoke-Compose @('config', '--quiet')
     Write-Warning 'Stopping API/RAG/frontend writers. MySQL stays running only for the controlled import.'
-    Invoke-Compose @('stop', 'frontend', 'auth-api', 'rag-ai')
+    # Mark before stop: Compose can partially stop services and then fail.
     $quiesced = $true
+    Invoke-Compose @('stop', 'frontend', 'auth-api', 'rag-ai')
 
     Write-Host 'Importing MySQL dump into the production database...'
     $mysqlContainer = (& docker compose @composeArgs ps -q mysql).Trim()
-    if (-not $mysqlContainer) { throw 'Could not resolve the running mysql container.' }
+    if ($LASTEXITCODE -ne 0 -or -not $mysqlContainer) { throw 'Could not resolve the running mysql container.' }
+    $sqlCopyAttempted = $true
     Copy-ToContainer $mysqlContainer $expanded['mysql.sql'] '/tmp/blueai-restore.sql'
     & docker exec $mysqlContainer sh -c 'export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; exec mysql -uroot < /tmp/blueai-restore.sql'
     if ($LASTEXITCODE -ne 0) { throw 'Live MySQL restore failed.' }
 
     Write-Host 'Replacing uploaded documents volume...'
-    & docker compose @composeArgs run --rm --no-deps --mount "type=bind,source=$($expanded['documents.tar.gz']),target=/tmp/restore-documents.tar.gz,readonly" --entrypoint sh auth-api -c 'set -eu; rm -rf /app/storage/*; tar -xzf /tmp/restore-documents.tar.gz -C /app/storage'
+    $documentsBind = '{0}:/tmp/restore-documents.tar.gz:ro' -f $expanded['documents.tar.gz']
+    & docker compose @composeArgs run --rm --no-deps -T --volume $documentsBind --entrypoint sh auth-api -c 'set -eu; tar -tzf /tmp/restore-documents.tar.gz >/dev/null; find /app/storage -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; tar -xzf /tmp/restore-documents.tar.gz -C /app/storage'
     if ($LASTEXITCODE -ne 0) { throw 'Uploaded documents restore failed.' }
 
     Write-Host 'Replacing FAISS/RAG index volume...'
-    & docker compose @composeArgs run --rm --no-deps --mount "type=bind,source=$($expanded['faiss-index.tar.gz']),target=/tmp/restore-faiss.tar.gz,readonly" --entrypoint sh rag-ai -c 'set -eu; rm -rf /app/.rag-index/*; tar -xzf /tmp/restore-faiss.tar.gz -C /app/.rag-index'
+    $faissBind = '{0}:/tmp/restore-faiss.tar.gz:ro' -f $expanded['faiss-index.tar.gz']
+    & docker compose @composeArgs run --rm --no-deps -T --volume $faissBind --entrypoint sh rag-ai -c 'set -eu; tar -tzf /tmp/restore-faiss.tar.gz >/dev/null; find /app/.rag-index -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; tar -xzf /tmp/restore-faiss.tar.gz -C /app/.rag-index'
     if ($LASTEXITCODE -ne 0) { throw 'FAISS index restore failed.' }
-    Write-Host 'Restore completed. Start services and run the post-restore smoke/security checks before reopening traffic.'
+
+    $tableCount = (& docker exec $mysqlContainer sh -c 'export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; exec mysql -N -B -uroot -e "$1"' sh "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'blueai_auth'").Trim()
+    if ($LASTEXITCODE -ne 0 -or $tableCount -notmatch '^\d+$' -or [int]$tableCount -lt 1) { throw 'Live restore table validation failed.' }
+    $restoreSucceeded = $true
+    if ($restoreSucceeded -and -not $KeepQuiesced) {
+        Invoke-Compose @('start', 'auth-api', 'rag-ai', 'frontend')
+        Write-Host 'Restore completed and services started. Keep external traffic closed until post-restore smoke/security acceptance passes.'
+    } else {
+        Write-Host 'Restore completed and validated; API/RAG/frontend remain stopped (-KeepQuiesced).'
+    }
 } finally {
     if ($testContainer) { & docker rm -f $testContainer 2>$null | Out-Null }
-    if ($Apply -and $quiesced -and -not $KeepQuiesced) {
-        try { Invoke-Compose @('start', 'auth-api', 'rag-ai', 'frontend') } catch { Write-Warning "Could not automatically restart services: $($_.Exception.Message)" }
+    if ($sqlCopyAttempted -and $mysqlContainer) {
+        try {
+            & docker exec $mysqlContainer rm -f /tmp/blueai-restore.sql
+            if ($LASTEXITCODE -ne 0) { throw 'SQL scratch cleanup failed.' }
+        } catch { Write-Warning 'Remove /tmp/blueai-restore.sql from the MySQL container during manual recovery; scratch cleanup failed.' }
     }
-    if (Get-Location | Where-Object { $_.Path -eq $beRoot }) { Pop-Location }
+    if ($Apply -and $quiesced -and -not $restoreSucceeded) {
+        Write-Warning 'RESTORE FAILED: API/RAG/frontend will NOT be restarted. Data may be partially replaced. Keep traffic closed and perform manual recovery from a verified snapshot; do not simply start services.'
+    }
+    if ($locationPushed) { Pop-Location }
     if ($tempCreated) { Remove-SafeRestoreDirectory $tempDir }
 }

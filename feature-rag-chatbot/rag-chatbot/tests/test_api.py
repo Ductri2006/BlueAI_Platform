@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -167,6 +168,30 @@ class RagApiTest(unittest.TestCase):
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=True):
             self.assertEqual({"status": "ready", "provider": "gemini"}, api.readiness())
 
+    def test_operational_readiness_rejects_disabled_stalled_or_failing_worker(self):
+        healthy = {
+            "configured": True, "running": True, "consecutiveFailures": 0,
+            "lastSuccessAt": datetime.now(timezone.utc).isoformat(), "intervalSeconds": 5,
+        }
+        invalid_states = [
+            {**healthy, "configured": False}, {**healthy, "running": False},
+            {**healthy, "consecutiveFailures": 100}, {**healthy, "lastSuccessAt": None},
+            {**healthy, "lastSuccessAt": "invalid"},
+            {**healthy, "lastSuccessAt": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()},
+        ]
+        with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=True), \
+                patch.object(api, "start_worker", return_value=None), TestClient(api.app) as client:
+            self.assertEqual(200, client.get("/ready").status_code)
+            for state in invalid_states:
+                with self.subTest(state=state), patch.object(api, "worker_status", return_value=state):
+                    self.assertEqual(503, client.get("/readiness").status_code)
+                    self.assertEqual(200, client.get("/health").status_code)
+            with patch.object(api, "worker_status", return_value=healthy), \
+                    patch.object(api.runtime, "complete") as complete, patch.object(api.runtime, "search") as search:
+                self.assertEqual(200, client.get("/readiness").status_code)
+                complete.assert_not_called()
+                search.assert_not_called()
+
     def test_retrieval_contract(self):
         match = api.RetrievalMatch(
             documentId="DOC-DEMO",
@@ -297,7 +322,10 @@ class RagApiTest(unittest.TestCase):
         runtime = api.RagRuntime()
         store = PurgeableVectorStore()
         durable_store = PurgeableVectorStore()
-        with tempfile.TemporaryDirectory() as directory, patch.dict("os.environ", {"RAG_INDEX_DIR": directory}):
+        # Disk recovery must be testable without a provider key or network call.
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.dict("os.environ", {"RAG_INDEX_DIR": directory}, clear=True), \
+                patch.object(api.RagRuntime, "_embeddings", return_value=unittest.mock.Mock()):
             store.save_local(directory)
             store.fail_next_save = True
             with patch.object(api.FAISS, "load_local", return_value=durable_store):

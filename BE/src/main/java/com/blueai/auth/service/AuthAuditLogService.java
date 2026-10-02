@@ -9,6 +9,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -34,6 +35,12 @@ public class AuthAuditLogService {
         requiresNewTransaction.executeWithoutResult(status ->
                 repository.save(new AuthAuditLog(action, outcome, actorUserId, targetUserId))
         );
+    }
+
+    /** Security mutations and their audit must share one connection and one commit. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordInTransaction(String action, String outcome, String actorUserId, String targetUserId) {
+        repository.save(new AuthAuditLog(action, outcome, actorUserId, targetUserId));
     }
 
     public void recordAfterCommit(String action, String outcome, String actorUserId, String targetUserId) {

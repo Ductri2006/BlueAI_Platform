@@ -36,10 +36,11 @@ public class AuthRecordRetentionService {
             );
         }
         Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
-        int resetTokens = resetTokenRepository.purgeBefore(cutoff);
+        // Match password mutation lock order: refresh tokens before reset tokens.
         int refreshTokens = refreshTokenRepository.purgeBefore(cutoff);
+        int resetTokens = resetTokenRepository.purgeBefore(cutoff);
         int auditLogs = auditLogService.purgeBefore(cutoff);
-        auditLogService.recordAfterCommit("AUTH_RECORDS_PURGED", "SUCCESS", administratorId, null);
+        auditLogService.recordInTransaction("AUTH_RECORDS_PURGED", "SUCCESS", administratorId, null);
         return new PurgeAuthRecordsResponse(resetTokens, refreshTokens, auditLogs);
     }
 }

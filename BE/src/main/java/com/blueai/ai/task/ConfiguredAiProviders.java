@@ -22,6 +22,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.TransactionException;
 
 import java.io.InputStream;
 import java.net.URI;
@@ -96,7 +97,7 @@ public class ConfiguredAiProviders implements AiCompletionProvider, AiRetrievalP
                 usageService.record(response.path("model").asText(config.getLlmModel()),
                         usage.path("prompt_tokens").asLong(), usage.path("completion_tokens").asLong(),
                         usage.path("total_tokens").asLong());
-            } catch (DataAccessException exception) {
+            } catch (DataAccessException | TransactionException exception) {
                 LOG.warn("Could not persist Gemini token usage for a successful AI task completion.", exception);
             }
         }
