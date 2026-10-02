@@ -189,6 +189,11 @@ jobs:
       - name: Test disposable restore, failure safety and deployment acceptance
         shell: pwsh
         run: |
-          & ./BE/ops/test-backup-restore.ps1 -RunDockerRestore
-          & ./BE/ops/test-deploy-rollback.ps1
-          & ./BE/ops/test-worker-private-e2e.ps1
+          # Expected negative tests must not leak LASTEXITCODE into the runner.
+          # Isolate each script and fail immediately on a real process failure.
+          pwsh -NoProfile -File ./BE/ops/test-backup-restore.ps1 -RunDockerRestore
+          if ($LASTEXITCODE -ne 0) { throw 'Backup/restore regression failed.' }
+          pwsh -NoProfile -File ./BE/ops/test-deploy-rollback.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Deployment/rollback regression failed.' }
+          pwsh -NoProfile -File ./BE/ops/test-worker-private-e2e.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Worker credential regression failed.' }

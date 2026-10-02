@@ -176,3 +176,11 @@ Giới hạn review cụ thể: pool-capacity dùng H2 và chỉ covers login/re
 Nếu bị hard-kill trong backup/restore, plaintext scratch có thể còn và cần cleanup thủ công theo runbook. Image fixture dạng tag có thể thay đổi; release production nên ghi digest artifact đã duyệt.
 
 **Bước tiếp theo phù hợp:** đưa patch lên branch/PR sau khi bạn duyệt báo cáo, để team chạy CI + staging. Chưa có cơ sở bỏ qua các bước này và đẩy thẳng main/production chỉ vì local tests pass.
+
+## 10. Bổ sung trong lượt push lên branch
+
+Sau khi được phép push, bản vá được commit thành `d42b4a5` và đẩy lên `feature/conversation-context`; không merge main hay force-push. [Lượt GitHub CI đầu](https://github.com/Ductri2006/BlueAI_Platform/actions/runs/37003371289) xác nhận Flyway upgrade, MySQL, RAG và frontend pass, nhưng bước gom các test PowerShell báo failure dù log restore thật/deploy/worker đều pass.
+
+Đã tái hiện nguyên nhân: khi gọi test bằng `& script.ps1` trong cùng process, mã native/mock failure đã được bắt vẫn có thể còn trong `LASTEXITCODE`. Wrapper của GitHub Actions dùng giá trị này làm mã thoát cuối; test worker riêng tái hiện toàn bộ assertion pass nhưng runner-style exit 9, trong khi `pwsh -NoProfile -File` trả 0.
+
+Chỉnh **chỉ orchestration của verify.yml**: chạy từng test trong process PowerShell riêng, kiểm tra mã thoát ngay sau mỗi process và throw nếu khác 0. Không thêm `exit 0` để giấu lỗi, không giảm assertion, không bỏ test hoặc thay production logic. Test một process cố ý exit khác 0 vẫn phải làm wrapper failure. Kết luận của các lượt CI tiếp theo xem tại [GitHub Actions cho branch](https://github.com/Ductri2006/BlueAI_Platform/actions?query=branch%3Afeature%2Fconversation-context); nội dung các mục trước là snapshot kiểm tra trước commit/push, không phải trạng thái CI cập nhật liên tục.
