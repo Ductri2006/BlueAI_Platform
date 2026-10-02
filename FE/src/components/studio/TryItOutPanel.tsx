@@ -1,6 +1,6 @@
 import React from 'react';
 import { Bot, RotateCcw, Send, UserRound, X } from 'lucide-react';
-import { blueAiApi, type StudioCustomization, type StudioPreviewContext } from '../../api/blueAiApi';
+import { blueAiApi, type ConversationResponse, type StudioCustomization, type StudioPreviewContext, type StudioRuntimeResponse } from '../../api/blueAiApi';
 
 interface TryItOutPanelProps {
   botId: string;
@@ -8,6 +8,7 @@ interface TryItOutPanelProps {
   blueAiCoreEnabled: boolean;
   customization?: StudioCustomization;
   onClose: () => void;
+  welcomeMessage?: string;
 }
 
 interface TranscriptItem {
@@ -20,6 +21,7 @@ interface TranscriptItem {
   contextVariables?: Record<string, string>;
   pendingEntity?: string;
   fallback?: boolean;
+  result?: StudioRuntimeResponse;
 }
 
 const INITIAL_MESSAGE: TranscriptItem = {
@@ -47,23 +49,36 @@ const structureLabels: Record<string, string> = {
   summary_then_detail: 'Tóm tắt → chi tiết',
 };
 
-export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, blueAiCoreEnabled, customization, onClose }) => {
-  const [items, setItems] = React.useState<TranscriptItem[]>([INITIAL_MESSAGE]);
+export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, blueAiCoreEnabled, customization, onClose, welcomeMessage }) => {
+  const welcome = { ...INITIAL_MESSAGE, text: welcomeMessage || INITIAL_MESSAGE.text };
+  const [items, setItems] = React.useState<TranscriptItem[]>([welcome]);
+  const [conversations, setConversations] = React.useState<ConversationResponse[]>([]);
+  const [conversationId, setConversationId] = React.useState('');
   const [context, setContext] = React.useState<StudioPreviewContext>();
   const [message, setMessage] = React.useState('');
   const [isSending, setIsSending] = React.useState(false);
   const [error, setError] = React.useState('');
   const endRef = React.useRef<HTMLDivElement>(null);
+  const generation = React.useRef(0);
+
+  React.useEffect(() => {
+    let active = true;
+    void blueAiApi.listConversations().then(value => { if (active) setConversations(value); })
+      .catch(() => { if (active) setError('Không tải được danh sách hội thoại. Bạn vẫn có thể thử kịch bản độc lập.'); });
+    return () => { active = false; generation.current += 1; };
+  }, [botId]);
 
   React.useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [items, isSending]);
 
   const reset = () => {
-    setItems([INITIAL_MESSAGE]);
+    generation.current += 1;
+    setItems([welcome]);
     setContext(undefined);
     setMessage('');
     setError('');
+    setIsSending(false);
   };
 
   const send = async (event: React.FormEvent) => {
@@ -75,9 +90,14 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
     setMessage('');
     setError('');
     setIsSending(true);
+    const currentGeneration = generation.current;
 
     try {
-      const response = await blueAiApi.previewStudioBot(botId, value, context);
+      const response = await blueAiApi.previewStudioBot(botId, value, context, {
+        conversationId: conversationId || undefined,
+        history: items.slice(-20).map(item => ({ role: item.role, content: item.text.slice(0, 4000) })),
+      });
+      if (currentGeneration !== generation.current) return;
       setContext(response.context);
       setItems(current => [...current, {
         id: crypto.randomUUID(),
@@ -89,11 +109,12 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
         contextVariables: response.context.variables,
         pendingEntity: response.context.pendingEntity,
         fallback: response.fallback,
+        result: response,
       }]);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Không thể chạy bản thử nghiệm.');
+      if (currentGeneration === generation.current) setError(requestError instanceof Error ? requestError.message : 'Không thể chạy bản thử nghiệm.');
     } finally {
-      setIsSending(false);
+      if (currentGeneration === generation.current) setIsSending(false);
     }
   };
 
@@ -113,13 +134,25 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={reset} className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white" title="Xoá ngữ cảnh" aria-label="Xoá ngữ cảnh thử nghiệm">
+          <button type="button" onClick={reset} disabled={isSending} className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-40" title="Xoá ngữ cảnh" aria-label="Xoá ngữ cảnh thử nghiệm">
             <RotateCcw className="h-4 w-4" />
           </button>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white" title="Đóng" aria-label="Đóng bảng thử nghiệm">
             <X className="h-4 w-4" />
           </button>
         </div>
+      </div>
+
+      <div className="border-b border-white/10 px-4 py-3 text-xs">
+        <label className="block font-bold text-slate-200">Context nền cho lượt thử
+          <select aria-label="Hội thoại nền cho thử nghiệm" value={conversationId} disabled={isSending}
+            onChange={event => { setConversationId(event.target.value); reset(); }}
+            className="mt-2 w-full rounded-lg border border-white/10 bg-slate-900 px-2 py-2 text-slate-100 disabled:opacity-40">
+            <option value="">Không dùng hội thoại có sẵn</option>
+            {conversations.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>
+        </label>
+        <p className="mt-2 leading-5 text-slate-400">Dùng cùng bộ xử lý context và KB với màn sales. Lượt thử không ghi vào hội thoại nền; đóng bảng sẽ xoá lịch sử thử.</p>
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
@@ -142,6 +175,15 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
                   </div>
                   <p className="text-slate-400">Entity nhận diện ở câu này: {Object.keys(item.recognizedEntities || {}).length ? Object.entries(item.recognizedEntities || {}).map(([name, value]) => `@${name}=${value}`).join(', ') : 'không có'}</p>
                   <p className="text-slate-400">Context sau câu này: {Object.keys(item.contextVariables || {}).length ? Object.entries(item.contextVariables || {}).map(([name, value]) => `@${name}=${value}`).join(', ') : 'không giữ entity'}{item.pendingEntity ? ` · Đang đợi @${item.pendingEntity}` : ''}</p>
+                  {item.result?.trace && <details className="rounded-lg bg-white/5 p-2">
+                    <summary className="cursor-pointer font-bold text-cyan-200">Vì sao bot trả lời như vậy? · {item.result.trace.route}</summary>
+                    <p className="mt-2 text-slate-300">{item.result.trace.reason}</p>
+                    {item.result.trace.visitedNodes.length > 0 && <p className="mt-1">Các bước: {item.result.trace.visitedNodes.join(' → ')}</p>}
+                    {item.result.trace.contextSource && <p className="mt-1">Nguồn dữ kiện: {item.result.trace.contextSource}</p>}
+                    {Object.entries(item.result.trace.confirmedEntities).map(([key, value]) => <p key={key}>Đã xác nhận: {key} = {value}</p>)}
+                  </details>}
+                  {(item.result?.sources || []).map((source, index) => <p key={`${source.chunkId}-${index}`} className="text-emerald-200">[S{index + 1}] {source.filename} · {source.excerpt}</p>)}
+                  {(item.result?.contextSources || []).map((source, index) => <p key={index} className="text-violet-200">Context: {source.title}{source.memoryKey ? ` · ${source.memoryKey}` : ''}</p>)}
                 </div>
               )}
             </div>
@@ -158,6 +200,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
             <span className="font-bold uppercase tracking-wider">Context cho câu tiếp theo</span>
             {context.waitingNode && <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-violet-200">node: {context.waitingNode}</span>}
             {context.pendingEntity && <span className="rounded bg-white/10 px-1.5 py-0.5">đợi @{context.pendingEntity}</span>}
+            {Object.entries(context.suggestedVariables || {}).map(([key, value]) => <span key={`suggestion-${key}`} className="rounded bg-amber-500/20 px-1.5 py-0.5 text-amber-200">Chưa xác nhận: {key}={value}</span>)}
             {Object.entries(context.variables || {}).map(([key, value]) => <span key={key} className="rounded bg-white/10 px-1.5 py-0.5">{key}={value}</span>)}
           </div>
         )}

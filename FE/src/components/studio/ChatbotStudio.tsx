@@ -15,6 +15,12 @@ import {
 } from '../../api/blueAiApi';
 import { useAppStore } from '../../store/useAppStore';
 import { TryItOutPanel } from './TryItOutPanel';
+import { analyzeDialogNodes } from './dialogValidation';
+import { deleteDialogNode, planDialogInsertion, renameDialogNode, summarizeDialogStep, uniqueDialogName } from './dialogNodeOperations';
+import { beginStudioOperation, confirmStudioExit, installStudioExitProtection } from './studioDraftProtection';
+import { DialogNodeNameField } from './DialogNodeNameField';
+import { DialogContextPolicy, DialogValidationNotice } from './DialogContextPolicy';
+import { StudioDiscardDialog, useStudioConfirmation } from './StudioDiscardDialog';
 import {
   compactDraftEntries,
   mergeEntityImports,
@@ -53,18 +59,38 @@ export const ChatbotStudio: React.FC = () => {
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [newBotName, setNewBotName] = React.useState('Trợ lý BlueAI');
   const [error, setError] = React.useState('');
+  const studioRef = React.useRef<HTMLElement>(null);
+  const draftGuard = React.useRef({ dirty: false, busy: false });
+  const discard = useStudioConfirmation();
+  const studioLifecycle = React.useRef({ active: true, generation: 0 });
+  React.useEffect(() => {
+    studioLifecycle.current.active = true;
+    return () => { studioLifecycle.current.active = false; studioLifecycle.current.generation += 1; };
+  }, []);
+  const isBusy = isLoading || isSaving || isPublishing || isActivating;
+  const notifyBusy = () => showToast('Đang xử lý cấu hình. Vui lòng chờ hoàn tất trước khi rời hoặc đổi cấu hình.', 'warning');
+  React.useEffect(() => installStudioExitProtection(() => studioRef.current, draftGuard.current, notifyBusy, discard.confirm), [showToast, discard.confirm]);
 
   const loadBot = React.useCallback(async (botId: string) => {
+    if (!beginStudioOperation(draftGuard.current)) return;
+    const requestGeneration = ++studioLifecycle.current.generation;
+    const isCurrentRequest = () => studioLifecycle.current.active && studioLifecycle.current.generation === requestGeneration;
     setIsLoading(true);
     setError('');
     try {
       const result = await blueAiApi.getStudioBot(botId);
+      if (!isCurrentRequest()) return;
       setConfiguration(copyConfiguration(result));
+      setIsPreviewOpen(false);
+      draftGuard.current.dirty = false;
       setIsDirty(false);
     } catch (requestError) {
-      setError(errorMessage(requestError));
+      if (isCurrentRequest()) setError(errorMessage(requestError));
     } finally {
-      setIsLoading(false);
+      if (isCurrentRequest()) {
+        draftGuard.current.busy = false;
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -86,13 +112,21 @@ export const ChatbotStudio: React.FC = () => {
   }, [loadBot]);
 
   const updateConfiguration = (updater: (current: StudioBotConfiguration) => StudioBotConfiguration) => {
+    if (draftGuard.current.busy) return;
     setConfiguration(current => current ? updater(copyConfiguration(current)) : current);
+    draftGuard.current.dirty = true;
     setIsDirty(true);
+  };
+
+  const switchBot = async (botId: string) => {
+    if (botId === configuration?.bot.id) return;
+    if (await confirmStudioExit(draftGuard.current, discard.confirm, notifyBusy)) void loadBot(botId);
   };
 
   const createBot = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!newBotName.trim()) return;
+    if (!await confirmStudioExit(draftGuard.current, discard.confirm, notifyBusy) || !beginStudioOperation(draftGuard.current)) return;
     setIsLoading(true);
     setError('');
     try {
@@ -105,18 +139,21 @@ export const ChatbotStudio: React.FC = () => {
       });
       setBots(current => [result.bot, ...current]);
       setConfiguration(copyConfiguration(result));
+      setIsPreviewOpen(false);
       setIsCreateOpen(false);
+      draftGuard.current.dirty = false;
       setIsDirty(false);
-        showToast('Đã tạo cấu hình BlueAI với bộ intent và luồng mẫu.', 'success');
+      showToast('Đã tạo cấu hình BlueAI với bộ intent và luồng mẫu.', 'success');
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
+      draftGuard.current.busy = false;
       setIsLoading(false);
     }
   };
 
   const save = async (announce = true): Promise<StudioBotConfiguration | undefined> => {
-    if (!configuration) return undefined;
+    if (!configuration || draftGuard.current.busy) return undefined;
     const intents = configuration.intents.map(intent => ({
       ...intent,
       examples: compactDraftEntries(intent.examples),
@@ -148,12 +185,14 @@ export const ChatbotStudio: React.FC = () => {
       configuration.dialogNodes,
       intents.map(intent => intent.name),
       entities.map(entity => entity.name),
+      entities,
     );
     if (dialogErrors.length > 0) {
       setActiveTab('dialog');
-      setError(`Kiểm tra Dialog trước khi lưu: ${dialogErrors[0]}`);
+      setError(`Kiểm tra luồng hội thoại trước khi lưu (${dialogErrors.length} lỗi): ${dialogErrors.join('\n')}`);
       return undefined;
     }
+    if (!beginStudioOperation(draftGuard.current)) return undefined;
     setIsSaving(true);
     setError('');
     try {
@@ -172,6 +211,7 @@ export const ChatbotStudio: React.FC = () => {
       });
       setConfiguration(copyConfiguration(saved));
       setBots(current => current.map(bot => bot.id === saved.bot.id ? saved.bot : bot));
+      draftGuard.current.dirty = false;
       setIsDirty(false);
       if (announce) showToast(`Đã lưu bản nháp r${saved.bot.draftRevision}.`, 'success');
       return saved;
@@ -179,18 +219,21 @@ export const ChatbotStudio: React.FC = () => {
       setError(errorMessage(requestError));
       return undefined;
     } finally {
+      draftGuard.current.busy = false;
       setIsSaving(false);
     }
   };
 
   const openPreview = async () => {
+    if (draftGuard.current.busy) return;
     const saved = isDirty ? await save(false) : configuration;
     if (saved) setIsPreviewOpen(true);
   };
 
   const publish = async () => {
+    if (draftGuard.current.busy) return;
     const saved = isDirty ? await save(false) : configuration;
-    if (!saved) return;
+    if (!saved || !beginStudioOperation(draftGuard.current)) return;
     setIsPublishing(true);
     setError('');
     try {
@@ -203,22 +246,26 @@ export const ChatbotStudio: React.FC = () => {
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
+      draftGuard.current.busy = false;
       setIsPublishing(false);
     }
   };
 
   const activate = async () => {
-    if (!configuration || configuration.bot.status !== 'PUBLISHED') return;
+    if (!configuration || configuration.bot.status !== 'PUBLISHED' || draftGuard.current.busy) return;
+    const saved = isDirty ? await save(false) : configuration;
+    if (!saved || !beginStudioOperation(draftGuard.current)) return;
     setIsActivating(true);
     setError('');
     try {
-      const activated = await blueAiApi.activateStudioBot(configuration.bot.id);
+      const activated = await blueAiApi.activateStudioBot(saved.bot.id);
       setConfiguration(copyConfiguration(activated));
       setBots(current => current.map(bot => ({ ...bot, active: bot.id === activated.bot.id })));
       showToast('Đã áp dụng cấu hình cho màn Hỏi BlueAI.', 'success');
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
+      draftGuard.current.busy = false;
       setIsActivating(false);
     }
   };
@@ -246,14 +293,14 @@ export const ChatbotStudio: React.FC = () => {
 
   const tabs: { id: StudioTab; label: string; icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
     { id: 'blueai', label: 'BlueAI chính', icon: BrainCircuit },
-    { id: 'intents', label: 'Mục đích', icon: MessageSquareText, count: configuration.intents.length },
-    { id: 'entities', label: 'Dữ liệu', icon: Braces, count: configuration.entities.length },
-    { id: 'dialog', label: 'Dialog', icon: GitBranch, count: configuration.dialogNodes.length },
+    { id: 'intents', label: 'Mục đích (intent)', icon: MessageSquareText, count: configuration.intents.length },
+    { id: 'entities', label: 'Dữ kiện (entity)', icon: Braces, count: configuration.entities.length },
+    { id: 'dialog', label: 'Luồng hội thoại', icon: GitBranch, count: configuration.dialogNodes.length },
     { id: 'integrate', label: 'Tích hợp', icon: Code2 },
   ];
 
   return (
-    <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 dark:bg-[#060B14]">
+    <section ref={studioRef} aria-busy={isBusy} className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 dark:bg-[#060B14]">
       <header className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-[#0B1324] sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -262,7 +309,8 @@ export const ChatbotStudio: React.FC = () => {
               <div className="flex items-center gap-2">
                 <select
                   value={configuration.bot.id}
-                  onChange={event => void loadBot(event.target.value)}
+                  onChange={event => void switchBot(event.target.value)}
+                  disabled={isBusy}
                   className="max-w-64 truncate bg-transparent text-base font-black text-slate-900 outline-none dark:text-white"
                   aria-label="Chọn cấu hình BlueAI"
                 >
@@ -271,39 +319,45 @@ export const ChatbotStudio: React.FC = () => {
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${configuration.bot.status === 'PUBLISHED' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}`}>{configuration.bot.status}</span>
                 {configuration.bot.active && <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[10px] font-black text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300">Đang dùng cho Hỏi BlueAI</span>}
               </div>
-              <p className="text-[11px] text-slate-500">Bản nháp r{configuration.bot.draftRevision}{isDirty ? ' • Có thay đổi chưa lưu' : ' • Đã đồng bộ'}</p>
+              <p className="text-[11px] text-slate-500" role="status">Bản nháp r{configuration.bot.draftRevision}{isBusy ? ' • Đang xử lý, vui lòng chờ' : isDirty ? ' • Có thay đổi chưa lưu' : ' • Đã đồng bộ'}</p>
             </div>
-            <button type="button" onClick={() => setIsCreateOpen(true)} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:border-cobalt-300 hover:text-cobalt-600 dark:border-slate-700" title="Tạo cấu hình BlueAI khác" aria-label="Tạo cấu hình BlueAI khác"><Plus className="h-4 w-4" /></button>
+            <button type="button" disabled={isBusy} onClick={() => setIsCreateOpen(true)} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:border-cobalt-300 hover:text-cobalt-600 disabled:opacity-40 dark:border-slate-700" title="Tạo cấu hình BlueAI khác" aria-label="Tạo cấu hình BlueAI khác"><Plus className="h-4 w-4" /></button>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <fieldset disabled={isBusy} className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => void openPreview()} disabled={isSaving} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:border-cobalt-300 hover:text-cobalt-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><FlaskConical className="h-4 w-4" />Thử BlueAI</button>
             <button type="button" onClick={() => void save()} disabled={!isDirty || isSaving} className="inline-flex items-center gap-2 rounded-xl border border-cobalt-200 bg-cobalt-50 px-3.5 py-2 text-xs font-bold text-cobalt-700 hover:bg-cobalt-100 disabled:cursor-not-allowed disabled:opacity-45 dark:border-cobalt-800 dark:bg-cobalt-950 dark:text-cobalt-200">{isSaving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Lưu nháp</button>
             <button type="button" onClick={() => void publish()} disabled={isPublishing || isSaving} className="inline-flex items-center gap-2 rounded-xl bg-cobalt-600 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-cobalt-500/20 hover:bg-cobalt-700 disabled:opacity-50">{isPublishing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}Phát hành</button>
             {configuration.bot.status === 'PUBLISHED' && !configuration.bot.active && <button type="button" onClick={() => void activate()} disabled={isActivating || isSaving} className="inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3.5 py-2 text-xs font-bold text-cyan-800 hover:bg-cyan-100 disabled:opacity-50 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-200">{isActivating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Áp dụng cho Hỏi BlueAI</button>}
-          </div>
+          </fieldset>
         </div>
       </header>
 
       <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 bg-white px-4 dark:border-slate-800 dark:bg-[#0B1324] sm:px-6" aria-label="Các khu vực BlueAI Custom">
         {tabs.map(tab => {
           const Icon = tab.icon;
-          return <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 border-b-2 px-3 py-3 text-xs font-bold transition-colors ${activeTab === tab.id ? 'border-cobalt-600 text-cobalt-700 dark:text-cobalt-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><Icon className="h-4 w-4" />{tab.label}{tab.count !== undefined && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-slate-800">{tab.count}</span>}</button>;
+          return <button key={tab.id} type="button" disabled={isBusy} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 border-b-2 px-3 py-3 text-xs font-bold transition-colors ${activeTab === tab.id ? 'border-cobalt-600 text-cobalt-700 dark:text-cobalt-300' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}><Icon className="h-4 w-4" />{tab.label}{tab.count !== undefined && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] dark:bg-slate-800">{tab.count}</span>}</button>;
         })}
       </nav>
 
-      {error && <div className="mx-4 mt-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 sm:mx-6"><span>{error}</span><button type="button" onClick={() => setError('')} aria-label="Đóng lỗi"><X className="h-4 w-4" /></button></div>}
+      {error && <div className="mx-4 mt-4 flex items-start justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300 sm:mx-6"><span className="whitespace-pre-line">{error}</span><button type="button" onClick={() => setError('')} aria-label="Đóng lỗi"><X className="h-4 w-4" /></button></div>}
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <fieldset disabled={isBusy} className="min-w-0">
         {activeTab === 'blueai' && <BlueAiCorePanel configuration={configuration} onChange={bot => updateConfiguration(current => ({ ...current, bot }))} onCustomizationChange={customization => updateConfiguration(current => ({ ...current, customization }))} />}
-        {activeTab === 'intents' && <IntentsEditor intents={configuration.intents} onChange={intents => updateConfiguration(current => ({ ...current, intents }))} />}
-        {activeTab === 'entities' && <EntitiesEditor entities={configuration.entities} onChange={entities => updateConfiguration(current => ({ ...current, entities }))} />}
-        {activeTab === 'dialog' && <DialogEditor nodes={configuration.dialogNodes} intents={configuration.intents} entities={configuration.entities} onChange={dialogNodes => updateConfiguration(current => ({ ...current, dialogNodes }))} onPreview={() => void openPreview()} />}
+        {activeTab === 'intents' && <IntentsEditor key={configuration.bot.id} intents={configuration.intents} onChange={intents => updateConfiguration(current => ({ ...current, intents }))} />}
+        {activeTab === 'entities' && <EntitiesEditor key={configuration.bot.id} entities={configuration.entities} onChange={entities => updateConfiguration(current => ({ ...current, entities }))} />}
+        {activeTab === 'dialog' && <DialogEditor key={configuration.bot.id} nodes={configuration.dialogNodes} intents={configuration.intents} entities={configuration.entities} onChange={dialogNodes => updateConfiguration(current => ({ ...current, dialogNodes }))} onPreview={() => void openPreview()} />}
         {activeTab === 'integrate' && <IntegrationPanel configuration={configuration} />}
+        </fieldset>
       </div>
 
+      {discard.message && <StudioDiscardDialog message={discard.message} onDecision={discard.decide} />}
+
       {isPreviewOpen && <TryItOutPanel
+        key={configuration.bot.id}
         botId={configuration.bot.id}
         botName={configuration.bot.name}
+        welcomeMessage={configuration.dialogNodes.find(node => node.type === 'WELCOME')?.responseText}
         blueAiCoreEnabled={configuration.bot.blueAiCoreEnabled !== false}
         customization={configuration.customization || configuration.bot.customization}
         onClose={() => setIsPreviewOpen(false)}
@@ -312,10 +366,12 @@ export const ChatbotStudio: React.FC = () => {
       {isCreateOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
           <form onSubmit={createBot} className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <fieldset disabled={isBusy}>
             <div className="flex items-center justify-between"><h2 className="text-lg font-black">Tạo cấu hình BlueAI mới</h2><button type="button" onClick={() => setIsCreateOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button></div>
             <p className="mt-1 text-sm text-slate-500">Khởi tạo bản cấu hình dùng chung cho BlueAI với dữ liệu mẫu tiếng Việt.</p>
             <label className="mt-5 block"><span className={labelClass}>Tên cấu hình</span><input value={newBotName} onChange={event => setNewBotName(event.target.value)} className={inputClass} autoFocus /></label>
             <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsCreateOpen(false)} className="rounded-xl px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Huỷ</button><button type="submit" className="rounded-xl bg-cobalt-600 px-4 py-2 text-sm font-bold text-white hover:bg-cobalt-700">Tạo với dữ liệu mẫu</button></div>
+            </fieldset>
           </form>
         </div>
       )}
@@ -470,25 +526,26 @@ function RouteComposer({ nodes, intents, defaultParent, onClose, onCreate }: { n
     event.preventDefault();
     if (!draft.routeName.trim()) { setError('Route cần có tên để dễ tìm trong cây Dialog.'); return; }
     if (!draft.matchIntent) { setError('Hãy chọn intent để route biết khi nào được kích hoạt.'); return; }
-    if (draft.destinationMode === 'new' && !draft.destinationName.trim()) { setError('Hãy đặt tên cho node đích mới.'); return; }
-    if (draft.destinationMode === 'existing' && !draft.destinationNode) { setError('Hãy chọn một node đích có sẵn.'); return; }
+    if (draft.destinationMode === 'new' && !draft.destinationName.trim()) { setError('Hãy đặt tên cho bước đích mới.'); return; }
+    if (draft.destinationMode === 'new' && !draft.destinationResponse.trim()) { setError('Bước đích cần có lời đáp trước khi chờ người dùng.'); return; }
+    if (draft.destinationMode === 'existing' && !availableTargets.some(node => node.name === draft.destinationNode)) { setError('Hãy chọn một bước đích có sẵn.'); return; }
     onCreate(draft);
   };
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Tạo route và node đích">
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Tạo nhánh và bước đích">
     <form onSubmit={submit} className="max-h-[min(760px,calc(100vh-2rem))] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
-      <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cobalt-600">Flow builder</p><h2 className="mt-1 text-xl font-black">Tạo route và node đích cùng lúc</h2><p className="mt-1 text-sm leading-5 text-slate-500">Route sẽ tự chuyển đến node đích sau khi được tạo. Bạn có thể chọn node có sẵn hoặc tạo node trả lời mới.</p></div><button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Đóng flow builder"><X className="h-4 w-4" /></button></div>
+      <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cobalt-600">Liên kết hội thoại</p><h2 className="mt-1 text-xl font-black">Tạo nhánh và bước trả lời cùng lúc</h2><p className="mt-1 text-sm leading-5 text-slate-500">Khi khách có mục đích đã chọn, nhánh sẽ chuyển ngay đến bước đích. Chọn bước có sẵn hoặc tạo bước trả lời mới.</p></div><button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Đóng trình liên kết hội thoại"><X className="h-4 w-4" /></button></div>
       <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <label><span className={labelClass}>Tên route</span><input value={draft.routeName} onChange={event => update({ routeName: event.target.value })} className={inputClass} autoFocus placeholder="Ví dụ: Hỏi giá cước" /></label>
-        <SearchableSelect label="Kích hoạt khi nhận intent" value={draft.matchIntent} onChange={matchIntent => update({ matchIntent })} emptyLabel="Chọn intent" options={intents.map(intent => ({ value: intent.name, label: `#${intent.name}` }))} />
-        <SearchableSelect label="Node cha" value={draft.parentNode} onChange={parentNode => update({ parentNode })} emptyLabel="Cấp gốc" options={availableParents.map(node => ({ value: node.name, label: node.name }))} />
+        <label><span className={labelClass}>Tên nhánh</span><input maxLength={120} value={draft.routeName} onChange={event => update({ routeName: event.target.value })} className={inputClass} autoFocus placeholder="Ví dụ: Hỏi giá cước" /></label>
+        <SearchableSelect label="Khách muốn làm gì (intent)" value={draft.matchIntent} onChange={matchIntent => update({ matchIntent })} emptyLabel="Chọn mục đích" options={intents.map(intent => ({ value: intent.name, label: `#${intent.name}` }))} />
+        <SearchableSelect label="Bước cha" value={draft.parentNode} onChange={parentNode => update({ parentNode })} emptyLabel="Cấp gốc" options={availableParents.map(node => ({ value: node.name, label: node.name }))} />
       </div>
-      <div className="mt-5 rounded-2xl border border-cobalt-100 bg-cobalt-50/60 p-4 dark:border-cobalt-900 dark:bg-cobalt-950/30"><p className="text-xs font-black text-cobalt-800 dark:text-cobalt-200">Node đích sau khi route khớp</p><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => update({ destinationMode: 'new' })} className={`rounded-xl border px-3 py-2 text-xs font-bold ${draft.destinationMode === 'new' ? 'border-cobalt-500 bg-white text-cobalt-700 shadow-sm dark:bg-slate-900 dark:text-cobalt-200' : 'border-transparent text-slate-500 hover:bg-white/60'}`}>Tạo node mới</button><button type="button" onClick={() => update({ destinationMode: 'existing' })} className={`rounded-xl border px-3 py-2 text-xs font-bold ${draft.destinationMode === 'existing' ? 'border-cobalt-500 bg-white text-cobalt-700 shadow-sm dark:bg-slate-900 dark:text-cobalt-200' : 'border-transparent text-slate-500 hover:bg-white/60'}`}>Chọn node có sẵn</button></div>
-        {draft.destinationMode === 'new' ? <div className="mt-3 grid gap-3 md:grid-cols-2"><label><span className={labelClass}>Tên node đích</span><input value={draft.destinationName} onChange={event => update({ destinationName: event.target.value })} className={inputClass} placeholder="Ví dụ: Trả lời giá cước" /></label><label><span className={labelClass}>Nội dung trả lời</span><textarea value={draft.destinationResponse} onChange={event => update({ destinationResponse: event.target.value })} rows={2} className={`${inputClass} resize-y`} placeholder="Nội dung BlueAI trả lời" /></label></div> : <div className="mt-3"><SearchableSelect label="Node đích có sẵn" value={draft.destinationNode} onChange={destinationNode => update({ destinationNode })} emptyLabel="Chọn node đích" options={availableTargets.map(node => ({ value: node.name, label: `${node.name} · ${node.type}` }))} /></div>}
-        <p className="mt-3 text-[11px] leading-5 text-cobalt-800 dark:text-cobalt-200"><GitBranch className="mr-1 inline h-3.5 w-3.5" />Kết quả: <strong>{draft.routeName || 'Route mới'}</strong> sẽ chuyển thẳng đến <strong>{draft.destinationMode === 'new' ? draft.destinationName || 'node mới' : draft.destinationNode || 'node đã chọn'}</strong>.</p>
+      <div className="mt-5 rounded-2xl border border-cobalt-100 bg-cobalt-50/60 p-4 dark:border-cobalt-900 dark:bg-cobalt-950/30"><p className="text-xs font-black text-cobalt-800 dark:text-cobalt-200">Bước tiếp theo khi mục đích khớp</p><div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => update({ destinationMode: 'new' })} className={`rounded-xl border px-3 py-2 text-xs font-bold ${draft.destinationMode === 'new' ? 'border-cobalt-500 bg-white text-cobalt-700 shadow-sm dark:bg-slate-900 dark:text-cobalt-200' : 'border-transparent text-slate-500 hover:bg-white/60'}`}>Tạo bước mới</button><button type="button" onClick={() => update({ destinationMode: 'existing' })} className={`rounded-xl border px-3 py-2 text-xs font-bold ${draft.destinationMode === 'existing' ? 'border-cobalt-500 bg-white text-cobalt-700 shadow-sm dark:bg-slate-900 dark:text-cobalt-200' : 'border-transparent text-slate-500 hover:bg-white/60'}`}>Chọn bước có sẵn</button></div>
+        {draft.destinationMode === 'new' ? <div className="mt-3 grid gap-3 md:grid-cols-2"><label><span className={labelClass}>Tên bước đích</span><input maxLength={120} value={draft.destinationName} onChange={event => update({ destinationName: event.target.value })} className={inputClass} placeholder="Ví dụ: Trả lời giá cước" /></label><label><span className={labelClass}>Nội dung trả lời</span><textarea maxLength={4000} value={draft.destinationResponse} onChange={event => update({ destinationResponse: event.target.value })} rows={2} className={`${inputClass} resize-y`} placeholder="Nội dung BlueAI trả lời" /></label></div> : <div className="mt-3"><SearchableSelect label="Bước đích có sẵn" value={draft.destinationNode} onChange={destinationNode => update({ destinationNode })} emptyLabel="Chọn bước đích" options={availableTargets.map(node => ({ value: node.name, label: `${node.name} · ${node.type}` }))} /></div>}
+        <p className="mt-3 text-[11px] leading-5 text-cobalt-800 dark:text-cobalt-200"><GitBranch className="mr-1 inline h-3.5 w-3.5" />Kết quả: <strong>{draft.routeName || 'Route mới'}</strong> sẽ chuyển thẳng đến <strong>{draft.destinationMode === 'new' ? draft.destinationName || 'bước mới' : draft.destinationNode || 'bước đã chọn'}</strong>.</p>
       </div>
       {error && <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>}
-      <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">Huỷ</button><button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-cobalt-600 px-4 py-2 text-sm font-bold text-white hover:bg-cobalt-700"><CheckCircle2 className="h-4 w-4" />Tạo và liên kết route</button></div>
+      <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={onClose} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">Huỷ</button><button type="submit" className="inline-flex items-center gap-2 rounded-xl bg-cobalt-600 px-4 py-2 text-sm font-bold text-white hover:bg-cobalt-700"><CheckCircle2 className="h-4 w-4" />Tạo và liên kết nhánh</button></div>
     </form>
   </div>;
 }
@@ -514,13 +571,7 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
   const current = nodes[selected];
   const update = (patch: Partial<StudioDialogNode>) => onChange(nodes.map((node, index) => index === selected ? { ...node, ...patch } : node));
   const updateAt = (index: number, patch: Partial<StudioDialogNode>) => onChange(nodes.map((node, nodeIndex) => nodeIndex === index ? { ...node, ...patch } : node));
-  const makeName = (base: string) => {
-    const used = new Set(nodes.map(node => node.name.toLocaleLowerCase()));
-    if (!used.has(base.toLocaleLowerCase())) return base;
-    let suffix = 2;
-    while (used.has(`${base} ${suffix}`.toLocaleLowerCase())) suffix += 1;
-    return `${base} ${suffix}`;
-  };
+  const makeName = (base: string) => uniqueDialogName(nodes.map(node => node.name), base);
   const makeNode = (type: StudioDialogNode['type'], parentNode = ''): StudioDialogNode => ({
     name: makeName(type === 'FOLDER' ? 'Nhóm hội thoại' : 'Nhánh mới'),
     type,
@@ -534,15 +585,19 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
     nextStep: type === 'FOLDER' ? 'SKIP_USER_INPUT' : 'WAIT_FOR_REPLY',
     jumpToNode: '',
     irrelevantResponseText: '',
+    contextReusePolicy: 'NONE',
     priority: Math.max(0, ...nodes.map(node => node.priority)) + 10,
   });
-  const resequence = (value: StudioDialogNode[]) => value.map((node, index) => ({ ...node, priority: index * 10 }));
+  const acceptInsertion = (value: StudioDialogNode[], additions: StudioDialogNode[], beforeName?: string) => {
+    const plan = planDialogInsertion(value, additions, beforeName);
+    if (plan.requiresRenumber && !window.confirm('Không còn khoảng số ưu tiên ở vị trí này. Đánh lại ưu tiên để chèn bước, giữ nguyên thứ tự chạy tương đối của các bước hiện có?')) return undefined;
+    return plan.nodes;
+  };
   const insertNode = (node: StudioDialogNode, index = nodes.length) => {
-    const next = [...nodes];
-    next.splice(index, 0, node);
-    const sequenced = resequence(next);
-    onChange(sequenced);
-    setSelected(sequenced.findIndex(item => item === sequenced[index]));
+    const next = acceptInsertion(nodes, [node], nodes[index]?.name);
+    if (!next) return;
+    onChange(next);
+    setSelected(next.findIndex(item => item.name === node.name));
     setNodeSearch('');
     setOpenMenu(null);
   };
@@ -553,42 +608,29 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
   };
   const rename = (name: string) => {
     if (!current) return;
-    const previousName = current.name;
-    onChange(nodes.map((node, index) => ({
-      ...node,
-      name: index === selected ? name : node.name,
-      parentNode: node.parentNode === previousName ? name : node.parentNode,
-      jumpToNode: node.jumpToNode === previousName ? name : node.jumpToNode,
-    })));
+    onChange(renameDialogNode(nodes, selected, name));
   };
   const remove = () => {
     if (!current || current.type === 'WELCOME' || current.type === 'FALLBACK') return;
-    if (!window.confirm(`Xoá node “${current.name}”? Các liên kết trỏ đến node này sẽ được làm rỗng.`)) return;
-    const next = nodes
-      .filter((_, index) => index !== selected)
-      .map(node => ({
-        ...node,
-        parentNode: node.parentNode === current.name ? current.parentNode || '' : node.parentNode,
-        jumpToNode: node.jumpToNode === current.name ? '' : node.jumpToNode,
-        nextStep: node.jumpToNode === current.name ? 'WAIT_FOR_REPLY' as const : node.nextStep,
-      }));
-    onChange(resequence(next));
+    const children = nodes.filter(node => node.parentNode?.trim().toLocaleLowerCase() === current.name.trim().toLocaleLowerCase()).length;
+    const incoming = nodes.filter(node => node.jumpToNode?.trim().toLocaleLowerCase() === current.name.trim().toLocaleLowerCase()).length;
+    if (!window.confirm(`Xoá bước “${current.name}”? ${children} bước con được chuyển lên cấp cha; ${incoming} liên kết đến bước này sẽ chuyển sang chờ người dùng. Hãy kiểm tra lại lời đáp.`)) return;
+    onChange(deleteDialogNode(nodes, current.name));
     setSelected(Math.max(0, selected - 1));
     setOpenMenu(null);
   };
-  const addRelative = (offset: 0 | 1) => current && insertNode(makeNode('ROUTE', current.parentNode || ''), selected + offset);
+  const addRelative = (offset: 0 | 1) => {
+    if (!current) return;
+    const anchor = offset === 0 ? current : [...nodes].sort((a, b) => a.priority - b.priority).find(node => node.priority > current.priority);
+    insertNode(makeNode('ROUTE', current.parentNode || ''), anchor ? nodes.indexOf(anchor) : nodes.length);
+  };
   const createRouteFlow = (draft: RouteComposerDraft) => {
     const routeName = makeName(draft.routeName.trim() || 'Nhánh mới');
     let destinationName = draft.destinationMode === 'new'
       ? draft.destinationName.trim() || 'Bước tiếp theo'
       : draft.destinationNode;
     if (draft.destinationMode === 'new') {
-      const used = new Set([...nodes.map(node => node.name.toLocaleLowerCase()), routeName.toLocaleLowerCase()]);
-      let suffix = 2;
-      while (used.has(destinationName.toLocaleLowerCase())) {
-        destinationName = `${draft.destinationName.trim() || 'Bước tiếp theo'} ${suffix}`;
-        suffix += 1;
-      }
+      destinationName = uniqueDialogName([...nodes.map(node => node.name), routeName], destinationName);
     }
     if (!destinationName) return;
     const route: StudioDialogNode = {
@@ -599,12 +641,11 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
       jumpToNode: destinationName,
       responseText: '',
     };
-    const next = [...nodes];
+    const additions = [route];
     const fallbackIndex = nodes.findIndex(node => node.type === 'FALLBACK');
     const insertAt = !draft.parentNode && fallbackIndex >= 0 ? fallbackIndex : nodes.length;
-    next.splice(insertAt, 0, route);
     if (draft.destinationMode === 'new') {
-      next.splice(insertAt + 1, 0, {
+      additions.push({
         ...makeNode('ROUTE', draft.parentNode),
         name: destinationName,
         // A ROUTE node must always reference an intent for backend validation;
@@ -614,15 +655,17 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
         nextStep: 'WAIT_FOR_REPLY',
       });
     }
-    const sequenced = resequence(next);
-    onChange(sequenced);
-    setSelected(sequenced.findIndex(item => item.name === routeName));
+    const next = acceptInsertion(nodes, additions, nodes[insertAt]?.name);
+    if (!next) return;
+    onChange(next);
+    setSelected(next.findIndex(item => item.name === routeName));
     setNodeSearch('');
     setIsRouteComposerOpen(false);
   };
   const duplicate = () => {
     if (!current || current.type === 'WELCOME' || current.type === 'FALLBACK') return;
-    insertNode({ ...current, name: makeName(`${current.name} copy`), priority: current.priority + 1 }, selected + 1);
+    const anchor = [...nodes].sort((a, b) => a.priority - b.priority).find(node => node.priority > current.priority);
+    insertNode({ ...current, name: makeName(`${current.name} bản sao`) }, anchor ? nodes.indexOf(anchor) : nodes.length);
   };
   const responseBranches = current?.type === 'ROUTE' ? nodes
     .map((node, index) => ({ node, index }))
@@ -662,8 +705,7 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
       responseText: branchResponse.trim(),
     };
     const next = [...nodes];
-    const catchAllIndex = next.findIndex(node => node.parentNode === current.name && node.type === 'ROUTE' && !node.matchEntityName);
-    next.splice(catchAllIndex >= 0 ? catchAllIndex : next.length, 0, branch);
+    const catchAll = [...next].sort((a, b) => a.priority - b.priority).find(node => node.parentNode === current.name && node.type === 'ROUTE' && !node.matchEntityName);
     const parentIndex = next.findIndex(node => node === current);
     next[parentIndex] = {
       ...next[parentIndex],
@@ -671,8 +713,10 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
       jumpToNode: '',
       responseText: current.responseText === 'Nội dung phản hồi' ? '' : current.responseText,
     };
-    onChange(resequence(next));
-    setSelected(parentIndex);
+    const inserted = acceptInsertion(next, [branch], catchAll?.name);
+    if (!inserted) return;
+    onChange(inserted);
+    setSelected(inserted.findIndex(node => node.name === current.name));
     setCollapsed(previous => { const result = new Set(previous); result.delete(current.name); return result; });
     setIsBranchFormOpen(false);
     setBranchSearch('');
@@ -683,13 +727,7 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
   const removeResponseBranch = (index: number) => {
     const branch = nodes[index];
     if (!window.confirm(`Xoá phản hồi cho @${branch.matchEntityName}:${branch.matchEntityValue}?`)) return;
-    const next = nodes.filter((_, nodeIndex) => nodeIndex !== index).map(node => ({
-      ...node,
-      parentNode: node.parentNode === branch.name ? current?.name || '' : node.parentNode,
-      jumpToNode: node.jumpToNode === branch.name ? '' : node.jumpToNode,
-      nextStep: node.jumpToNode === branch.name ? 'WAIT_FOR_REPLY' as const : node.nextStep,
-    }));
-    onChange(resequence(next));
+    onChange(deleteDialogNode(nodes, branch.name));
     if (index < selected) setSelected(selected - 1);
   };
   const changeIntent = (matchIntent: string) => {
@@ -719,27 +757,30 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
   const visibleTreeRows = normalizedSearch ? treeRows.filter(({ node }) =>
     `${node.name} ${node.matchIntent} ${node.matchEntityName} ${node.matchEntityValue} ${node.parentNode || ''}`.toLocaleLowerCase().includes(normalizedSearch)) : treeRows.filter(({ node }) => !isHiddenByCollapsedParent(node));
   const nextStep = current?.nextStep || 'WAIT_FOR_REPLY';
+  const validation = React.useMemo(() => analyzeDialogNodes(nodes, intents.map(intent => intent.name), entities.map(entity => entity.name), entities), [nodes, intents, entities]);
 
   return <div className="mx-auto max-w-[1700px] space-y-4">
+    <p className="text-xs leading-5 text-slate-500">Mục đích (intent) là việc khách muốn làm, như hỏi giá hoặc đặt hàng. Dữ kiện (entity) là thông tin để trả lời đúng, như sản phẩm, số lượng hoặc chi nhánh. Mỗi bước xác định khi nào chạy, lời đáp và bước tiếp theo.</p>
+    <DialogValidationNotice {...validation} />
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-[#0B1324]">
-      <div><h1 className="text-lg font-black text-slate-900 dark:text-white">Dialog</h1><p className="mt-0.5 text-xs text-slate-500">Tạo luồng theo node cha/con, điều kiện nhận diện và phản hồi.</p></div>
+      <div><h1 className="text-lg font-black text-slate-900 dark:text-white">Luồng hội thoại</h1><p className="mt-0.5 text-xs text-slate-500">Thiết lập nhánh bán hàng, dữ kiện cần hỏi và bước trả lời tiếp theo.</p></div>
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => add('ROUTE')} className="inline-flex items-center gap-1.5 rounded-xl bg-cobalt-600 px-3 py-2 text-xs font-bold text-white hover:bg-cobalt-700"><Plus className="h-4 w-4" />Thêm node</button>
-        <button type="button" disabled={!current || current.type === 'FALLBACK'} onClick={() => current && add('ROUTE', current.name)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-cobalt-300 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200"><GitBranch className="h-4 w-4" />Node con</button>
-        <button type="button" onClick={() => add('FOLDER')} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-cobalt-300 dark:border-slate-700 dark:text-slate-200"><FolderPlus className="h-4 w-4" />Folder</button>
-        <button type="button" onClick={() => setIsRouteComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-cobalt-300 dark:border-slate-700 dark:text-slate-200"><MoveRight className="h-4 w-4" />Route + đích</button>
+        <button type="button" onClick={() => add('ROUTE')} className="inline-flex items-center gap-1.5 rounded-xl bg-cobalt-600 px-3 py-2 text-xs font-bold text-white hover:bg-cobalt-700"><Plus className="h-4 w-4" />Thêm bước</button>
+        <button type="button" disabled={!current || current.type === 'FALLBACK'} onClick={() => current && add('ROUTE', current.name)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-cobalt-300 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200"><GitBranch className="h-4 w-4" />Bước con</button>
+        <button type="button" onClick={() => add('FOLDER')} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-cobalt-300 dark:border-slate-700 dark:text-slate-200"><FolderPlus className="h-4 w-4" />Nhóm bước</button>
+        <button type="button" onClick={() => setIsRouteComposerOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-cobalt-300 dark:border-slate-700 dark:text-slate-200"><MoveRight className="h-4 w-4" />Nhánh + bước đích</button>
         <button type="button" onClick={onPreview} className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 hover:bg-cyan-100 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-200"><FlaskConical className="h-4 w-4" />Thử hội thoại</button>
       </div>
     </div>
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(390px,0.9fr)_minmax(460px,1.1fr)]">
     <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-sm dark:border-slate-800 dark:bg-[#0B1324]">
       <div className="border-b border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-[#0B1324]">
-        <div className="flex items-center justify-between"><h2 className="text-sm font-black">Cây hội thoại</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 dark:bg-slate-800">{nodes.length} node</span></div>
-        <label className="relative mt-3 block"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={nodeSearch} onChange={event => setNodeSearch(event.target.value)} className={`${inputClass} pl-9`} placeholder="Tìm node, intent, entity" aria-label="Tìm dialog node" /></label>
-        <p className="mt-1.5 text-[11px] text-slate-500" aria-live="polite">{visibleTreeRows.length} / {treeRows.length} node{normalizedSearch ? ' · Đang xem kết quả tìm kiếm' : ''}</p>
+        <div className="flex items-center justify-between"><h2 className="text-sm font-black">Cây hội thoại</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 dark:bg-slate-800">{nodes.length} bước</span></div>
+        <label className="relative mt-3 block"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={nodeSearch} onChange={event => setNodeSearch(event.target.value)} className={`${inputClass} pl-9`} placeholder="Tìm bước, mục đích, dữ kiện" aria-label="Tìm bước hội thoại" /></label>
+        <p className="mt-1.5 text-[11px] text-slate-500" aria-live="polite">{visibleTreeRows.length} / {treeRows.length} bước{normalizedSearch ? ' · Đang xem kết quả tìm kiếm' : ''}</p>
       </div>
       <div className="max-h-[75vh] min-h-80 overflow-y-auto p-3 sm:p-4">
-        {visibleTreeRows.length === 0 && <p className="px-3 py-8 text-center text-xs text-slate-400">Không tìm thấy node phù hợp.</p>}
+        {visibleTreeRows.length === 0 && <p className="px-3 py-8 text-center text-xs text-slate-400">Không tìm thấy bước phù hợp.</p>}
         {visibleTreeRows.map(row => {
           const childrenCount = nodes.filter(node => node.parentNode === row.node.name).length;
           const responseCount = row.node.nextStep === 'SKIP_USER_INPUT' ? nodes.filter(node => node.parentNode === row.node.name && node.matchIntent === row.node.matchIntent && node.matchEntityName && node.matchEntityValue).length : 0;
@@ -748,16 +789,16 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
           <div className={`relative rounded-xl border bg-white shadow-sm transition ${selected === row.index ? 'border-cobalt-500 ring-2 ring-cobalt-100 dark:ring-cobalt-950' : 'border-slate-200 hover:border-cobalt-300 dark:border-slate-700'} dark:bg-slate-900`}>
           <button type="button" onClick={() => { setSelected(row.index); setOpenMenu(null); setIsBranchFormOpen(false); }} aria-current={selected === row.index ? 'true' : undefined} className="block w-full px-4 py-3 pr-20 text-left">
             <span className="flex items-center gap-2"><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${row.node.type === 'FOLDER' ? 'bg-amber-100 text-amber-700' : row.node.type === 'FALLBACK' ? 'bg-slate-100 text-slate-600' : 'bg-cobalt-50 text-cobalt-700'}`}>{row.node.type === 'FOLDER' ? <FolderPlus className="h-4 w-4" /> : <GitBranch className="h-4 w-4" />}</span><span className="truncate text-sm font-bold text-slate-900 dark:text-white">{row.node.name}</span></span>
-            <span className="mt-2 flex flex-wrap gap-1.5 pl-9 text-[11px] text-slate-500">{row.node.matchIntent && <span className="rounded bg-cobalt-50 px-1.5 py-0.5 text-cobalt-700 dark:bg-cobalt-950 dark:text-cobalt-200">#{row.node.matchIntent}</span>}{row.node.matchEntityName && <span className="rounded bg-cyan-50 px-1.5 py-0.5 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-200">@{row.node.matchEntityName}{row.node.matchEntityValue ? `:${row.node.matchEntityValue}` : ''}</span>}{!row.node.matchIntent && !row.node.matchEntityName && <span>{row.node.type === 'WELCOME' ? 'Bắt đầu hội thoại' : row.node.type === 'FALLBACK' ? 'Khi không khớp nhánh nào' : row.node.type}</span>}</span>
-            <span className="mt-3 block border-t border-slate-100 pt-2 pl-9 text-[11px] text-slate-500 dark:border-slate-800">{responseCount ? `${responseCount} phản hồi theo entity` : row.node.responseText ? '1 phản hồi' : '0 phản hồi'} · {childrenCount} node con · {dialogNodeSubtitle(row.node, nodes)}</span>
+            <span className="mt-2 flex flex-wrap gap-1.5 pl-9 text-[11px] text-slate-500">{row.node.matchIntent && <span className="rounded bg-cobalt-50 px-1.5 py-0.5 text-cobalt-700 dark:bg-cobalt-950 dark:text-cobalt-200">#{row.node.matchIntent}</span>}{row.node.matchEntityName && <span className="rounded bg-cyan-50 px-1.5 py-0.5 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-200">@{row.node.matchEntityName}{row.node.matchEntityValue ? `:${row.node.matchEntityValue}` : ''}</span>}{!row.node.matchIntent && !row.node.matchEntityName && <span>{row.node.type === 'WELCOME' ? 'Bắt đầu hội thoại' : row.node.type === 'FALLBACK' ? 'Khi không khớp nhánh nào' : 'Nhóm bước'}</span>}</span>
+            <span className="mt-3 block border-t border-slate-100 pt-2 pl-9 text-[11px] text-slate-500 dark:border-slate-800">{responseCount ? `${responseCount} phản hồi theo dữ kiện` : row.node.responseText ? '1 phản hồi' : '0 phản hồi'} · {childrenCount} bước con · {dialogNodeSubtitle(row.node, nodes)}</span>
           </button>
-          {childrenCount > 0 && <button type="button" onClick={() => setCollapsed(previous => { const result = new Set(previous); if (result.has(row.node.name)) result.delete(row.node.name); else result.add(row.node.name); return result; })} className="absolute right-10 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label={`${collapsed.has(row.node.name) ? 'Mở' : 'Thu gọn'} node con của ${row.node.name}`} aria-expanded={!collapsed.has(row.node.name)}><ChevronDown className={`h-4 w-4 transition-transform ${collapsed.has(row.node.name) ? '-rotate-90' : ''}`} /></button>}
+          {childrenCount > 0 && <button type="button" onClick={() => setCollapsed(previous => { const result = new Set(previous); if (result.has(row.node.name)) result.delete(row.node.name); else result.add(row.node.name); return result; })} className="absolute right-10 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label={`${collapsed.has(row.node.name) ? 'Mở' : 'Thu gọn'} bước con của ${row.node.name}`} aria-expanded={!collapsed.has(row.node.name)}><ChevronDown className={`h-4 w-4 transition-transform ${collapsed.has(row.node.name) ? '-rotate-90' : ''}`} /></button>}
           <button type="button" onClick={event => { event.stopPropagation(); setSelected(row.index); setOpenMenu(openMenu === row.index ? null : row.index); }} className="absolute right-2 top-3 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label={`Mở menu ${row.node.name}`}><MoreVertical className="h-4 w-4" /></button>
           {openMenu === row.index && <div className="grid grid-cols-2 gap-1 border-t border-slate-100 p-1.5 dark:border-slate-700">
-            <DialogMenuButton icon={ChevronRight} label="Thêm node con" onClick={() => add('ROUTE', row.node.name)} />
-            <DialogMenuButton icon={ArrowUp} label="Thêm node phía trên" onClick={() => addRelative(0)} />
-            <DialogMenuButton icon={ArrowDown} label="Thêm node phía dưới" onClick={() => addRelative(1)} />
-            <DialogMenuButton icon={FolderPlus} label="Thêm folder" onClick={() => add('FOLDER', row.node.parentNode || '')} />
+            <DialogMenuButton icon={ChevronRight} label="Thêm bước con" onClick={() => add('ROUTE', row.node.name)} />
+            <DialogMenuButton icon={ArrowUp} label="Thêm bước trước" onClick={() => addRelative(0)} />
+            <DialogMenuButton icon={ArrowDown} label="Thêm bước sau" onClick={() => addRelative(1)} />
+            <DialogMenuButton icon={FolderPlus} label="Thêm nhóm bước" onClick={() => add('FOLDER', row.node.parentNode || '')} />
             <DialogMenuButton icon={MoveRight} label="Di chuyển" disabled={row.node.type === 'WELCOME' || row.node.type === 'FALLBACK'} onClick={() => { setMoveParent(row.node.parentNode || ''); setIsMoveOpen(true); }} />
             <DialogMenuButton icon={CopyPlus} label="Nhân bản" disabled={row.node.type === 'WELCOME' || row.node.type === 'FALLBACK'} onClick={duplicate} />
             <DialogMenuButton icon={GitBranch} label="Chuyển đến" disabled={row.node.type === 'FOLDER' || responseBranches.length > 0} onClick={() => { update({ nextStep: 'JUMP_TO' }); setOpenMenu(null); }} />
@@ -770,42 +811,43 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
     </aside>
     <main className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0B1324] sm:p-6">
     {current ? <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cobalt-600">Đang chỉnh sửa node</p><h2 className="mt-1 text-xl font-black">{current.name}</h2><p className="mt-1 text-xs text-slate-500">{current.parentNode ? `Node con của ${current.parentNode}` : 'Node cấp gốc'} · Ưu tiên {current.priority}</p></div><button type="button" onClick={remove} disabled={current.type === 'WELCOME' || current.type === 'FALLBACK'} className="rounded-xl p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-rose-950/40" aria-label="Xoá dialog node"><Trash2 className="h-4 w-4" /></button></div>
-      <div className="grid gap-4 sm:grid-cols-2"><label><span className={labelClass}>Tên node</span><input value={current.name} onChange={event => rename(event.target.value)} className={inputClass} /></label><label><span className={labelClass}>Loại node</span><select value={current.type} onChange={event => update({ type: event.target.value as StudioDialogNode['type'], parentNode: ['WELCOME', 'FALLBACK'].includes(event.target.value) ? '' : current.parentNode })} className={inputClass}><option value="WELCOME">Welcome</option><option value="ROUTE">Route</option><option value="FALLBACK">Fallback</option><option value="FOLDER">Folder</option></select></label><SearchableSelect label="Node cha" value={current.parentNode || ''} onChange={parentNode => update({ parentNode })} emptyLabel="Cấp gốc" options={allowedParents.map(node => ({ value: node.name, label: node.name }))} disabled={current.type === 'WELCOME' || current.type === 'FALLBACK'} /><label><span className={labelClass}>Priority</span><input type="number" value={current.priority} onChange={event => update({ priority: Number(event.target.value) })} className={inputClass} /></label></div>
-      {current.type === 'FOLDER' ? <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"><div className="flex items-center gap-2 font-black"><FolderPlus className="h-4 w-4" />Folder nhóm các nhánh hội thoại</div><p className="mt-2">Folder không gửi phản hồi. Khi luồng đi vào folder, BlueAI tự đánh giá các node con theo điều kiện và priority.</p></div> : <>
-      <div role="tablist" aria-label="Cấu hình node" className="grid grid-cols-3 rounded-xl bg-slate-100 p-1 dark:bg-slate-900">
+      <p className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600 dark:bg-slate-900 dark:text-slate-300">{summarizeDialogStep(current, nodes)}</p>
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cobalt-600">Đang chỉnh sửa bước</p><h2 className="mt-1 text-xl font-black">{current.name}</h2><p className="mt-1 text-xs text-slate-500">{current.parentNode ? `Bước con của ${current.parentNode}` : 'Bước cấp gốc'} · Ưu tiên {current.priority}</p></div><button type="button" onClick={remove} disabled={current.type === 'WELCOME' || current.type === 'FALLBACK'} className="rounded-xl p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-rose-950/40" aria-label="Xoá bước hội thoại"><Trash2 className="h-4 w-4" /></button></div>
+      <div className="grid gap-4 sm:grid-cols-2"><DialogNodeNameField key={selected} name={current.name} otherNames={nodes.filter((_, index) => index !== selected).map(node => node.name)} onRename={rename} className={inputClass} /><label><span className={labelClass}>Vai trò của bước</span><select value={current.type} disabled={current.type === 'WELCOME' || current.type === 'FALLBACK'} onChange={event => update({ type: event.target.value as StudioDialogNode['type'], parentNode: ['WELCOME', 'FALLBACK'].includes(event.target.value) ? '' : current.parentNode })} className={inputClass}><option value="WELCOME" disabled={nodes.some(node => node !== current && node.type === 'WELCOME')}>Chào mở đầu</option><option value="ROUTE">Nhánh theo mục đích</option><option value="FALLBACK" disabled={nodes.some(node => node !== current && node.type === 'FALLBACK')}>Dự phòng khi chưa hiểu</option><option value="FOLDER">Nhóm bước</option></select></label><SearchableSelect label="Bước cha" value={current.parentNode || ''} onChange={parentNode => update({ parentNode })} emptyLabel="Cấp gốc" options={allowedParents.map(node => ({ value: node.name, label: node.name }))} disabled={current.type === 'WELCOME' || current.type === 'FALLBACK'} /><label><span className={labelClass}>Ưu tiên xét (số nhỏ chạy trước)</span><input type="number" step={1} min={-2147483648} max={2147483647} value={current.priority} onChange={event => update({ priority: Number(event.target.value) })} className={inputClass} /></label></div>
+      {current.type === 'FOLDER' ? <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"><div className="flex items-center gap-2 font-black"><FolderPlus className="h-4 w-4" />Nhóm các nhánh hội thoại</div><p className="mt-2">Nhóm không gửi lời đáp. Khi luồng đi vào nhóm, BlueAI xét bước con theo điều kiện và ưu tiên. Liên kết nhóm vào luồng để các bước này được chạy.</p></div> : <>
+      <div role="tablist" aria-label="Cấu hình bước" className="grid grid-cols-3 rounded-xl bg-slate-100 p-1 dark:bg-slate-900">
         {(['condition', 'response', 'flow'] as const).map(tab => <button key={tab} type="button" role="tab" aria-selected={inspectorTab === tab} onClick={() => setInspectorTab(tab)} className={`rounded-lg px-2 py-2 text-xs font-bold transition ${inspectorTab === tab ? 'bg-white text-cobalt-700 shadow-sm dark:bg-slate-800 dark:text-cobalt-200' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'}`}>{tab === 'condition' ? 'Điều kiện' : tab === 'response' ? `Phản hồi${responseBranches.length ? ` (${responseBranches.length})` : ''}` : 'Chuyển bước'}</button>)}
       </div>
-      {inspectorTab === 'condition' && (current.type === 'ROUTE' ? <div className="rounded-2xl border border-cobalt-100 bg-cobalt-50/60 p-4 dark:border-cobalt-900 dark:bg-cobalt-950/30"><p className="mb-1 text-sm font-black text-cobalt-800 dark:text-cobalt-200">Nếu BlueAI nhận diện</p><p className="mb-3 text-xs text-slate-500">Kết hợp intent với entity để quyết định khi nào vào node này.</p><div className="grid gap-3 md:grid-cols-2">
-        <SearchableSelect label="Intent" value={current.matchIntent || ''} onChange={changeIntent} emptyLabel="Chọn intent" options={intents.map(intent => ({ value: intent.name, label: `#${intent.name}` }))} />
-        <SearchableSelect label="Entity cần thu thập" value={current.requiredEntityName || ''} onChange={requiredEntityName => update({ requiredEntityName })} emptyLabel="Không dùng slot" options={entities.map(entity => ({ value: entity.name, label: `@${entity.name}` }))} />
-        <SearchableSelect label="Entity điều kiện" value={current.matchEntityName || ''} onChange={matchEntityName => update({ matchEntityName, matchEntityValue: '' })} emptyLabel="Mọi entity" options={entities.map(entity => ({ value: entity.name, label: `@${entity.name}` }))} disabled={responseBranches.length > 0} />
-        <SearchableSelect label="Giá trị entity" value={current.matchEntityValue || ''} onChange={matchEntityValue => update({ matchEntityValue })} emptyLabel="Mọi giá trị" options={(entities.find(entity => entity.name === current.matchEntityName)?.values || []).map(value => ({ value: value.value, label: value.value }))} disabled={!current.matchEntityName || responseBranches.length > 0} />
-      </div><p className="mt-3 text-xs leading-5 text-slate-500">Nếu câu mới nêu địa điểm chưa có trong entity, hãy thêm giá trị đó ở tab Entities. Bản thử sẽ hỏi lại địa điểm thay vì dùng địa điểm của câu trước.</p></div> : <div className="rounded-2xl border border-slate-200 p-4 text-xs text-slate-500 dark:border-slate-700">Node {current.type.toLowerCase()} không cần điều kiện nhận diện.</div>)}
+      {inspectorTab === 'condition' && (current.type === 'ROUTE' ? <div className="rounded-2xl border border-cobalt-100 bg-cobalt-50/60 p-4 dark:border-cobalt-900 dark:bg-cobalt-950/30"><p className="mb-1 text-sm font-black text-cobalt-800 dark:text-cobalt-200">Nếu BlueAI nhận diện</p><p className="mb-3 text-xs text-slate-500">Chọn mục đích của khách, rồi thêm điều kiện dữ kiện nếu cần. Dữ kiện cần thu thập sẽ được hỏi khi còn thiếu.</p><div className="grid gap-3 md:grid-cols-2">
+        <SearchableSelect label="Mục đích của khách (intent)" value={current.matchIntent || ''} onChange={changeIntent} emptyLabel="Chọn mục đích" options={intents.map(intent => ({ value: intent.name, label: `#${intent.name}` }))} />
+        <SearchableSelect label="Dữ kiện cần hỏi khi thiếu" value={current.requiredEntityName || ''} onChange={requiredEntityName => update({ requiredEntityName })} emptyLabel="Không cần hỏi thêm" options={entities.map(entity => ({ value: entity.name, label: `@${entity.name}` }))} />
+        <SearchableSelect label="Điều kiện dữ kiện (entity)" value={current.matchEntityName || ''} onChange={matchEntityName => update({ matchEntityName, matchEntityValue: '' })} emptyLabel="Không lọc theo dữ kiện" options={entities.map(entity => ({ value: entity.name, label: `@${entity.name}` }))} disabled={responseBranches.length > 0} />
+        <SearchableSelect label="Giá trị chính để khớp" value={current.matchEntityValue || ''} onChange={matchEntityValue => update({ matchEntityValue })} emptyLabel="Mọi giá trị" options={(entities.find(entity => entity.name === current.matchEntityName)?.values || []).map(value => ({ value: value.value, label: value.value }))} disabled={!current.matchEntityName || responseBranches.length > 0} />
+      </div><p className="mt-3 text-xs leading-5 text-slate-500">Thêm sản phẩm, chi nhánh hoặc giá trị mới ở tab Dữ kiện. Giá trị chính được dùng để khớp; các tên gọi khác giúp nhận diện câu khách nói. Không tự lấy dữ kiện từ câu trước làm sự thật.</p><DialogContextPolicy value={current.contextReusePolicy} onChange={contextReusePolicy => update({ contextReusePolicy })} className={inputClass} /></div> : <div className="rounded-2xl border border-slate-200 p-4 text-xs text-slate-500 dark:border-slate-700">Bước chào mở đầu hoặc dự phòng không cần điều kiện nhận diện.</div>)}
       {inspectorTab === 'response' && <section className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-black">BlueAI phản hồi</h3><p className="mt-1 text-xs text-slate-500">Viết lời đáp chung hoặc thêm các lời đáp riêng cho từng giá trị entity.</p></div>{current.type === 'ROUTE' && <button type="button" disabled={entities.length === 0} onClick={() => { const entityName = current.matchEntityName || entities[0]?.name || ''; setBranchEntity(entityName); setBranchValue(entities.find(entity => entity.name === entityName)?.values[0]?.value || ''); setBranchResponse(''); setBranchError(''); setIsBranchFormOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-cobalt-200 px-2.5 py-2 text-xs font-bold text-cobalt-700 hover:bg-cobalt-50 disabled:opacity-40 dark:border-cobalt-800 dark:text-cobalt-200"><Plus className="h-3.5 w-3.5" />Phản hồi theo entity</button>}</div>
-        <label className="block"><span className={labelClass}>{responseBranches.length ? 'Lời đáp trước khi xét các nhánh (tuỳ chọn)' : 'Nội dung BlueAI trả lời'}</span><textarea value={current.responseText} onChange={event => update({ responseText: event.target.value })} rows={responseBranches.length ? 2 : 4} className={`${inputClass} resize-y leading-6`} placeholder="Bạn có thể dùng {{location}} để chèn giá trị entity." /></label>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-black">BlueAI phản hồi</h3><p className="mt-1 text-xs text-slate-500">Viết lời đáp chung hoặc lời đáp riêng cho từng sản phẩm / chi nhánh.</p></div>{current.type === 'ROUTE' && <button type="button" disabled={entities.length === 0} onClick={() => { const entityName = current.matchEntityName || entities[0]?.name || ''; setBranchEntity(entityName); setBranchValue(entities.find(entity => entity.name === entityName)?.values[0]?.value || ''); setBranchResponse(''); setBranchError(''); setIsBranchFormOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border border-cobalt-200 px-2.5 py-2 text-xs font-bold text-cobalt-700 hover:bg-cobalt-50 disabled:opacity-40 dark:border-cobalt-800 dark:text-cobalt-200"><Plus className="h-3.5 w-3.5" />Phản hồi theo dữ kiện</button>}</div>
+        <label className="block"><span className={labelClass}>{responseBranches.length ? 'Lời đáp trước khi xét các nhánh (tuỳ chọn)' : 'Nội dung BlueAI trả lời'}</span><textarea value={current.responseText} onChange={event => update({ responseText: event.target.value })} maxLength={4000} rows={responseBranches.length ? 2 : 4} className={`${inputClass} resize-y leading-6`} placeholder="Bạn có thể dùng {{location}} để chèn giá trị entity." /></label>
         {responseBranches.length > 0 && <div className="mt-4 space-y-3">
-          <p className={labelClass}>{responseBranches.length} phản hồi theo entity · xét theo thứ tự</p>
+          <p className={labelClass}>{responseBranches.length} phản hồi theo dữ kiện · xét theo thứ tự</p>
           {responseBranches.length > 8 && <label className="relative block"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input value={branchSearch} onChange={event => { setBranchSearch(event.target.value); setBranchPage(0); }} className={`${inputClass} pl-9`} placeholder="Tìm giá trị entity hoặc nội dung phản hồi" aria-label="Tìm phản hồi theo entity" /></label>}
           {visibleResponseBranches.length === 0 && <p className="rounded-xl bg-slate-50 px-3 py-5 text-center text-xs text-slate-500 dark:bg-slate-900">Không tìm thấy phản hồi phù hợp.</p>}
           {visibleResponseBranches.map(({ node, index }) => <div key={`${node.name}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950">
             <div className="mb-2 flex items-center justify-between gap-2"><span className="text-xs font-bold text-cobalt-700 dark:text-cobalt-200">@{node.matchEntityName}:{node.matchEntityValue}</span><div className="flex gap-1"><button type="button" onClick={() => { setSelected(index); setIsBranchFormOpen(false); }} className="rounded-lg px-2 py-1 text-[11px] font-bold text-slate-500 hover:bg-white hover:text-cobalt-700 dark:hover:bg-slate-800">Mở node</button><button type="button" onClick={() => removeResponseBranch(index)} className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label={`Xoá phản hồi @${node.matchEntityName}:${node.matchEntityValue}`}><Trash2 className="h-3.5 w-3.5" /></button></div></div>
-            <textarea value={node.responseText} onChange={event => updateAt(index, { responseText: event.target.value })} rows={2} className={`${inputClass} resize-y`} aria-label={`Nội dung phản hồi @${node.matchEntityName}:${node.matchEntityValue}`} />
+            <textarea maxLength={4000} value={node.responseText} onChange={event => updateAt(index, { responseText: event.target.value })} rows={2} className={`${inputClass} resize-y`} aria-label={`Nội dung phản hồi @${node.matchEntityName}:${node.matchEntityValue}`} />
           </div>)}
           {filteredResponseBranches.length > 8 && <div className="flex items-center justify-between text-xs text-slate-500"><span>{filteredResponseBranches.length} kết quả · Trang {Math.min(branchPage, branchPageCount - 1) + 1}/{branchPageCount}</span><div className="flex gap-2"><button type="button" disabled={branchPage <= 0} onClick={() => setBranchPage(page => Math.max(0, page - 1))} className="rounded-lg border border-slate-200 px-2.5 py-1.5 font-bold disabled:opacity-40 dark:border-slate-700">Trước</button><button type="button" disabled={branchPage >= branchPageCount - 1} onClick={() => setBranchPage(page => Math.min(branchPageCount - 1, page + 1))} className="rounded-lg border border-slate-200 px-2.5 py-1.5 font-bold disabled:opacity-40 dark:border-slate-700">Sau</button></div></div>}
         </div>}
-        {isBranchFormOpen && current.type === 'ROUTE' && <div className="mt-4 space-y-3 rounded-xl border border-cobalt-200 bg-cobalt-50/60 p-3 dark:border-cobalt-800 dark:bg-cobalt-950/30"><p className="text-xs font-black text-cobalt-800 dark:text-cobalt-200">Thêm phản hồi có điều kiện</p><div className="grid gap-3 sm:grid-cols-2"><SearchableSelect label="Entity" value={branchEntity} onChange={value => { setBranchEntity(value); setBranchValue(entities.find(entity => entity.name === value)?.values[0]?.value || ''); }} emptyLabel="Chọn entity" options={entities.map(entity => ({ value: entity.name, label: `@${entity.name}` }))} disabled={Boolean(current.matchEntityName)} /><SearchableSelect label="Giá trị" value={branchValue} onChange={setBranchValue} emptyLabel="Chọn giá trị" options={(entities.find(entity => entity.name === branchEntity)?.values || []).map(value => ({ value: value.value, label: value.value }))} /></div><label className="block"><span className={labelClass}>Lời đáp</span><textarea value={branchResponse} onChange={event => setBranchResponse(event.target.value)} rows={2} className={`${inputClass} resize-y`} placeholder="Ví dụ: Chi nhánh {{location}} mở cửa lúc 8 giờ." /></label>{branchError && <p className="text-xs font-bold text-rose-600" role="alert">{branchError}</p>}<div className="flex justify-end gap-2"><button type="button" onClick={() => setIsBranchFormOpen(false)} className="rounded-lg px-3 py-2 text-xs font-bold text-slate-600">Huỷ</button><button type="button" onClick={addResponseBranch} className="rounded-lg bg-cobalt-600 px-3 py-2 text-xs font-bold text-white">Thêm phản hồi</button></div></div>}
-        {current.type === 'ROUTE' && current.requiredEntityName && <label className="mt-4 block"><span className={labelClass}>Câu hỏi khi thiếu entity</span><textarea value={current.missingEntityPrompt || ''} onChange={event => update({ missingEntityPrompt: event.target.value })} rows={2} className={`${inputClass} resize-y`} placeholder={`Bạn muốn hỏi cho ${current.requiredEntityName} nào?`} /></label>}
+        {isBranchFormOpen && current.type === 'ROUTE' && <div className="mt-4 space-y-3 rounded-xl border border-cobalt-200 bg-cobalt-50/60 p-3 dark:border-cobalt-800 dark:bg-cobalt-950/30"><p className="text-xs font-black text-cobalt-800 dark:text-cobalt-200">Thêm phản hồi có điều kiện</p><div className="grid gap-3 sm:grid-cols-2"><SearchableSelect label="Loại dữ kiện" value={branchEntity} onChange={value => { setBranchEntity(value); setBranchValue(entities.find(entity => entity.name === value)?.values[0]?.value || ''); }} emptyLabel="Chọn dữ kiện" options={entities.map(entity => ({ value: entity.name, label: `@${entity.name}` }))} disabled={Boolean(current.matchEntityName)} /><SearchableSelect label="Giá trị" value={branchValue} onChange={setBranchValue} emptyLabel="Chọn giá trị" options={(entities.find(entity => entity.name === branchEntity)?.values || []).map(value => ({ value: value.value, label: value.value }))} /></div><label className="block"><span className={labelClass}>Lời đáp</span><textarea maxLength={4000} value={branchResponse} onChange={event => setBranchResponse(event.target.value)} rows={2} className={`${inputClass} resize-y`} placeholder="Ví dụ: Chi nhánh {{location}} mở cửa lúc 8 giờ." /></label>{branchError && <p className="text-xs font-bold text-rose-600" role="alert">{branchError}</p>}<div className="flex justify-end gap-2"><button type="button" onClick={() => setIsBranchFormOpen(false)} className="rounded-lg px-3 py-2 text-xs font-bold text-slate-600">Huỷ</button><button type="button" onClick={addResponseBranch} className="rounded-lg bg-cobalt-600 px-3 py-2 text-xs font-bold text-white">Thêm phản hồi</button></div></div>}
+        {current.type === 'ROUTE' && current.requiredEntityName && <label className="mt-4 block"><span className={labelClass}>Câu hỏi khi thiếu dữ kiện</span><textarea maxLength={1000} value={current.missingEntityPrompt || ''} onChange={event => update({ missingEntityPrompt: event.target.value })} rows={2} className={`${inputClass} resize-y`} placeholder={`Bạn muốn hỏi cho ${current.requiredEntityName} nào?`} /></label>}
       </section>}
       {inspectorTab === 'flow' && <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
         <div className="flex items-center gap-2"><CircleDot className="h-4 w-4 text-emerald-500" /><p className="text-xs font-black text-slate-800 dark:text-slate-100">Sau đó BlueAI sẽ</p></div>
         <div className="grid gap-3 md:grid-cols-2">
-          <label><span className={labelClass}>Hành động tiếp theo</span><select value={nextStep} onChange={event => update({ nextStep: event.target.value as StudioDialogNode['nextStep'], jumpToNode: event.target.value === 'JUMP_TO' ? current.jumpToNode || '' : '' })} className={inputClass}><option value="WAIT_FOR_REPLY" disabled={responseBranches.length > 0}>Chờ người dùng trả lời</option><option value="SKIP_USER_INPUT">Tự động tiếp tục</option><option value="JUMP_TO" disabled={responseBranches.length > 0}>Chuyển đến node</option></select></label>
-          {nextStep === 'JUMP_TO' && <SearchableSelect label="Node đích" value={current.jumpToNode || ''} onChange={jumpToNode => update({ jumpToNode })} emptyLabel="Chọn node đích" options={nodes.filter(node => node !== current).map(node => ({ value: node.name, label: node.name }))} />}
+          <label><span className={labelClass}>Hành động tiếp theo</span><select value={nextStep} onChange={event => update({ nextStep: event.target.value as StudioDialogNode['nextStep'], jumpToNode: event.target.value === 'JUMP_TO' ? current.jumpToNode || '' : '' })} className={inputClass}><option value="WAIT_FOR_REPLY" disabled={responseBranches.length > 0}>Chờ người dùng trả lời</option><option value="SKIP_USER_INPUT">Tự động tiếp tục</option><option value="JUMP_TO" disabled={responseBranches.length > 0}>Chuyển ngay đến bước đích</option></select></label>
+          {nextStep === 'JUMP_TO' && <SearchableSelect label="Bước đích" value={current.jumpToNode || ''} onChange={jumpToNode => update({ jumpToNode })} emptyLabel="Chọn bước đích" options={nodes.filter(node => node !== current).map(node => ({ value: node.name, label: node.name }))} />}
         </div>
-        <p className="text-xs leading-5 text-slate-500">{responseBranches.length > 0 ? 'Tự động tiếp tục để chọn phản hồi đúng theo giá trị entity. Xoá các phản hồi có điều kiện nếu muốn đổi hành động.' : nextStep === 'WAIT_FOR_REPLY' ? 'Dừng tại node này và chờ người dùng gửi câu tiếp theo.' : nextStep === 'SKIP_USER_INPUT' ? 'Không chờ input; đánh giá node con trước, sau đó mới xét node kế tiếp cùng cấp.' : 'Không chờ input; chuyển thẳng đến node đã chọn.'}</p>
-        {nextStep === 'WAIT_FOR_REPLY' && <label className="block"><span className={labelClass}>Phản hồi khi user trả lời không liên quan</span><textarea value={current.irrelevantResponseText || ''} onChange={event => update({ irrelevantResponseText: event.target.value })} rows={3} className={`${inputClass} resize-y`} placeholder="Mình chưa hiểu câu trả lời này. Bạn vui lòng thử lại nhé." /><span className="mt-1.5 block text-[11px] leading-5 text-slate-500">Được dùng khi hệ thống đang chờ tại node này nhưng không nhận diện được intent hoặc entity phù hợp. Để trống sẽ dùng Fallback.</span></label>}
+        <p className="text-xs leading-5 text-slate-500">{responseBranches.length > 0 ? 'Tự động tiếp tục để chọn phản hồi đúng theo giá trị entity. Xoá các phản hồi có điều kiện nếu muốn đổi hành động.' : nextStep === 'WAIT_FOR_REPLY' ? 'Dừng tại bước này và chờ người dùng gửi câu tiếp theo.' : nextStep === 'SKIP_USER_INPUT' ? 'Không chờ người dùng; xét bước con trước, rồi nhánh cùng cấp có số ưu tiên lớn hơn.' : 'Không chờ người dùng; chuyển thẳng đến bước đích, không xét lại điều kiện của đích.'}</p>
+        {nextStep === 'WAIT_FOR_REPLY' && <label className="block"><span className={labelClass}>Lời đáp khi câu tiếp theo chưa rõ</span><textarea maxLength={1000} value={current.irrelevantResponseText || ''} onChange={event => update({ irrelevantResponseText: event.target.value })} rows={3} className={`${inputClass} resize-y`} placeholder="Mình chưa hiểu câu trả lời này. Bạn vui lòng thử lại nhé." /><span className="mt-1.5 block text-[11px] leading-5 text-slate-500">Khi đang chờ ở bước này nhưng chưa hiểu mục đích hoặc dữ kiện của câu mới. Để trống sẽ dùng bước dự phòng.</span></label>}
       </div>}</>}
     </div> : <EmptySelection label="dialog node" />}
     </main>
@@ -817,7 +859,7 @@ function DialogEditor({ nodes, intents, entities, onChange, onPreview }: { nodes
       onClose={() => setIsRouteComposerOpen(false)}
       onCreate={createRouteFlow}
     />}
-    {isMoveOpen && current && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900"><h2 className="text-lg font-black">Di chuyển “{current.name}”</h2><p className="mt-1 text-sm text-slate-500">Chọn vị trí cha mới trong cây Dialog.</p><div className="mt-5"><SearchableSelect label="Node cha mới" value={moveParent} onChange={setMoveParent} emptyLabel="Cấp gốc" options={allowedParents.map(node => ({ value: node.name, label: node.name }))} /></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setIsMoveOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">Huỷ</button><button type="button" onClick={move} className="rounded-xl bg-cobalt-600 px-4 py-2 text-sm font-bold text-white">Di chuyển node</button></div></div></div>}
+    {isMoveOpen && current && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900"><h2 className="text-lg font-black">Di chuyển “{current.name}”</h2><p className="mt-1 text-sm text-slate-500">Chọn bước cha mới; các bước con vẫn đi cùng bước này.</p><div className="mt-5"><SearchableSelect label="Bước cha mới" value={moveParent} onChange={setMoveParent} emptyLabel="Cấp gốc" options={allowedParents.map(node => ({ value: node.name, label: node.name }))} /></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setIsMoveOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">Huỷ</button><button type="button" onClick={move} className="rounded-xl bg-cobalt-600 px-4 py-2 text-sm font-bold text-white">Di chuyển bước</button></div></div></div>}
   </div>;
 }
 
@@ -855,13 +897,13 @@ function collectDialogDescendants(nodes: StudioDialogNode[], parentName: string)
 }
 
 function dialogNodeSubtitle(node: StudioDialogNode, nodes: StudioDialogNode[]): string {
-  if (node.type === 'FOLDER') return `${nodes.filter(item => item.parentNode === node.name).length} node con`;
+  if (node.type === 'FOLDER') return `${nodes.filter(item => item.parentNode === node.name).length} bước con`;
   const action = node.nextStep === 'SKIP_USER_INPUT'
     ? 'Tự động tiếp tục'
     : node.nextStep === 'JUMP_TO'
       ? `Chuyển đến ${node.jumpToNode || '…'}`
       : 'Chờ người dùng trả lời';
-  return `${node.type === 'ROUTE' ? `#${node.matchIntent || 'chưa_chọn'}` : node.type} · ${action}`;
+  return `${node.type === 'ROUTE' ? `#${node.matchIntent || 'chưa_chọn'}` : node.type === 'WELCOME' ? 'Chào mở đầu' : 'Dự phòng khi chưa hiểu'} · ${action}`;
 }
 
 function EditorLayout({ title, description, items, selected, onSelect, onAdd, addLabel, onImport, importLabel, children }: { title: string; description: string; items: { title: string; subtitle: string }[]; selected: number; onSelect: (index: number) => void; onAdd: () => void; addLabel: string; onImport?: () => void; importLabel?: string; children: React.ReactNode }) {

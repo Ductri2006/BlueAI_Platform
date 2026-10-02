@@ -64,6 +64,21 @@ class MySqlMigrationIntegrationTest {
         }
 
         try (var connection = DriverManager.getConnection(url, username, password)) {
+            try (var bot = connection.prepareStatement("""
+                    INSERT INTO studio_bots (id,owner_id,name,locale,timezone,status,public_key,draft_revision,created_at,updated_at,row_version)
+                    VALUES ('00000000-0000-0000-0000-000000000020',?,'Legacy Dialog','vi-VN','Asia/Ho_Chi_Minh',
+                            'DRAFT','00000000-0000-0000-0000-000000000021',0,CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6),0)
+                    """)) {
+                bot.setString(1, userId);
+                assertThat(bot.executeUpdate()).isEqualTo(1);
+            }
+            try (var node = connection.createStatement()) {
+                assertThat(node.executeUpdate("""
+                        INSERT INTO studio_bot_dialog_nodes (id,bot_id,node_name,node_type,response_text,priority)
+                        VALUES ('00000000-0000-0000-0000-000000000022','00000000-0000-0000-0000-000000000020',
+                                'Legacy welcome','WELCOME','Nội dung cũ cần bảo toàn',0)
+                        """)).isEqualTo(1);
+            }
             try (var client = connection.prepareStatement("""
                     INSERT INTO ai_integration_clients (id,owner_id,name,credential_hash,created_at)
                     VALUES (?,?,'Legacy migration client',?,?)
@@ -101,14 +116,20 @@ class MySqlMigrationIntegrationTest {
                         "idempotency_key_type", "VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"))
                 .cleanDisabled(true)
                 .load();
-        assertThat(latest.migrate().migrationsExecuted).isEqualTo(2);
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("8");
+        assertThat(latest.migrate().migrationsExecuted).isEqualTo(3);
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("9");
         latest.validate();
         assertThat(latest.info().pending()).isEmpty();
         assertThat(latest.migrate().migrationsExecuted).isZero();
 
         try (var connection = DriverManager.getConnection(url, username, password);
              var statement = connection.createStatement()) {
+            try (var node = statement.executeQuery("SELECT response_text,context_reuse_policy FROM studio_bot_dialog_nodes")) {
+                assertThat(node.next()).isTrue();
+                assertThat(node.getString("response_text")).isEqualTo("Nội dung cũ cần bảo toàn");
+                assertThat(node.getString("context_reuse_policy")).isEqualTo("NONE");
+                assertThat(node.next()).isFalse();
+            }
             try (var task = connection.prepareStatement("SELECT status,idempotency_key,created_at,expires_at FROM ai_task_ledger WHERE id=?")) {
                 task.setString(1, legacyTaskId);
                 try (var result = task.executeQuery()) {

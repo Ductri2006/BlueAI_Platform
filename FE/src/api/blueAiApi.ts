@@ -91,7 +91,9 @@ export interface ConversationMessageResponse {
   role: 'USER' | 'ASSISTANT';
   content: string;
   createdAt: string;
-  evidence?: Pick<RagAnswerResponse, 'sources' | 'contextSources'> | null;
+  evidence?: (Pick<RagAnswerResponse, 'sources' | 'contextSources'> & {
+    origin?: 'CORE' | 'DIALOG' | 'DIALOG_CONTEXT_CONFIRMATION' | null;
+  }) | null;
 }
 
 export interface RagSourceResponse {
@@ -232,6 +234,7 @@ export interface StudioDialogNode {
   jumpToNode?: string;
   irrelevantResponseText?: string;
   priority: number;
+  contextReusePolicy?: 'NONE' | 'CONFIRMED_ONLY';
 }
 
 export interface StudioBotConfiguration {
@@ -248,6 +251,28 @@ export interface StudioPreviewContext {
   lastIntent?: string;
   variables: Record<string, string>;
   waitingNode?: string;
+  suggestedVariables?: Record<string, string>;
+  suggestionSource?: string;
+}
+
+export interface StudioDialogTrace {
+  route: string;
+  reason: string;
+  visitedNodes: string[];
+  confirmedEntities: Record<string, string>;
+  contextSource?: string;
+}
+
+export interface ConversationContextSourceResponse {
+  type: string;
+  conversationId?: string;
+  title: string;
+  memoryKey?: string;
+}
+
+export interface StudioPreviewHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 export interface StudioRuntimeResponse {
@@ -258,6 +283,9 @@ export interface StudioRuntimeResponse {
   context: StudioPreviewContext;
   fallback: boolean;
   dialogHandled?: boolean;
+  trace?: StudioDialogTrace;
+  sources?: RagSourceResponse[];
+  contextSources?: ConversationContextSourceResponse[];
 }
 
 export interface StudioPublishResponse {
@@ -528,10 +556,11 @@ export class BlueAiApi {
     botId: string,
     message: string,
     context?: StudioPreviewContext,
+    options: { conversationId?: string; history?: StudioPreviewHistoryMessage[] } = {},
   ): Promise<StudioRuntimeResponse> {
     return this.authorizedRequest<StudioRuntimeResponse>(
       `/api/v1/studio/bots/${encodeURIComponent(botId)}/preview`,
-      { method: 'POST', body: JSON.stringify({ message, context }) },
+      { method: 'POST', body: JSON.stringify({ message, context, ...options }) },
     );
   }
 
@@ -720,6 +749,8 @@ export function ragAnswerToChatMessage(response: RagAnswerResponse): ChatMessage
   const contextSources = response.contextSources || [];
   const hasUnapprovedSource = citations.some(citation => citation.status === 'scope_mismatch');
   const createdAt = new Date(response.assistantMessage.createdAt);
+  const origin = response.assistantMessage.evidence?.origin;
+  const isDialog = origin === 'DIALOG' || origin === 'DIALOG_CONTEXT_CONFIRMATION';
   return {
     id: response.assistantMessage.id,
     sender: 'assistant',
@@ -729,12 +760,15 @@ export function ragAnswerToChatMessage(response: RagAnswerResponse): ChatMessage
       : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     // No verified source is not an error: the assistant is expected to say the
     // knowledge base does not cover the question. Red is reserved for real failures.
-    confidence: citations.length === 0
+    confidence: origin === 'DIALOG_CONTEXT_CONFIRMATION' ? 'context_confirmation'
+      : origin === 'DIALOG' ? 'dialog'
+      : citations.length === 0
       ? contextSources.length > 0 ? 'context' : 'ungrounded'
       : hasUnapprovedSource ? 'inferred' : 'confirmed',
     citations,
     contextSources,
-    toolsUsed: citations.length > 0 ? ['RAG_Retrieval_API', 'LLM_Chat_API'] : ['LLM_Chat_API'],
+    toolsUsed: isDialog ? ['Dialog_Runtime']
+      : citations.length > 0 ? ['RAG_Retrieval_API', 'LLM_Chat_API'] : ['LLM_Chat_API'],
   };
 }
 

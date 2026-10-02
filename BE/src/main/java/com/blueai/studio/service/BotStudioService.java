@@ -156,32 +156,15 @@ public class BotStudioService {
     public RuntimeResponse preview(String ownerId, String botId, PreviewRequest request) {
         Bot bot = requireOwnedBot(ownerId, botId);
         BotSnapshot snapshot = snapshot(bot);
+        if ((request.conversationId() != null && !request.conversationId().isBlank()) || !request.history().isEmpty()) {
+            return ragChatService.previewWithSnapshot(ownerId, snapshot, request);
+        }
         RuntimeResponse deterministic = runtimeService.evaluate(snapshot, request.context(), request.message().trim());
         if (deterministic.fallback()
                 && deterministic.context().pendingEntity() == null
                 && !deterministic.dialogHandled()
                 && bot.isBlueAiCoreEnabled()) {
-            try {
-                String answer = ragChatService.answerForCustomAssistant(
-                        ownerId,
-                        bot.getName(),
-                        customization(snapshot.customization()),
-                        bot.getCustomInstructions(),
-                        request.message().trim()
-                );
-                if (!isBlank(answer)) {
-                    return new RuntimeResponse(
-                            answer,
-                            deterministic.matchedIntent(),
-                            deterministic.recognizedEntities(),
-                            "BlueAI Core",
-                            deterministic.context(),
-                            false
-                    );
-                }
-            } catch (ApiException ignored) {
-                // Preview remains usable with deterministic fallback if shared RAG/LLM is unavailable.
-            }
+            return ragChatService.previewWithSnapshot(ownerId, snapshot, request);
         }
         return deterministic;
     }
@@ -285,7 +268,8 @@ public class BotStudioService {
                         node.getNextStep() == null ? DialogNextStep.WAIT_FOR_REPLY : node.getNextStep(),
                         node.getJumpToNode(),
                         node.getIrrelevantResponseText(),
-                        node.getPriority()
+                        node.getPriority(),
+                        node.getContextReusePolicy()
                 ))
                 .toList();
         return new BotConfigurationResponse(summary(bot), intents, entities, nodes, customization(bot));
@@ -370,23 +354,34 @@ public class BotStudioService {
             }
         }
         for (DialogNodeInput input : nodes) {
-            dialogNodeRepository.save(new BotDialogNode(
+            String matchEntity = canonicalReference(entities.stream().map(EntityInput::name).toList(), input.matchEntityName());
+            List<String> matchValues = entities.stream().filter(entity -> entity.name().trim().equals(matchEntity))
+                    .flatMap(entity -> entity.values().stream()).map(EntityValueInput::value).toList();
+            BotDialogNode node = new BotDialogNode(
                     bot,
                     input.name().trim(),
                     input.type(),
-                    trimToNull(input.parentNode()),
-                    trimToNull(input.matchIntent()),
-                    trimToNull(input.matchEntityName()),
-                    trimToNull(input.matchEntityValue()),
-                    trimToNull(input.requiredEntityName()),
+                    canonicalReference(nodes.stream().map(DialogNodeInput::name).toList(), input.parentNode()),
+                    canonicalReference(intents.stream().map(IntentInput::name).toList(), input.matchIntent()),
+                    matchEntity,
+                    canonicalReference(matchValues, input.matchEntityValue()),
+                    canonicalReference(entities.stream().map(EntityInput::name).toList(), input.requiredEntityName()),
                     blankToDefault(input.responseText(), ""),
                     trimToNull(input.missingEntityPrompt()),
                     input.nextStep() == null ? DialogNextStep.WAIT_FOR_REPLY : input.nextStep(),
-                    trimToNull(input.jumpToNode()),
+                    canonicalReference(nodes.stream().map(DialogNodeInput::name).toList(), input.jumpToNode()),
                     trimToNull(input.irrelevantResponseText()),
                     input.priority()
-            ));
+            );
+            node.setContextReusePolicy(input.contextReusePolicy());
+            dialogNodeRepository.save(node);
         }
+    }
+
+    private String canonicalReference(List<String> names, String supplied) {
+        if (isBlank(supplied)) return null;
+        return names.stream().filter(name -> key(name).equals(key(supplied)))
+                .map(String::trim).findFirst().orElse(supplied.trim());
     }
 
     private void validate(List<IntentInput> intents, List<EntityInput> entities, List<DialogNodeInput> nodes) {
@@ -474,6 +469,7 @@ public class BotStudioService {
             }
         }
         validateParentCycles(nodes);
+        new DialogConfigurationValidator().validate(nodes, entities);
     }
 
     private void validateParentCycles(List<DialogNodeInput> nodes) {

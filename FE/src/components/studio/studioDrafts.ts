@@ -1,3 +1,5 @@
+import { analyzeDialogNodes, type DialogValidationEntity, type DialogValidationNode } from './dialogValidation';
+
 export function splitMultilineDraft(value: string): string[] {
   return value.split(/\r?\n/);
 }
@@ -252,38 +254,10 @@ export function mergeEntityImports<T extends { name: string; description: string
 }
 
 export function validateDialogNodes(
-  nodes: Array<{ name: string; type?: string; matchIntent?: string; matchEntityName?: string; requiredEntityName?: string; parentNode?: string; nextStep?: string; jumpToNode?: string }>,
+  nodes: DialogValidationNode[],
   intentNames: string[] = [],
   entityNames: string[] = [],
+  entities?: DialogValidationEntity[],
 ): string[] {
-  const errors: string[] = [];
-  const names = new Set<string>();
-  const knownIntents = new Set(intentNames.map(name => name.trim().toLocaleLowerCase()));
-  const knownEntities = new Set(entityNames.map(name => name.trim().toLocaleLowerCase()));
-  nodes.forEach(node => {
-    const key = node.name.trim().toLocaleLowerCase();
-    if (!key) errors.push('Có dialog node chưa đặt tên.');
-    else if (names.has(key)) errors.push(`Tên dialog node bị trùng: “${node.name}”.`);
-    else names.add(key);
-  });
-  nodes.forEach(node => {
-    if (node.type === 'ROUTE' && !node.matchIntent?.trim()) {
-      errors.push(`Route node “${node.name}” chưa chọn intent.`);
-    }
-    if (node.matchIntent?.trim() && !knownIntents.has(node.matchIntent.trim().toLocaleLowerCase())) {
-      errors.push(`Node “${node.name}” đang tham chiếu intent không tồn tại: “${node.matchIntent}”.`);
-    }
-    for (const entityReference of [node.matchEntityName, node.requiredEntityName]) {
-      if (entityReference?.trim() && !knownEntities.has(entityReference.trim().toLocaleLowerCase())) {
-        errors.push(`Node “${node.name}” đang tham chiếu entity không tồn tại: “${entityReference}”.`);
-      }
-    }
-    if (node.parentNode && !names.has(node.parentNode.trim().toLocaleLowerCase())) {
-      errors.push(`Node “${node.name}” đang trỏ đến node cha không tồn tại: “${node.parentNode}”.`);
-    }
-    if (node.nextStep === 'JUMP_TO' && (!node.jumpToNode || !names.has(node.jumpToNode.trim().toLocaleLowerCase()))) {
-      errors.push(`Node “${node.name}” cần một node đích hợp lệ.`);
-    }
-  });
-  return errors;
+  return analyzeDialogNodes(nodes, intentNames, entityNames, entities).errors;
 }

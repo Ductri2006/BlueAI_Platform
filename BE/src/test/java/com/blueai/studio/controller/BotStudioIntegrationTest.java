@@ -565,17 +565,18 @@ class BotStudioIntegrationTest {
         );
         assertThat(saved.path("bot").path("customInstructions").asText()).isEqualTo(customInstructions);
 
-        when(ragChatService.answerForCustomAssistant(
+        when(ragChatService.previewWithSnapshot(
                 anyString(),
-                eq("CSKH BlueAI"),
-                argThat(customization -> customization != null
-                        && "friendly".equals(customization.tonePreset())
-                        && "short".equals(customization.answerLength())
-                        && "steps".equals(customization.responseStructure())
-                        && "proactive".equals(customization.proactivity())),
-                eq(customInstructions),
-                eq("Chính sách đổi trả là gì?")
-        )).thenReturn("BlueAI đã tra cứu chính sách đổi trả cho bạn.");
+                argThat(snapshot -> snapshot != null && "CSKH BlueAI".equals(snapshot.name())
+                        && customInstructions.equals(snapshot.customInstructions())
+                        && "friendly".equals(snapshot.customization().tonePreset())
+                        && "short".equals(snapshot.customization().answerLength())
+                        && "steps".equals(snapshot.customization().responseStructure())
+                        && "proactive".equals(snapshot.customization().proactivity())),
+                argThat(request -> "Chính sách đổi trả là gì?".equals(request.message()))
+        )).thenReturn(new com.blueai.studio.dto.BotStudioDtos.RuntimeResponse(
+                "BlueAI đã tra cứu chính sách đổi trả cho bạn.", null, java.util.Map.of(), "BlueAI Core",
+                new com.blueai.studio.dto.BotStudioDtos.PreviewContext(null, null, null, java.util.Map.of()), false));
 
         JsonNode response = postJson(
                 "/api/v1/studio/bots/" + botId + "/preview",

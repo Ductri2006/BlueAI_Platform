@@ -8,7 +8,7 @@ export type UserRole =
   | 'reseller'        // Đại lý B2B (Cổng đại lý)
   | 'b2c_customer';   // Khách hàng B2C (Cổng hỗ trợ khách hàng)
 
-export type ConfidenceLevel = 'confirmed' | 'context' | 'inferred' | 'proposal' | 'ungrounded' | 'danger';
+export type ConfidenceLevel = 'confirmed' | 'context' | 'inferred' | 'proposal' | 'ungrounded' | 'danger' | 'dialog' | 'context_confirmation';
 
 export type AIStreamStatus = 'idle' | 'searching' | 'tool_calling' | 'streaming' | 'complete' | 'abstained' | 'error';
 

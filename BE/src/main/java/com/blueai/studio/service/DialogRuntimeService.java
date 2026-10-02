@@ -6,6 +6,8 @@ import com.blueai.studio.dto.BotStudioDtos.EntityValueInput;
 import com.blueai.studio.dto.BotStudioDtos.IntentInput;
 import com.blueai.studio.dto.BotStudioDtos.PreviewContext;
 import com.blueai.studio.dto.BotStudioDtos.RuntimeResponse;
+import com.blueai.studio.dto.BotStudioDtos.DialogTrace;
+import com.blueai.studio.model.DialogContextReusePolicy;
 import com.blueai.studio.model.DialogNextStep;
 import com.blueai.studio.model.DialogNodeType;
 import org.springframework.stereotype.Service;
@@ -45,6 +47,11 @@ public class DialogRuntimeService {
     }
 
     public RuntimeResponse evaluate(BotSnapshot snapshot, PreviewContext suppliedContext, String message) {
+        return evaluate(snapshot, suppliedContext, message, Map.of());
+    }
+
+    public RuntimeResponse evaluate(BotSnapshot snapshot, PreviewContext suppliedContext, String message,
+                                    Map<String, DialogContextBridge.Suggestion> suggestions) {
         PreviewContext current = suppliedContext == null ? emptyContext() : suppliedContext;
         String normalizedMessage = normalize(message);
         if (Set.of("huy", "cancel", "bat dau lai", "restart", "reset").contains(normalizedMessage)) {
@@ -55,11 +62,37 @@ public class DialogRuntimeService {
                     null,
                     emptyContext(),
                     false
-            );
+            ).withTrace(new DialogTrace("DIALOG", "Người dùng đã hủy; dữ kiện và đề xuất của luồng được xóa.", List.of(), Map.of(), null));
         }
 
-        Map<String, String> recognizedEntities = extractEntities(snapshot.entities(), normalizedMessage);
-        String classifiedIntent = classifyIntent(snapshot.intents(), normalizedMessage);
+        String suggested = current.pendingEntity() == null ? null : current.suggestedVariables().get(current.pendingEntity());
+        DialogNodeInput suggestionNode = findNodeByName(snapshot.dialogNodes(), current.waitingNode());
+        DialogContextBridge.Suggestion liveSuggestion = current.pendingEntity() == null ? null : suggestions.get(current.pendingEntity());
+        if (suggested != null && (suggestionNode == null
+                || suggestionNode.contextReusePolicy() != DialogContextReusePolicy.CONFIRMED_ONLY
+                || !isCanonicalValue(snapshot, current.pendingEntity(), suggested)
+                || liveSuggestion == null || !suggested.equals(liveSuggestion.value()))) {
+            suggested = null;
+            current = new PreviewContext(current.pendingIntent(), current.pendingEntity(), current.lastIntent(), current.variables(), current.waitingNode());
+        }
+        if (suggested != null) {
+            // The client cannot invent the provenance of an otherwise valid suggestion.
+            current = new PreviewContext(current.pendingIntent(), current.pendingEntity(), current.lastIntent(),
+                    current.variables(), current.waitingNode(), current.suggestedVariables(), liveSuggestion.source());
+        }
+        boolean confirmed = suggested != null && Set.of("dung", "dung roi", "xac nhan", "dong y", "yes", "ok", "chinh xac").contains(normalizedMessage);
+        if (confirmed && !isCanonicalValue(snapshot, current.pendingEntity(), suggested)) confirmed = false;
+        if (suggested != null && Set.of("khong", "khong dung", "no", "khong phai").contains(normalizedMessage)) {
+            DialogNodeInput waiting = findNodeByName(snapshot.dialogNodes(), current.waitingNode());
+            return new RuntimeResponse(missingEntityPrompt(waiting, current.pendingEntity()), current.pendingIntent(),
+                    Map.of(), current.waitingNode(), new PreviewContext(current.pendingIntent(), current.pendingEntity(),
+                    current.lastIntent(), current.variables(), current.waitingNode()), false, true)
+                    .withTrace(new DialogTrace("DIALOG", "Đã bỏ dữ kiện đề xuất; cần người dùng cung cấp giá trị mới.", List.of(), Map.of(), null));
+        }
+        Map<String, String> recognizedEntities = confirmed
+                ? Map.of(current.pendingEntity(), suggested)
+                : extractEntities(snapshot.entities(), normalizedMessage);
+        String classifiedIntent = confirmed ? current.pendingIntent() : classifyIntent(snapshot.intents(), normalizedMessage);
         boolean continuingPendingSlot = current.pendingEntity() != null
                 && (classifiedIntent == null || classifiedIntent.equalsIgnoreCase(current.pendingIntent()));
         // A completed turn must not donate its entities to a fresh request.
@@ -72,6 +105,10 @@ public class DialogRuntimeService {
             boolean changedTopic = classifiedIntent != null
                     && !classifiedIntent.equalsIgnoreCase(current.pendingIntent());
             if (!changedTopic) {
+                if (suggested != null) {
+                    return confirmationResponse(current.pendingIntent(), current.pendingEntity(), suggested,
+                            current.suggestionSource(), current.waitingNode(), variables, recognizedEntities);
+                }
                 DialogNodeInput pendingNode = findNodeByName(snapshot.dialogNodes(), current.waitingNode());
                 if (pendingNode == null) {
                     pendingNode = findPromptNode(snapshot.dialogNodes(), current.pendingIntent(), current.pendingEntity());
@@ -92,7 +129,8 @@ public class DialogRuntimeService {
                                 pendingNode == null ? current.waitingNode() : pendingNode.name()
                         ),
                         classifiedIntent == null
-                );
+                ).withTrace(new DialogTrace("DIALOG", "Đang chờ dữ kiện bắt buộc; chưa gọi knowledge base hoặc AI.",
+                        pendingNode == null ? List.of() : List.of(pendingNode.name()), Map.of(), null));
             }
         }
 
@@ -110,7 +148,7 @@ public class DialogRuntimeService {
                     new PreviewContext(null, null, current.lastIntent(), current.variables(), waitingNode.name()),
                     true,
                     true
-            );
+            ).withTrace(new DialogTrace("DIALOG", "Lời đáp chưa phù hợp; giữ bước đang chờ, không gọi AI.", List.of(waitingNode.name()), Map.of(), null));
         }
 
         String matchedIntent = classifiedIntent;
@@ -124,15 +162,22 @@ public class DialogRuntimeService {
                 current.waitingNode()
         );
         if (matched != null) {
-            return respondFromNode(
+            RuntimeResponse response = respondFromNode(
                     snapshot,
                     matched,
                     matchedIntent,
                     recognizedEntities,
                     variables,
                     matchedIntent,
-                    false
+                    false,
+                    suggestions
             );
+            if (confirmed) {
+                return response.withTrace(new DialogTrace("DIALOG", "Người dùng đã xác nhận dữ kiện từ context.",
+                        response.trace() == null ? List.of(matched.name()) : response.trace().visitedNodes(),
+                        Map.of(current.pendingEntity(), suggested), current.suggestionSource()));
+            }
+            return response;
         }
 
         DialogNodeInput fallback = snapshot.dialogNodes().stream()
@@ -147,7 +192,7 @@ public class DialogRuntimeService {
                     null,
                     new PreviewContext(null, null, current.lastIntent(), variables),
                     true
-            );
+            ).withTrace(new DialogTrace("FALLBACK", "Không có nhánh phù hợp trong cấu hình.", List.of(), Map.of(), null));
         }
         return respondFromNode(
                 snapshot,
@@ -156,7 +201,8 @@ public class DialogRuntimeService {
                 recognizedEntities,
                 variables,
                 current.lastIntent(),
-                true
+                true,
+                suggestions
         );
     }
 
@@ -173,16 +219,25 @@ public class DialogRuntimeService {
             String lastIntent,
             boolean fallback
     ) {
+        return respondFromNode(snapshot, startingNode, matchedIntent, recognizedEntities, variables, lastIntent, fallback, Map.of());
+    }
+
+    private RuntimeResponse respondFromNode(BotSnapshot snapshot, DialogNodeInput startingNode, String matchedIntent,
+                                           Map<String, String> recognizedEntities, Map<String, String> variables,
+                                           String lastIntent, boolean fallback,
+                                           Map<String, DialogContextBridge.Suggestion> suggestions) {
         List<String> messages = new ArrayList<>();
         Set<String> visited = new HashSet<>();
+        List<String> visitedNodes = new ArrayList<>();
         DialogNodeInput node = startingNode;
         String finalNode = startingNode.name();
         String effectiveLastIntent = lastIntent;
         boolean effectiveFallback = fallback;
 
         for (int step = 0; node != null && step < MAX_AUTOMATIC_STEPS; step++) {
-            String nodeKey = normalize(node.name());
+            String nodeKey = identifierKey(node.name());
             if (!visited.add(nodeKey)) break;
+            visitedNodes.add(node.name());
 
             finalNode = node.name();
             effectiveFallback = effectiveFallback || node.type() == DialogNodeType.FALLBACK;
@@ -190,6 +245,12 @@ public class DialogRuntimeService {
             if (!isBlank(nodeIntent)) effectiveLastIntent = nodeIntent;
 
             if (!isBlank(node.requiredEntityName()) && !variables.containsKey(node.requiredEntityName())) {
+                DialogContextBridge.Suggestion suggestion = suggestions.get(node.requiredEntityName());
+                if (node.contextReusePolicy() == DialogContextReusePolicy.CONFIRMED_ONLY && suggestion != null
+                        && isCanonicalValue(snapshot, node.requiredEntityName(), suggestion.value())) {
+                    return confirmationResponse(nodeIntent, node.requiredEntityName(), suggestion.value(), suggestion.source(),
+                            node.name(), variables, recognizedEntities);
+                }
                 messages.add(missingEntityPrompt(node, node.requiredEntityName()));
                 return new RuntimeResponse(
                         String.join("\n\n", messages),
@@ -204,7 +265,7 @@ public class DialogRuntimeService {
                                 node.name()
                         ),
                         effectiveFallback
-                );
+                ).withTrace(new DialogTrace("DIALOG", "Kịch bản cần thêm dữ kiện trước khi tiếp tục.", visitedNodes, Map.of(), null));
             }
 
             String renderedResponse = render(node.responseText(), variables);
@@ -213,18 +274,35 @@ public class DialogRuntimeService {
                     ? DialogNextStep.SKIP_USER_INPUT
                     : nextStep(node);
             if (nextStep == DialogNextStep.WAIT_FOR_REPLY) {
-                return completedResponse(messages, matchedIntent, recognizedEntities, finalNode, effectiveLastIntent, variables, node.name(), effectiveFallback);
+                return completedResponse(messages, matchedIntent, recognizedEntities, finalNode, effectiveLastIntent, variables, node.name(), effectiveFallback)
+                        .withTrace(new DialogTrace(effectiveFallback ? "FALLBACK" : "DIALOG", "Đã chạy kịch bản và dừng để chờ lượt tiếp theo.", visitedNodes, Map.of(), null));
             }
 
             node = nextStep == DialogNextStep.JUMP_TO
                     ? findNodeByName(snapshot.dialogNodes(), node.jumpToNode())
                     : findNextEligibleNode(snapshot.dialogNodes(), node, matchedIntent, variables);
             if (node == null) {
-                return completedResponse(messages, matchedIntent, recognizedEntities, finalNode, effectiveLastIntent, variables, finalNode, effectiveFallback);
+                return completedResponse(messages, matchedIntent, recognizedEntities, finalNode, effectiveLastIntent, variables, finalNode, effectiveFallback)
+                        .withTrace(new DialogTrace(effectiveFallback ? "FALLBACK" : "DIALOG", "Đã hoàn tất các bước phù hợp.", visitedNodes, Map.of(), null));
             }
         }
 
-        return completedResponse(messages, matchedIntent, recognizedEntities, finalNode, effectiveLastIntent, variables, finalNode, effectiveFallback);
+        return completedResponse(messages, matchedIntent, recognizedEntities, finalNode, effectiveLastIntent, variables, finalNode, effectiveFallback)
+                .withTrace(new DialogTrace("FLOW_GUARD", "Luồng tự động đã bị dừng bởi giới hạn bước hoặc vòng lặp; cần rà cấu hình.", visitedNodes, Map.of(), null));
+    }
+
+    private boolean isCanonicalValue(BotSnapshot snapshot, String entityName, String value) {
+        return snapshot.entities().stream().filter(entity -> entity.name().equals(entityName))
+                .flatMap(entity -> entity.values().stream()).anyMatch(item -> item.value().equals(value));
+    }
+
+    private RuntimeResponse confirmationResponse(String intent, String entity, String value, String source,
+                                                 String node, Map<String, String> variables, Map<String, String> recognized) {
+        return new RuntimeResponse("Context có dữ kiện “" + entity + " = " + value
+                + "”. Bạn có muốn dùng cho yêu cầu này không? Trả lời “xác nhận”, hoặc nhập giá trị mới.",
+                intent, recognized, node, new PreviewContext(intent, entity, intent, variables, node, Map.of(entity, value), source),
+                false, true).withTrace(new DialogTrace("CONTEXT_CONFIRMATION", "Dữ kiện lịch sử chỉ là đề xuất, chưa được áp dụng.",
+                node == null ? List.of() : List.of(node), Map.of(), source));
     }
 
     private RuntimeResponse completedResponse(
@@ -327,7 +405,7 @@ public class DialogRuntimeService {
             Map<String, String> variables,
             Set<String> visited
     ) {
-        if (!visited.add(normalize(folder.name()))) return false;
+        if (!visited.add(identifierKey(folder.name()))) return false;
         return nodes.stream()
                 .filter(node -> sameParent(node.parentNode(), folder.name()))
                 .anyMatch(node -> routeMatches(node, intent, variables)
@@ -336,7 +414,12 @@ public class DialogRuntimeService {
     }
 
     private boolean sameParent(String left, String right) {
-        return normalize(left).equals(normalize(right));
+        return identifierKey(left).equals(identifierKey(right));
+    }
+
+    private String identifierKey(String value) {
+        // Identifiers preserve accents, unlike natural-language intent/entity matching.
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
     private boolean routeMatches(DialogNodeInput node, String intent, Map<String, String> variables) {

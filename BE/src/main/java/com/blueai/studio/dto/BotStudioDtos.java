@@ -3,11 +3,15 @@ package com.blueai.studio.dto;
 import com.blueai.studio.model.BotStatus;
 import com.blueai.studio.model.DialogNextStep;
 import com.blueai.studio.model.DialogNodeType;
+import com.blueai.studio.model.DialogContextReusePolicy;
+import com.blueai.rag.chat.dto.RagSourceResponse;
+import com.blueai.rag.chat.dto.ConversationContextSourceResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 
 import java.time.Instant;
 import java.util.List;
@@ -141,8 +145,17 @@ public final class BotStudioDtos {
             DialogNextStep nextStep,
             @Size(max = 120) String jumpToNode,
             @Size(max = 1000) String irrelevantResponseText,
-            int priority
+            int priority,
+            DialogContextReusePolicy contextReusePolicy
     ) {
+        public DialogNodeInput(String name, DialogNodeType type, String parentNode, String matchIntent,
+                               String matchEntityName, String matchEntityValue, String requiredEntityName,
+                               String responseText, String missingEntityPrompt, DialogNextStep nextStep,
+                               String jumpToNode, String irrelevantResponseText, int priority) {
+            this(name, type, parentNode, matchIntent, matchEntityName, matchEntityValue, requiredEntityName,
+                    responseText, missingEntityPrompt, nextStep, jumpToNode, irrelevantResponseText, priority,
+                    DialogContextReusePolicy.NONE);
+        }
     }
 
     public record SaveConfigurationRequest(
@@ -170,26 +183,50 @@ public final class BotStudioDtos {
     }
 
     public record PreviewContext(
-            String pendingIntent,
-            String pendingEntity,
-            String lastIntent,
-            Map<String, String> variables,
-            String waitingNode
+            @Size(max = 100) String pendingIntent,
+            @Size(max = 100) String pendingEntity,
+            @Size(max = 100) String lastIntent,
+            @Size(max = 50) Map<@NotBlank @Size(max = 100) String, @NotBlank @Size(max = 150) String> variables,
+            @Size(max = 120) String waitingNode,
+            @Size(max = 1) Map<@NotBlank @Size(max = 100) String, @NotBlank @Size(max = 150) String> suggestedVariables,
+            @Size(max = 500) String suggestionSource
     ) {
+        public PreviewContext(String pendingIntent, String pendingEntity, String lastIntent,
+                              Map<String, String> variables, String waitingNode) {
+            this(pendingIntent, pendingEntity, lastIntent, variables, waitingNode, Map.of(), null);
+        }
+
         public PreviewContext(String pendingIntent, String pendingEntity, String lastIntent, Map<String, String> variables) {
             this(pendingIntent, pendingEntity, lastIntent, variables, null);
         }
 
         public PreviewContext {
             variables = variables == null ? Map.of() : Map.copyOf(variables);
+            suggestedVariables = suggestedVariables == null ? Map.of() : Map.copyOf(suggestedVariables);
         }
     }
 
+    public record PreviewHistoryMessage(
+            @NotBlank @Pattern(regexp = "user|assistant") String role,
+            @NotBlank @Size(max = 4000) String content
+    ) { }
+
     public record PreviewRequest(
             @NotBlank @Size(max = 2000) String message,
-            PreviewContext context
+            @Valid PreviewContext context,
+            @Size(max = 36) String conversationId,
+            @Size(max = 20) List<@Valid PreviewHistoryMessage> history
     ) {
+        public PreviewRequest(String message, PreviewContext context) {
+            this(message, context, null, List.of());
+        }
+        public PreviewRequest {
+            history = history == null ? List.of() : List.copyOf(history);
+        }
     }
+
+    public record DialogTrace(String route, String reason, List<String> visitedNodes,
+                              Map<String, String> confirmedEntities, String contextSource) { }
 
     public record RuntimeResponse(
             String message,
@@ -198,8 +235,17 @@ public final class BotStudioDtos {
             String matchedNode,
             PreviewContext context,
             boolean fallback,
-            boolean dialogHandled
+            boolean dialogHandled,
+            DialogTrace trace,
+            List<RagSourceResponse> sources,
+            List<ConversationContextSourceResponse> contextSources
     ) {
+        public RuntimeResponse(String message, String matchedIntent, Map<String, String> recognizedEntities,
+                               String matchedNode, PreviewContext context, boolean fallback, boolean dialogHandled) {
+            this(message, matchedIntent, recognizedEntities, matchedNode, context, fallback, dialogHandled,
+                    null, List.of(), List.of());
+        }
+
         public RuntimeResponse(
                 String message,
                 String matchedIntent,
@@ -209,6 +255,17 @@ public final class BotStudioDtos {
                 boolean fallback
         ) {
             this(message, matchedIntent, recognizedEntities, matchedNode, context, fallback, false);
+        }
+
+        public RuntimeResponse withTrace(DialogTrace value) {
+            return new RuntimeResponse(message, matchedIntent, recognizedEntities, matchedNode, context,
+                    fallback, dialogHandled, value, sources, contextSources);
+        }
+
+        public RuntimeResponse withEvidence(List<RagSourceResponse> documents,
+                                             List<ConversationContextSourceResponse> contexts) {
+            return new RuntimeResponse(message, matchedIntent, recognizedEntities, matchedNode, context,
+                    fallback, dialogHandled, trace, documents, contexts);
         }
     }
 

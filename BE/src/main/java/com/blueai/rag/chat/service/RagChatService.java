@@ -19,6 +19,7 @@ import com.blueai.rag.conversation.event.ConversationTurnCompletedEvent;
 import com.blueai.rag.conversation.model.Conversation;
 import com.blueai.rag.conversation.model.ConversationMessage;
 import com.blueai.rag.conversation.model.MessageEvidence;
+import com.blueai.rag.conversation.model.AnswerOrigin;
 import com.blueai.rag.conversation.model.MessageRole;
 import com.blueai.rag.conversation.repository.ConversationMessageRepository;
 import com.blueai.rag.conversation.repository.ConversationRepository;
@@ -29,12 +30,16 @@ import com.blueai.rag.memory.model.UserMemory;
 import com.blueai.studio.dto.BotStudioDtos.CustomizationInput;
 import com.blueai.studio.dto.BotStudioDtos.PreviewContext;
 import com.blueai.studio.dto.BotStudioDtos.RuntimeResponse;
+import com.blueai.studio.dto.BotStudioDtos.PreviewRequest;
+import com.blueai.studio.dto.BotStudioDtos.DialogTrace;
 import com.blueai.studio.model.BotRelease;
 import com.blueai.studio.model.BotStatus;
+import com.blueai.studio.model.DialogContextReusePolicy;
 import com.blueai.studio.repository.BotReleaseRepository;
 import com.blueai.studio.repository.BotRepository;
 import com.blueai.studio.service.BotSnapshot;
 import com.blueai.studio.service.DialogRuntimeService;
+import com.blueai.studio.service.DialogContextBridge;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
@@ -106,9 +111,10 @@ public class RagChatService {
         String question = request.question().trim();
         ActiveConfiguration activeConfiguration = loadActiveConfiguration();
         PreviewContext dialogContext = readDialogContext(conversation.getDialogStateJson(), activeConfiguration);
-        RuntimeResponse dialogResponse = activeConfiguration == null
-                ? null
-                : dialogRuntimeService.evaluate(activeConfiguration.snapshot(), dialogContext, question);
+        ResolvedConversationContext context = conversationContextService.resolve(ownerId, conversation, contextLookupQuestion(question, dialogContext));
+        DialogEvaluation evaluation = activeConfiguration == null ? null
+                : evaluateDialog(ownerId, conversation, activeConfiguration.snapshot(), dialogContext, question, context);
+        RuntimeResponse dialogResponse = evaluation == null ? null : evaluation.response();
 
         // Dialog routing runs before the shared RAG/LLM runtime. A pending slot
         // or irrelevant response is terminal for this turn.
@@ -119,10 +125,13 @@ public class RagChatService {
                 || Boolean.FALSE.equals(activeConfiguration.snapshot().blueAiCoreEnabled()));
         if (dialogHandled) {
             conversation.updateDialogState(writeDialogState(activeConfiguration, dialogResponse.context()));
-            return saveAnswer(conversation, question, dialogResponse.message(), List.of(), List.of());
+            boolean usedContext = dialogResponse.trace() != null && dialogResponse.trace().contextSource() != null;
+            AnswerOrigin origin = dialogResponse.trace() != null && "CONTEXT_CONFIRMATION".equals(dialogResponse.trace().route())
+                    ? AnswerOrigin.DIALOG_CONTEXT_CONFIRMATION : AnswerOrigin.DIALOG;
+            return saveAnswer(conversation, question, dialogResponse.message(), List.of(),
+                    usedContext ? evaluation.grounding().sources() : List.of(), origin);
         }
 
-        ResolvedConversationContext context = conversationContextService.resolve(ownerId, conversation, question);
         List<RetrievedChunk> chunks = context.contextRecall()
                 ? List.of()
                 : retrieve(ownerId, context.retrievalQuery());
@@ -138,7 +147,74 @@ public class RagChatService {
         );
 
         if (dialogResponse != null) conversation.updateDialogState(writeDialogState(activeConfiguration, dialogResponse.context()));
-        return saveAnswer(conversation, question, answer, sources, context.sources());
+        return saveAnswer(conversation, question, answer, sources, context.sources(), AnswerOrigin.CORE);
+    }
+
+    /** Read-only draft simulation; never writes to the selected sales conversation. */
+    @Transactional(readOnly = true)
+    public RuntimeResponse previewWithSnapshot(String ownerId, BotSnapshot snapshot, PreviewRequest request) {
+        requireActiveUser(ownerId);
+        Conversation selected = request.conversationId() == null || request.conversationId().isBlank()
+                ? null : findOwnedConversation(ownerId, request.conversationId());
+        ResolvedConversationContext base = selected == null
+                ? new ResolvedConversationContext(request.message(), List.of(), "", List.of(), List.of(), List.of(), false)
+                : conversationContextService.resolve(ownerId, selected, contextLookupQuestion(request.message(), request.context()));
+        DialogEvaluation evaluation = evaluateDialog(ownerId, selected, snapshot, request.context(), request.message(), base);
+        RuntimeResponse result = evaluation.response();
+        List<ConversationContextSourceResponse> contextSources = evaluation.grounding().sources().stream()
+                .map(ConversationContextSourceResponse::from).toList();
+        boolean handled = result.context().pendingEntity() != null || !result.fallback() || result.dialogHandled()
+                || Boolean.FALSE.equals(snapshot.blueAiCoreEnabled());
+        if (handled) return result.withEvidence(List.of(), contextSources);
+
+        List<ConversationHistoryMessage> history = new ArrayList<>(base.recentHistory());
+        request.history().forEach(item -> history.add(new ConversationHistoryMessage(
+                "user".equals(item.role()) ? MessageRole.USER : MessageRole.ASSISTANT, item.content())));
+        // Only the most recent bounded context goes to the provider; no client system roles.
+        int remaining = 12_000;
+        List<ConversationHistoryMessage> bounded = new ArrayList<>();
+        for (int index = history.size() - 1; index >= 0 && bounded.size() < 20 && remaining > 0; index--) {
+            ConversationHistoryMessage item = history.get(index);
+            String content = shorten(item.content(), Math.min(4_000, remaining));
+            bounded.addFirst(new ConversationHistoryMessage(item.role(), content));
+            remaining -= content.length();
+        }
+        ResolvedConversationContext context = new ResolvedConversationContext(base.retrievalQuery(), bounded,
+                base.conversationSummary(), base.memories(), base.relatedContexts(), base.sources(), base.contextRecall());
+        try {
+            List<RagSourceResponse> sources = context.contextRecall() ? List.of() : toVerifiedSources(ownerId, retrieve(ownerId, context.retrievalQuery()));
+            String answer = askLlm(request.message(), context, sources, snapshot.customization(), snapshot.name(), snapshot.customInstructions());
+            return new RuntimeResponse(answer, result.matchedIntent(), result.recognizedEntities(), "BlueAI Core", result.context(), false)
+                    .withTrace(new DialogTrace("CORE", "Không có nhánh Dialog phù hợp; đã gọi AI với context được giới hạn và nguồn KB.",
+                            result.trace() == null ? List.of() : result.trace().visitedNodes(), java.util.Map.of(), null))
+                    .withEvidence(sources, contextSources);
+        } catch (ApiException unavailable) {
+            return result.withTrace(new DialogTrace("CORE_UNAVAILABLE", "AI/RAG không khả dụng; đang trả lời dự phòng của kịch bản.",
+                    List.of(), java.util.Map.of(), null));
+        }
+    }
+
+    private String contextLookupQuestion(String question, PreviewContext context) {
+        return context == null || context.pendingEntity() == null || context.suggestedVariables().isEmpty() ? question
+                : question + " " + context.pendingEntity() + " " + (context.pendingIntent() == null ? "" : context.pendingIntent());
+    }
+
+    private record DialogEvaluation(RuntimeResponse response, ResolvedConversationContext grounding) { }
+
+    private DialogEvaluation evaluateDialog(String ownerId, Conversation conversation, BotSnapshot snapshot,
+                                            PreviewContext supplied, String question, ResolvedConversationContext base) {
+        DialogContextBridge bridge = new DialogContextBridge();
+        RuntimeResponse result = dialogRuntimeService.evaluate(snapshot, supplied, question, bridge.suggestions(snapshot, base));
+        // Initial questions often omit the entity's technical name (e.g. "location").
+        // Resolve that slot only after Dialog requests it. Never alter the KB retrieval query.
+        boolean maySuggest = conversation != null && result.context().pendingEntity() != null
+                && snapshot.dialogNodes().stream().anyMatch(node -> node.name().equals(result.context().waitingNode())
+                && node.contextReusePolicy() == DialogContextReusePolicy.CONFIRMED_ONLY);
+        if (!maySuggest) return new DialogEvaluation(result, base);
+        ResolvedConversationContext targeted = conversationContextService.resolve(ownerId, conversation,
+                question + " " + result.context().pendingEntity());
+        return new DialogEvaluation(dialogRuntimeService.evaluate(snapshot, supplied, question,
+                bridge.suggestions(snapshot, targeted)), targeted);
     }
 
     private RagAnswerResponse saveAnswer(
@@ -146,7 +222,8 @@ public class RagChatService {
             String question,
             String answer,
             List<RagSourceResponse> sources,
-            List<com.blueai.rag.context.ConversationContextSource> contextSources
+            List<com.blueai.rag.context.ConversationContextSource> contextSources,
+            AnswerOrigin origin
     ) {
 
         ConversationMessage userMessage = messageRepository.save(new ConversationMessage(
@@ -159,7 +236,7 @@ public class RagChatService {
                 MessageRole.ASSISTANT,
                 answer,
                 new MessageEvidence(sources,
-                        contextSources.stream().map(ConversationContextSourceResponse::from).toList())
+                        contextSources.stream().map(ConversationContextSourceResponse::from).toList(), origin)
         ));
         conversation.touch();
         eventPublisher.publishEvent(new ConversationTurnCompletedEvent(conversation.getId()));

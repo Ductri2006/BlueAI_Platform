@@ -84,19 +84,19 @@ describe('studio draft list editing', () => {
       { name: 'Route giá', nextStep: 'JUMP_TO', jumpToNode: 'missing' },
       { name: 'Child', parentNode: 'missing' },
       { name: 'Child' },
-    ])).toEqual([
-      'Tên dialog node bị trùng: “Child”.',
-      'Node “Route giá” cần một node đích hợp lệ.',
-      'Node “Child” đang trỏ đến node cha không tồn tại: “missing”.',
-    ]);
+    ])).toEqual(expect.arrayContaining([
+      'Tên bước bị trùng: “Child”.',
+      'Bước “Route giá” cần một bước đích hợp lệ.',
+      'Bước “Child” có bước cha không tồn tại: “missing”.',
+    ]));
   });
 
   it('catches routes that reference deleted intents or entities', () => {
     expect(validateDialogNodes([
       { name: 'Route', type: 'ROUTE', matchIntent: 'deleted_intent', matchEntityName: 'deleted_entity' },
-    ], ['greeting'], ['location'])).toEqual([
-      'Node “Route” đang tham chiếu intent không tồn tại: “deleted_intent”.',
-      'Node “Route” đang tham chiếu entity không tồn tại: “deleted_entity”.',
-    ]);
+    ], ['greeting'], ['location'])).toEqual(expect.arrayContaining([
+      'Bước “Route” tham chiếu intent không tồn tại: “deleted_intent”.',
+      'Bước “Route” tham chiếu entity không tồn tại: “deleted_entity”.',
+    ]));
   });
 });

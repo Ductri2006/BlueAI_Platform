@@ -68,6 +68,10 @@ public class BotDialogNode {
     @Column(nullable = false)
     private int priority;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "context_reuse_policy", length = 30, nullable = false)
+    private DialogContextReusePolicy contextReusePolicy = DialogContextReusePolicy.NONE;
+
     protected BotDialogNode() {
     }
 
@@ -119,4 +123,8 @@ public class BotDialogNode {
     public String getJumpToNode() { return jumpToNode; }
     public String getIrrelevantResponseText() { return irrelevantResponseText; }
     public int getPriority() { return priority; }
+    public DialogContextReusePolicy getContextReusePolicy() { return contextReusePolicy; }
+    public void setContextReusePolicy(DialogContextReusePolicy policy) {
+        contextReusePolicy = policy == null ? DialogContextReusePolicy.NONE : policy;
+    }
 }
