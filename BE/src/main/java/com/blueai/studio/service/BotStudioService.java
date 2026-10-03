@@ -19,6 +19,7 @@ import com.blueai.studio.dto.BotStudioDtos.PublishResponse;
 import com.blueai.studio.dto.BotStudioDtos.RuntimeResponse;
 import com.blueai.studio.dto.BotStudioDtos.SaveConfigurationRequest;
 import com.blueai.studio.model.Bot;
+import com.blueai.studio.model.BotCreationTemplate;
 import com.blueai.studio.model.BotDialogNode;
 import com.blueai.studio.model.BotEntityDefinition;
 import com.blueai.studio.model.BotEntityValue;
@@ -102,7 +103,13 @@ public class BotStudioService {
                 locale,
                 timezone
         ));
-        if (!Boolean.FALSE.equals(request.includeStarterTemplate())) {
+        if (request.template() == BotCreationTemplate.SALES_DEMO) {
+            var template = SalesDialogDemoTemplate.load(objectMapper);
+            validate(template.intents(), template.entities(), template.dialogNodes());
+            bot.updateCustomization(false, null);
+            persistConfiguration(bot, template.intents(), template.entities(), template.dialogNodes());
+        } else if (request.template() == BotCreationTemplate.STARTER
+                || !Boolean.FALSE.equals(request.includeStarterTemplate())) {
             persistConfiguration(bot, starterIntents(), starterEntities(), starterNodes());
         }
         return configuration(bot);

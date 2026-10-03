@@ -1,6 +1,7 @@
 package com.blueai.studio.dto;
 
 import com.blueai.studio.model.BotStatus;
+import com.blueai.studio.model.BotCreationTemplate;
 import com.blueai.studio.model.DialogNextStep;
 import com.blueai.studio.model.DialogNodeType;
 import com.blueai.studio.model.DialogContextReusePolicy;
@@ -27,8 +28,13 @@ public final class BotStudioDtos {
             @Size(max = 500) String description,
             @Size(max = 20) String locale,
             @Size(max = 60) String timezone,
-            Boolean includeStarterTemplate
+            Boolean includeStarterTemplate,
+            BotCreationTemplate template
     ) {
+        public CreateBotRequest(String name, String description, String locale, String timezone,
+                                Boolean includeStarterTemplate) {
+            this(name, description, locale, timezone, includeStarterTemplate, null);
+        }
     }
 
     public record BotSummaryResponse(

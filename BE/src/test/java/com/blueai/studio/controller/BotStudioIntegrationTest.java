@@ -607,6 +607,53 @@ class BotStudioIntegrationTest {
         assertThat(active.path("customization").path("identityRole").asText()).isEqualTo("Trợ lý BlueAI");
     }
 
+    @Test
+    void salesDemoIsPersistedAsAnInactiveDraftWithoutChangingTheActiveBot() throws Exception {
+        String token = registerAndGetAccessToken("studio.demo@example.com");
+        JsonNode existing = postJson("/api/v1/studio/bots", token, "{\"name\":\"Existing\"}", 201);
+        String existingId = existing.path("bot").path("id").asText();
+        postJson("/api/v1/studio/bots/" + existingId + "/publish", token, "{}", 200);
+        postJson("/api/v1/studio/bots/" + existingId + "/activate", token, "{}", 200);
+
+        JsonNode created = postJson("/api/v1/studio/bots", token,
+                "{\"name\":\"Sales DEMO\",\"template\":\"SALES_DEMO\"}", 201);
+        assertThat(created.path("bot").path("status").asText()).isEqualTo("DRAFT");
+        assertThat(created.path("bot").path("active").asBoolean()).isFalse();
+        assertThat(created.path("bot").path("blueAiCoreEnabled").asBoolean()).isFalse();
+        assertThat(created.path("intents").size()).isEqualTo(3);
+        assertThat(created.path("entities").size()).isEqualTo(4);
+        assertThat(created.path("dialogNodes").size()).isEqualTo(13);
+
+        mockMvc.perform(get("/api/v1/studio/bots/" + created.path("bot").path("id").asText())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.bot.blueAiCoreEnabled").value(false));
+        mockMvc.perform(get("/api/v1/studio/bots/active").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.bot.id").value(existingId));
+    }
+
+    @Test
+    void demoTemplateCannotBypassAdminOrOwnershipChecksAndUnknownTemplatesAreRejected() throws Exception {
+        String userToken = registerUserAndGetAccessToken("studio.demo.user@example.com");
+        postJson("/api/v1/studio/bots", userToken, "{\"name\":\"DEMO\",\"template\":\"SALES_DEMO\"}", 403);
+        String owner = registerAndGetAccessToken("studio.demo.owner@example.com");
+        String other = registerAndGetAccessToken("studio.demo.other@example.com");
+        JsonNode created = postJson("/api/v1/studio/bots", owner, "{\"name\":\"DEMO\",\"template\":\"SALES_DEMO\"}", 201);
+        mockMvc.perform(get("/api/v1/studio/bots/" + created.path("bot").path("id").asText())
+                        .header("Authorization", "Bearer " + other))
+                .andExpect(status().isNotFound());
+        postJson("/api/v1/studio/bots", owner, "{\"name\":\"Invalid\",\"template\":\"../private\"}", 400);
+    }
+
+    @Test
+    void templateSelectionIsExplicitWhileLegacyEmptyCreationStillWorks() throws Exception {
+        String token = registerAndGetAccessToken("studio.demo.compat@example.com");
+        JsonNode empty = postJson("/api/v1/studio/bots", token, "{\"name\":\"Empty\",\"includeStarterTemplate\":false}", 201);
+        assertThat(empty.path("dialogNodes").size()).isZero();
+        JsonNode demo = postJson("/api/v1/studio/bots", token,
+                "{\"name\":\"Demo\",\"includeStarterTemplate\":false,\"template\":\"SALES_DEMO\"}", 201);
+        assertThat(demo.path("dialogNodes").size()).isEqualTo(13);
+    }
+
     private String registerAndGetAccessToken(String email) throws Exception {
         postPublicJson(
                 "/api/v1/auth/register",

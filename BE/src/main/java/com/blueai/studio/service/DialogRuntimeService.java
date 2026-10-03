@@ -251,7 +251,7 @@ public class DialogRuntimeService {
                     return confirmationResponse(nodeIntent, node.requiredEntityName(), suggestion.value(), suggestion.source(),
                             node.name(), variables, recognizedEntities);
                 }
-                messages.add(missingEntityPrompt(node, node.requiredEntityName()));
+                messages.add(render(missingEntityPrompt(node, node.requiredEntityName()), variables));
                 return new RuntimeResponse(
                         String.join("\n\n", messages),
                         matchedIntent,

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Bot, RotateCcw, Send, UserRound, X } from 'lucide-react';
 import { blueAiApi, type ConversationResponse, type StudioCustomization, type StudioPreviewContext, type StudioRuntimeResponse } from '../../api/blueAiApi';
+import { StudioPreviewFallbackBadge } from './StudioPreviewFallbackBadge';
 
 interface TryItOutPanelProps {
   botId: string;
@@ -171,7 +172,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
                   {Object.entries(item.recognizedEntities || {}).map(([name, value]) => (
                     <span key={name} className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-cyan-200">@{name}:{value}</span>
                   ))}
-                  {item.fallback && <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-amber-200">fallback</span>}
+                  <StudioPreviewFallbackBadge fallback={item.fallback} pendingEntity={item.pendingEntity} />
                   </div>
                   <p className="text-slate-400">Entity nhận diện ở câu này: {Object.keys(item.recognizedEntities || {}).length ? Object.entries(item.recognizedEntities || {}).map(([name, value]) => `@${name}=${value}`).join(', ') : 'không có'}</p>
                   <p className="text-slate-400">Context sau câu này: {Object.keys(item.contextVariables || {}).length ? Object.entries(item.contextVariables || {}).map(([name, value]) => `@${name}=${value}`).join(', ') : 'không giữ entity'}{item.pendingEntity ? ` · Đang đợi @${item.pendingEntity}` : ''}</p>

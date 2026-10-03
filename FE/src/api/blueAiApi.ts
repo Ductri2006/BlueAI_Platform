@@ -515,6 +515,7 @@ export class BlueAiApi {
     locale?: string;
     timezone?: string;
     includeStarterTemplate?: boolean;
+    template?: 'STARTER' | 'SALES_DEMO';
   }): Promise<StudioBotConfiguration> {
     return this.authorizedRequest<StudioBotConfiguration>('/api/v1/studio/bots', {
       method: 'POST',

@@ -1,0 +1,44 @@
+{
+  "intents": [
+    {"name":"chao_hoi","description":"Chào hỏi và hướng dẫn sử dụng demo sales.","examples":["xin chào","chào bạn","hello","hướng dẫn demo","demo có gì"]},
+    {"name":"hoi_gio","description":"Hỏi giờ hoạt động minh họa theo chi nhánh.","examples":["hỏi giờ","giờ hoạt động","giờ mở cửa","chi nhánh mở cửa lúc mấy giờ","cửa hàng mở cửa khi nào"]},
+    {"name":"bao_gia","description":"Thu thập yêu cầu báo giá minh họa, không tính giá hay tạo đơn.","examples":["báo giá","xin báo giá","tôi cần báo giá","lập yêu cầu báo giá","hỏi giá sản phẩm","tư vấn giá"]}
+  ],
+  "entities": [
+    {"name":"chi_nhanh","description":"Chi nhánh / khu vực giao mẫu.","values":[
+      {"value":"Hà Nội","synonyms":["HN","Hanoi"]},
+      {"value":"HCM","synonyms":["TP HCM","Hồ Chí Minh","Sài Gòn"]},
+      {"value":"Đà Nẵng","synonyms":["Danang"]}
+    ]},
+    {"name":"san_pham","description":"Chỉ có sản phẩm A và B minh họa.","values":[
+      {"value":"Sản phẩm A","synonyms":["sản phẩm a","SP A","mẫu A"]},
+      {"value":"Sản phẩm B","synonyms":["sản phẩm b","SP B","mẫu B"]}
+    ]},
+    {"name":"so_luong","description":"Số lượng mẫu 10, 20, 30, 50, 100; không phải sys-number của Watson.","values":[
+      {"value":"10","synonyms":["mười"]},
+      {"value":"20","synonyms":["hai mươi"]},
+      {"value":"30","synonyms":["ba mươi"]},
+      {"value":"50","synonyms":["năm mươi"]},
+      {"value":"100","synonyms":["một trăm"]}
+    ]},
+    {"name":"xac_nhan","description":"Đồng ý hoặc từ chối bản tóm tắt đang chờ; không giao dịch thật.","values":[
+      {"value":"Đồng ý","synonyms":["xác nhận","đúng","đúng rồi","yes","ok"]},
+      {"value":"Không đồng ý","synonyms":["không xác nhận","không đúng","không","no"]}
+    ]}
+  ],
+  "dialogNodes": [
+    {"name":"01 - Chào mở đầu","type":"WELCOME","responseText":"DEMO SALES — 6 kịch bản. Bạn có thể chào hỏi, hỏi giờ chi nhánh hoặc thử báo giá sản phẩm A/B. Giờ hoạt động chỉ minh họa; không có giá hay đơn hàng thật. Gõ hủy để bắt đầu yêu cầu mới.","nextStep":"WAIT_FOR_REPLY","priority":0,"contextReusePolicy":"NONE"},
+    {"name":"01 - Hướng dẫn","type":"ROUTE","matchIntent":"chao_hoi","responseText":"Chào bạn! Thử: ‘hỏi giờ Hà Nội’ hoặc ‘báo giá’. Demo sẽ hỏi thông tin thiếu, đọc lại để xác nhận và cho sửa dữ kiện trước khi đồng ý. Sản phẩm A/B; số lượng 10, 20, 30, 50, 100; khu vực Hà Nội, HCM, Đà Nẵng.","nextStep":"WAIT_FOR_REPLY","priority":10,"contextReusePolicy":"NONE"},
+    {"name":"02 - Hỏi chi nhánh","type":"ROUTE","matchIntent":"hoi_gio","requiredEntityName":"chi_nhanh","responseText":"","missingEntityPrompt":"Bạn muốn hỏi giờ hoạt động của Hà Nội, HCM hay Đà Nẵng? Đây là lịch minh họa.","irrelevantResponseText":"Mình chưa nhận ra chi nhánh. Demo có Hà Nội, HCM và Đà Nẵng. Bạn muốn hỏi nơi nào?","nextStep":"SKIP_USER_INPUT","priority":20,"contextReusePolicy":"NONE"},
+    {"name":"02 - Giờ Hà Nội","type":"ROUTE","parentNode":"02 - Hỏi chi nhánh","matchIntent":"hoi_gio","matchEntityName":"chi_nhanh","matchEntityValue":"Hà Nội","responseText":"DEMO — Chi nhánh Hà Nội mở cửa 08:00–21:00. Đây là giờ minh họa, không phải lịch hoạt động đã được doanh nghiệp xác nhận.","nextStep":"WAIT_FOR_REPLY","priority":30,"contextReusePolicy":"NONE"},
+    {"name":"02 - Giờ HCM","type":"ROUTE","parentNode":"02 - Hỏi chi nhánh","matchIntent":"hoi_gio","matchEntityName":"chi_nhanh","matchEntityValue":"HCM","responseText":"DEMO — Chi nhánh HCM mở cửa 08:00–22:00. Đây là giờ minh họa, không phải lịch hoạt động đã được doanh nghiệp xác nhận.","nextStep":"WAIT_FOR_REPLY","priority":40,"contextReusePolicy":"NONE"},
+    {"name":"02 - Giờ Đà Nẵng","type":"ROUTE","parentNode":"02 - Hỏi chi nhánh","matchIntent":"hoi_gio","matchEntityName":"chi_nhanh","matchEntityValue":"Đà Nẵng","responseText":"DEMO — Chi nhánh Đà Nẵng mở cửa 08:30–21:00. Đây là giờ minh họa, không phải lịch hoạt động đã được doanh nghiệp xác nhận.","nextStep":"WAIT_FOR_REPLY","priority":50,"contextReusePolicy":"NONE"},
+    {"name":"03 - Thu thập sản phẩm","type":"ROUTE","matchIntent":"bao_gia","requiredEntityName":"san_pham","responseText":"","missingEntityPrompt":"Bạn cần báo giá sản phẩm A hay sản phẩm B? Demo không tính giá hoặc tạo đơn thật.","irrelevantResponseText":"Mình chưa nhận ra sản phẩm. Bạn chọn sản phẩm A hoặc sản phẩm B nhé; gõ hủy để dừng.","nextStep":"SKIP_USER_INPUT","priority":100,"contextReusePolicy":"NONE"},
+    {"name":"03 - Thu thập số lượng","type":"ROUTE","parentNode":"03 - Thu thập sản phẩm","matchIntent":"bao_gia","requiredEntityName":"so_luong","responseText":"","missingEntityPrompt":"Bạn cần bao nhiêu {{san_pham}}? Số lượng mẫu: 10, 20, 30, 50 hoặc 100.","irrelevantResponseText":"Demo chỉ nhận số lượng 10, 20, 30, 50 hoặc 100. Bạn cần bao nhiêu {{san_pham}}?","nextStep":"SKIP_USER_INPUT","priority":110,"contextReusePolicy":"NONE"},
+    {"name":"03 - Thu thập khu vực","type":"ROUTE","parentNode":"03 - Thu thập số lượng","matchIntent":"bao_gia","requiredEntityName":"chi_nhanh","responseText":"","missingEntityPrompt":"Bạn cần giao {{so_luong}} {{san_pham}} ở đâu: Hà Nội, HCM hay Đà Nẵng?","irrelevantResponseText":"Mình chưa nhận ra khu vực giao. Demo có Hà Nội, HCM và Đà Nẵng; bạn chọn nơi nào?","nextStep":"SKIP_USER_INPUT","priority":120,"contextReusePolicy":"NONE"},
+    {"name":"04-05 - Tóm tắt và sửa trước xác nhận","type":"ROUTE","parentNode":"03 - Thu thập khu vực","matchIntent":"bao_gia","requiredEntityName":"xac_nhan","responseText":"DEMO — Kiểm tra lại: {{so_luong}} {{san_pham}}, giao tại {{chi_nhanh}}. Hãy trả lời ‘xác nhận’ sau khi đọc tóm tắt này; hoặc cung cấp dữ kiện cần sửa. Chưa tạo báo giá hay đơn hàng thật.","missingEntityPrompt":"DEMO — Yêu cầu hiện tại: {{so_luong}} {{san_pham}}, giao tại {{chi_nhanh}}. Bạn xác nhận không? Trả lời ‘xác nhận’ / ‘không đồng ý’, hoặc sửa như ‘đổi thành 30’. Số lượng mẫu: 10, 20, 30, 50, 100. Chưa tạo báo giá hay đơn hàng thật.","nextStep":"WAIT_FOR_REPLY","priority":130,"contextReusePolicy":"NONE"},
+    {"name":"04 - Đã xác nhận demo","type":"ROUTE","parentNode":"04-05 - Tóm tắt và sửa trước xác nhận","matchIntent":"bao_gia","matchEntityName":"xac_nhan","matchEntityValue":"Đồng ý","responseText":"Bạn đã xác nhận bản tóm tắt ngay phía trên. DEMO chỉ minh họa bước xác nhận; chưa lưu yêu cầu vào CRM, chưa tính giá, chưa tạo đơn và chưa gửi thông tin cho ai. Muốn thử yêu cầu khác, gõ ‘báo giá’.","nextStep":"WAIT_FOR_REPLY","priority":140,"contextReusePolicy":"NONE"},
+    {"name":"04 - Từ chối demo","type":"ROUTE","parentNode":"04-05 - Tóm tắt và sửa trước xác nhận","matchIntent":"bao_gia","matchEntityName":"xac_nhan","matchEntityValue":"Không đồng ý","responseText":"Bạn chưa đồng ý với bản tóm tắt; demo không xử lý tiếp và không tạo đơn. Gõ ‘báo giá’ để nhập yêu cầu mới hoặc ‘hủy’ để xóa trạng thái đang trao đổi.","nextStep":"WAIT_FOR_REPLY","priority":150,"contextReusePolicy":"NONE"},
+    {"name":"06 - Chưa hiểu yêu cầu","type":"FALLBACK","responseText":"Mình chưa hiểu yêu cầu này. DEMO hỗ trợ chào hỏi, giờ chi nhánh và thu thập yêu cầu báo giá. Thử ‘hỏi giờ Hà Nội’ hoặc ‘báo giá’; gõ ‘hủy’ để bắt đầu lại. Không gọi AI/KB trong mẫu này.","nextStep":"WAIT_FOR_REPLY","priority":999,"contextReusePolicy":"NONE"}
+  ]
+}

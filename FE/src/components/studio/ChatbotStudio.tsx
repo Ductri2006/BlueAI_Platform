@@ -21,6 +21,7 @@ import { beginStudioOperation, confirmStudioExit, installStudioExitProtection } 
 import { DialogNodeNameField } from './DialogNodeNameField';
 import { DialogContextPolicy, DialogValidationNotice } from './DialogContextPolicy';
 import { StudioDiscardDialog, useStudioConfirmation } from './StudioDiscardDialog';
+import { StudioTemplateSelector, type StudioCreationTemplate } from './StudioTemplateSelector';
 import {
   compactDraftEntries,
   mergeEntityImports,
@@ -58,6 +59,7 @@ export const ChatbotStudio: React.FC = () => {
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [newBotName, setNewBotName] = React.useState('Trợ lý BlueAI');
+  const [newBotTemplate, setNewBotTemplate] = React.useState<StudioCreationTemplate>('STARTER');
   const [error, setError] = React.useState('');
   const studioRef = React.useRef<HTMLElement>(null);
   const draftGuard = React.useRef({ dirty: false, busy: false });
@@ -132,18 +134,24 @@ export const ChatbotStudio: React.FC = () => {
     try {
       const result = await blueAiApi.createStudioBot({
         name: newBotName.trim(),
-        description: 'Trải nghiệm BlueAI tùy chỉnh cho nghiệp vụ của doanh nghiệp.',
+        description: newBotTemplate === 'SALES_DEMO'
+          ? 'DEMO: 6 kịch bản sales, dữ liệu minh họa; không phải báo giá hay đơn hàng thật.'
+          : 'Trải nghiệm BlueAI tùy chỉnh cho nghiệp vụ của doanh nghiệp.',
         locale: 'vi-VN',
         timezone: 'Asia/Ho_Chi_Minh',
         includeStarterTemplate: true,
+        template: newBotTemplate,
       });
       setBots(current => [result.bot, ...current]);
       setConfiguration(copyConfiguration(result));
       setIsPreviewOpen(false);
       setIsCreateOpen(false);
+      if (newBotTemplate === 'SALES_DEMO') setActiveTab('dialog');
       draftGuard.current.dirty = false;
       setIsDirty(false);
-      showToast('Đã tạo cấu hình BlueAI với bộ intent và luồng mẫu.', 'success');
+      showToast(newBotTemplate === 'SALES_DEMO'
+        ? 'Đã tạo bản nháp demo 6 kịch bản. Core/LLM đã tắt; bot đang dùng không thay đổi.'
+        : 'Đã tạo cấu hình BlueAI với bộ intent và luồng mẫu.', 'success');
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -282,9 +290,12 @@ export const ChatbotStudio: React.FC = () => {
           <h1 className="mt-5 text-2xl font-black text-slate-900 dark:text-white">Tạo cấu hình BlueAI đầu tiên</h1>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">BlueAI sẽ tạo sẵn intent chào hỏi, giờ làm việc, entity chi nhánh và luồng fallback để bạn có thể thử ngay.</p>
           {error && <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">{error}</p>}
-          <form onSubmit={createBot} className="mt-6 flex gap-2">
-            <input value={newBotName} onChange={event => setNewBotName(event.target.value)} className={inputClass} aria-label="Tên cấu hình" />
-            <button type="submit" className="shrink-0 rounded-xl bg-cobalt-600 px-5 py-2 text-sm font-bold text-white hover:bg-cobalt-700">Tạo cấu hình</button>
+          <form onSubmit={createBot} className="mt-6 space-y-3">
+            <StudioTemplateSelector value={newBotTemplate} onChange={setNewBotTemplate} />
+            <div className="flex gap-2">
+              <input value={newBotName} onChange={event => setNewBotName(event.target.value)} className={inputClass} aria-label="Tên cấu hình" />
+              <button type="submit" className="shrink-0 rounded-xl bg-cobalt-600 px-5 py-2 text-sm font-bold text-white hover:bg-cobalt-700">Tạo cấu hình</button>
+            </div>
           </form>
         </div>
       </div>
@@ -370,6 +381,7 @@ export const ChatbotStudio: React.FC = () => {
             <div className="flex items-center justify-between"><h2 className="text-lg font-black">Tạo cấu hình BlueAI mới</h2><button type="button" onClick={() => setIsCreateOpen(false)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button></div>
             <p className="mt-1 text-sm text-slate-500">Khởi tạo bản cấu hình dùng chung cho BlueAI với dữ liệu mẫu tiếng Việt.</p>
             <label className="mt-5 block"><span className={labelClass}>Tên cấu hình</span><input value={newBotName} onChange={event => setNewBotName(event.target.value)} className={inputClass} autoFocus /></label>
+            <StudioTemplateSelector value={newBotTemplate} onChange={setNewBotTemplate} />
             <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setIsCreateOpen(false)} className="rounded-xl px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">Huỷ</button><button type="submit" className="rounded-xl bg-cobalt-600 px-4 py-2 text-sm font-bold text-white hover:bg-cobalt-700">Tạo với dữ liệu mẫu</button></div>
             </fieldset>
           </form>
