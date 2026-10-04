@@ -68,6 +68,8 @@ jobs:
       MYSQL_MIGRATION_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_migration_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
       MYSQL_MIGRATION_TEST_USERNAME: migration_test
       MYSQL_MIGRATION_TEST_PASSWORD: ci-disposable-migration-password
+      MYSQL_LEGACY_V1_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_legacy_v1_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      MYSQL_LEGACY_V3_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_legacy_v3_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
       MYSQL_AUTH_TEST_URL: jdbc:mysql://127.0.0.1:3307/blueai_auth_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
       MYSQL_AUTH_TEST_USERNAME: auth_test
       MYSQL_AUTH_TEST_PASSWORD: ci-disposable-auth-password
@@ -81,7 +83,12 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - run: mvn -B -Dtest=MySqlMigrationIntegrationTest test
+      - name: Create separate legacy migration fixtures
+        env:
+          MYSQL_CONTAINER_ID: ${{ job.services.mysql.id }}
+        run: |
+          docker exec "$MYSQL_CONTAINER_ID" mysql --protocol=TCP -h127.0.0.1 -uroot -pci-disposable-root-password -e "CREATE DATABASE blueai_legacy_v1_test; CREATE DATABASE blueai_legacy_v3_test; GRANT ALL ON blueai_legacy_v1_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v3_test.* TO 'migration_test'@'%';"
+      - run: mvn -B -Dtest=MySqlMigrationIntegrationTest,MySqlLegacyMigrationIntegrationTest test
       - run: mvn -B -Dtest=AuthMySqlConcurrencyIntegrationTest,AuthAdminMutationMySqlIntegrationTest,AiTaskMySqlRecoveryIntegrationTest,AiTaskMySqlAuthorizationIntegrationTest test
 
   flyway-engine-upgrade:
@@ -137,6 +144,8 @@ jobs:
           cache: npm
           cache-dependency-path: FE/package-lock.json
       - run: npm ci
+      - name: Audit frontend runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm test -- --run
       - run: npm run build
 
@@ -183,7 +192,12 @@ jobs:
       - name: Check production ports, health and restart contracts
         run: node BE/ops/test-production-compose.mjs
       - name: Validate Nginx configuration
-        run: docker run --rm --add-host auth-api:127.0.0.1 -v "$GITHUB_WORKSPACE/FE/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine nginx -t
+        run: docker run --rm --add-host auth-api:127.0.0.1 -v "$GITHUB_WORKSPACE/FE/nginx.conf:/etc/nginx/conf.d/default.conf:ro" -v "$GITHUB_WORKSPACE/FE/security-headers.conf:/etc/nginx/snippets/security-headers.conf:ro" nginx:1.30-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94 nginx -t
+      - name: Validate Alloy log collector
+        run: |
+          node BE/ops/test-alloy-config.mjs
+          docker run --rm -v "$GITHUB_WORKSPACE/BE/ops/alloy/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f validate /etc/alloy/config.alloy
+          node BE/ops/test-alloy-ingestion.mjs
       - name: Test live Nginx ingress against a disposable backend
         run: node BE/ops/test-nginx-ingress.mjs
       - name: Test disposable restore, failure safety and deployment acceptance

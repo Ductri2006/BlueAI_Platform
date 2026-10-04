@@ -17,6 +17,7 @@ const oldAddressHolder = `${prefix}-old-ip`;
 // under Docker Desktop. Normal CI/host runs continue to use localhost.
 const containerRunner = process.env.BLUEAI_INGRESS_TEST_RUNNER;
 const configPath = fileURLToPath(new URL('../../FE/nginx.conf', import.meta.url));
+const headersPath = fileURLToPath(new URL('../../FE/security-headers.conf', import.meta.url));
 const webRoot = mkdtempSync(join(tmpdir(), 'blueai-ingress-test-'));
 writeFileSync(join(webRoot, 'index.html'), '<!doctype html><title>Ingress test</title>blueai-ingress-fixture');
 // mkdtemp creates mode 0700 on Linux; Nginx's unprivileged worker must
@@ -65,13 +66,20 @@ try {
     'node:22-alpine', 'node', '-e', backendScript);
   docker('run', '--detach', '--name', frontend, '--network', network, '--publish', '127.0.0.1::80',
     '--volume', `${configPath}:/etc/nginx/conf.d/default.conf:ro`,
-    '--volume', `${webRoot}:/usr/share/nginx/html:ro`, 'nginx:1.27-alpine');
+    '--volume', `${headersPath}:/etc/nginx/snippets/security-headers.conf:ro`,
+    '--volume', `${webRoot}:/usr/share/nginx/html:ro`, 'nginx:1.30-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94');
   const binding = JSON.parse(docker('inspect', frontend))[0].NetworkSettings.Ports['80/tcp'][0];
   if (containerRunner) docker('network', 'connect', network, containerRunner);
   const baseUrl = containerRunner ? `http://${frontend}` : `http://127.0.0.1:${binding.HostPort}`;
   const request = (path, options = {}) => fetch(`${baseUrl}${path}`, {
     ...options, signal: AbortSignal.timeout(deadline),
   });
+  const assertSecurityHeaders = response => {
+    assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(response.headers.get('x-frame-options'), 'DENY');
+    assert.equal(response.headers.get('referrer-policy'), 'no-referrer');
+  };
 
   let ready = false;
   const readinessDeadline = Date.now() + deadline;
@@ -86,6 +94,7 @@ try {
 
   const index = await request('/index.html');
   assert.equal(index.status, 200);
+  assertSecurityHeaders(index);
   assert.match(await index.text(), /blueai-ingress-fixture/);
   docker('exec', frontend, 'wget', '-q', '-T', '3', '-O', '/dev/null', 'http://127.0.0.1/index.html');
 
@@ -95,6 +104,7 @@ try {
     for (const method of ['GET', 'POST', 'OPTIONS']) {
       const response = await request(path, { method, headers: { origin: 'https://widget.example.test' } });
       assert.equal(response.status, 404, `${method} ${path} must be blocked at the edge`);
+      assertSecurityHeaders(response);
       assert.equal(response.headers.has('access-control-allow-origin'), false);
       await response.text();
     }
@@ -115,6 +125,7 @@ try {
   const beforeRejectedUpload = (await (await request('/api/test-count')).json()).proxiedRequests;
   const rejected = await request('/api/v1/documents', { method: 'POST', body: oversized });
   assert.equal(rejected.status, 413, 'Oversized multipart must be rejected by Nginx');
+  assertSecurityHeaders(rejected);
   await rejected.text();
   const afterRejectedUpload = (await (await request('/api/test-count')).json()).proxiedRequests;
   assert.equal(afterRejectedUpload, beforeRejectedUpload, 'Oversized upload reached the backend');
@@ -146,6 +157,7 @@ try {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
     });
     if (response.status === 429) {
+      assertSecurityHeaders(response);
       limited++;
       assert.equal(response.headers.get('retry-after'), '60');
       assert.match(response.headers.get('content-type'), /application\/json/);
@@ -161,6 +173,10 @@ try {
   assert.equal(loginCountAfter - loginCountBefore, accepted, 'Rate-limited login reached the backend');
   const preflightAfter = await request('/api/v1/auth/login', { method: 'OPTIONS' });
   assert.equal(preflightAfter.status, 204, 'Preflight was blocked after login quota exhaustion');
+  const browserLogin = await request('/api/v1/auth/browser/login', { method: 'POST', body: '{}' });
+  assert.equal(browserLogin.status, 429, 'Browser login must share the existing login quota');
+  assertSecurityHeaders(browserLogin);
+  await browserLogin.text();
 
   for (const path of ['/api/v1/auth/refresh', '/api/v1/auth/logout']) {
     for (let i = 0; i < 12; i++) {
@@ -174,6 +190,7 @@ try {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"refreshToken":"invalid"}',
       });
       if (response.status === 429) {
+        assertSecurityHeaders(response);
         sessionLimited++;
         assert.equal(response.headers.get('retry-after'), '60');
         assert.match(response.headers.get('content-type'), /application\/json/);
@@ -189,6 +206,11 @@ try {
     assert.equal(after - before, sessionAccepted, `${path} rate-limited requests reached backend`);
     const preflight = await request(path, { method: 'OPTIONS' });
     assert.equal(preflight.status, 204, `${path} preflight blocked after quota exhaustion`);
+    const browserPath = path.replace('/auth/', '/auth/browser/');
+    const browserLimited = await request(browserPath, { method: 'POST', body: '{}' });
+    assert.equal(browserLimited.status, 429, `${browserPath} must share the session quota`);
+    assertSecurityHeaders(browserLimited);
+    await browserLimited.text();
   }
 
   const oldIp = JSON.parse(docker('inspect', backend))[0].NetworkSettings.Networks[network].IPAddress;

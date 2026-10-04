@@ -22,6 +22,11 @@
         <!-- Keep core and the MySQL module aligned on the tested 11.x line.
              11.7.2 warns above MySQL 8.1; 11.20.3 covers MySQL 8.4. -->
         <flyway.version>11.20.3</flyway.version>
+        <!-- Patch vulnerable transitive libraries without changing Boot's major.
+             Keep Jackson and all embedded Tomcat modules aligned. -->
+        <tomcat.version>10.1.60</tomcat.version>
+        <jackson-bom.version>2.21.7</jackson-bom.version>
+        <httpcore5.version>5.4.4</httpcore5.version>
     </properties>
 
     <dependencies>

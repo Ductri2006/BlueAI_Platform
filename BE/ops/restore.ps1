@@ -110,7 +110,10 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Could not start isolated MySQL restore test container.' }
         $ready = $false
         for ($i = 0; $i -lt 60; $i++) {
-            & docker exec $testContainer mysqladmin ping -uroot --silent 2>$null
+            # The entrypoint's temporary initializer accepts Unix-socket
+            # connections but disables TCP. Wait for the final server, not
+            # that temporary process which stops during the SQL import.
+            & docker exec $testContainer mysql -h 127.0.0.1 -uroot -N -e 'SELECT 1' 2>$null | Out-Null
             if ($LASTEXITCODE -eq 0) { $ready = $true; break }
             Start-Sleep -Seconds 2
         }
