@@ -15,6 +15,31 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('BlueAiApi', () => {
+  it.each([0, 20 * 1024 * 1024 + 1])('rejects upload size %i before any network request', async size => {
+    const fetchImpl = vi.fn();
+    const api = new BlueAiApi({ accessToken: 'test-access-token', fetchImpl: fetchImpl as typeof fetch });
+    const file = new File([new Uint8Array(size)], 'boundary.txt');
+    await expect(api.uploadDocument(file)).rejects.toMatchObject({
+      status: size === 0 ? 400 : 413,
+      code: size === 0 ? 'EMPTY_FILE' : 'FILE_TOO_LARGE',
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each([2, 20])('allows a %i MiB supported upload', async megabytes => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ id: 'boundary-document' }, 201));
+    const api = new BlueAiApi({ accessToken: 'test-access-token', fetchImpl: fetchImpl as typeof fetch });
+    await api.uploadDocument(new File([new Uint8Array(megabytes * 1024 * 1024)], 'boundary.TXT'));
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it('rejects unsupported extensions before any network request', async () => {
+    const fetchImpl = vi.fn();
+    const api = new BlueAiApi({ accessToken: 'test-access-token', fetchImpl: fetchImpl as typeof fetch });
+    await expect(api.uploadDocument(new File(['MZ'], 'program.exe'))).rejects.toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE' });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('creates a conversation and asks the authenticated RAG endpoint', async () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
@@ -64,9 +89,11 @@ describe('BlueAiApi', () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       paths.push(new URL(url).pathname);
-      if (url.endsWith('/auth/login')) {
+      if (url.endsWith('/auth/browser/login')) {
+        expect(init?.credentials).toBe('include');
+        expect((init?.headers as Headers).get('X-BlueAI-Browser')).toBe('1');
         return jsonResponse({
-          accessToken: 'login-token', refreshToken: 'refresh-token', tokenType: 'Bearer', expiresIn: 900,
+          accessToken: 'login-token', tokenType: 'Bearer', expiresIn: 900,
           user: { id: 'user-1', email: 'user@example.com', fullName: 'RAG User', role: 'USER', createdAt: '2026-09-04T10:00:00Z' },
         });
       }
@@ -81,7 +108,7 @@ describe('BlueAiApi', () => {
     const user = await api.login({ email: 'user@example.com', password: 'StrongPassword123!' });
     const currentUser = await api.getCurrentUser();
 
-    expect(paths).toEqual(['/api/v1/auth/login', '/api/v1/auth/me']);
+    expect(paths).toEqual(['/api/v1/auth/browser/login', '/api/v1/auth/me']);
     expect(user.email).toBe('user@example.com');
     expect(currentUser.fullName).toBe('RAG User');
   });
@@ -111,6 +138,88 @@ describe('BlueAiApi', () => {
     await expect(api.listConversations()).resolves.toEqual([]);
     expect(authorizationHeaders).toEqual(['Bearer expired-token', 'Bearer fresh-token']);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it('restores an HttpOnly-cookie session with a single refresh for concurrent requests', async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith('/browser/refresh')) {
+        expect(init?.body).toBeUndefined();
+        expect(init?.credentials).toBe('include');
+        expect((init?.headers as Headers).get('X-BlueAI-Browser')).toBe('1');
+        await Promise.resolve();
+        return jsonResponse({ accessToken: 'cookie-access', tokenType: 'Bearer', expiresIn: 900, user: {} });
+      }
+      expect(init?.credentials).toBe('omit');
+      expect((init?.headers as Headers).get('Authorization')).toBe('Bearer cookie-access');
+      return jsonResponse([]);
+    });
+    const api = new BlueAiApi({ baseUrl: 'http://api.test', fetchImpl: fetchImpl as typeof fetch });
+    await Promise.all([api.listConversations(), api.listMemories()]);
+    expect(fetchImpl.mock.calls.filter(call => String(call[0]).endsWith('/browser/refresh'))).toHaveLength(1);
+  });
+
+  it('does not loop after an expired browser cookie and logs out without exposing a refresh token', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ code: 'AUTH_REQUIRED' }, 401));
+    const api = new BlueAiApi({ baseUrl: 'http://api.test', fetchImpl: fetchImpl as typeof fetch });
+    await expect(api.listConversations()).rejects.toMatchObject({ status: 401 });
+    expect(api.hasSession()).toBe(false);
+    await expect(api.listConversations()).rejects.toMatchObject({ status: 401 });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const logoutFetch = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(null, { status: 204 }));
+    const browser = new BlueAiApi({ baseUrl: 'http://api.test', fetchImpl: logoutFetch as typeof fetch });
+    await browser.logout();
+    expect(logoutFetch.mock.calls[0][0]).toBe('http://api.test/api/v1/auth/browser/logout');
+    expect(logoutFetch.mock.calls[0][1]?.body).toBeUndefined();
+    expect(browser.hasSession()).toBe(false);
+  });
+
+  it('discards legacy localStorage credentials and never persists new credentials', async () => {
+    const storage = { removeItem: vi.fn(), getItem: vi.fn(), setItem: vi.fn() };
+    vi.stubGlobal('window', { localStorage: storage });
+    try {
+      const fetchImpl = vi.fn(async () => jsonResponse({ accessToken: 'memory-only', tokenType: 'Bearer', expiresIn: 900, user: {} }));
+      const api = new BlueAiApi({ baseUrl: 'http://api.test', fetchImpl: fetchImpl as typeof fetch });
+      await api.login({ email: 'qa@example.test', password: 'SyntheticPassword!' });
+      expect(storage.removeItem).toHaveBeenCalledWith('blueai.accessToken');
+      expect(storage.removeItem).toHaveBeenCalledWith('blueai.refreshToken');
+      expect(storage.getItem).not.toHaveBeenCalled();
+      expect(storage.setItem).not.toHaveBeenCalled();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('notifies session subscribers once when an authenticated cookie session expires', async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      if (String(input).endsWith('/browser/login')) {
+        return jsonResponse({ accessToken: 'memory-access', tokenType: 'Bearer', expiresIn: 900, user: {} });
+      }
+      return jsonResponse({ code: 'AUTH_REQUIRED' }, 401);
+    });
+    const api = new BlueAiApi({ baseUrl: 'http://api.test', fetchImpl: fetchImpl as typeof fetch });
+    const listener = vi.fn();
+    const unsubscribe = api.onSessionCleared(listener);
+    api.clearSession(); // Anonymous startup must not trigger reload loops.
+    expect(listener).not.toHaveBeenCalled();
+    await api.login({ email: 'qa@example.test', password: 'SyntheticPassword!' });
+    await expect(api.listConversations()).rejects.toMatchObject({ status: 401 });
+    api.clearSession();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(api.hasSession()).toBe(false);
+    unsubscribe();
+    await api.login({ email: 'qa@example.test', password: 'SyntheticPassword!' });
+    api.clearSession();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not resurrect a cleared session after an in-flight refresh resolves', async () => {
+    let resolveRefresh!: (response: Response) => void;
+    const fetchImpl = vi.fn(() => new Promise<Response>(resolve => { resolveRefresh = resolve; }));
+    const api = new BlueAiApi({ baseUrl: 'http://api.test', fetchImpl: fetchImpl as typeof fetch });
+    const pending = api.listConversations();
+    api.clearSession();
+    resolveRefresh(jsonResponse({ accessToken: 'stale', tokenType: 'Bearer', expiresIn: 900, user: {} }));
+    await expect(pending).rejects.toMatchObject({ status: 401 });
+    expect(api.hasSession()).toBe(false);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it('uploads multipart documents and handles a 204 conversation delete', async () => {

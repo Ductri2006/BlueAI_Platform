@@ -50,6 +50,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    return blueAiApi.onSessionCleared(() => {
+      setUser(null);
+      setStatus('anonymous');
+      // Workspace state is module-scoped. Reload so a later login cannot see
+      // conversations, documents or drafts cached by the previous account.
+      window.location.reload();
+    });
+  }, [status]);
+
   const login = useCallback(async (credentials: LoginCredentials) => {
     const currentUser = await blueAiApi.login(credentials);
     setUser(currentUser);

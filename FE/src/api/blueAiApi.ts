@@ -26,7 +26,7 @@ export interface UserResponse {
 
 export interface AuthResponse {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
   tokenType: string;
   expiresIn: number;
   user: UserResponse;
@@ -299,6 +299,7 @@ export interface BlueAiApiOptions {
   baseUrl?: string;
   accessToken?: string;
   refreshToken?: string;
+  sessionMode?: 'browser' | 'token';
   fetchImpl?: FetchImplementation;
 }
 
@@ -317,27 +318,13 @@ function withoutTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-function readStoredToken(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.localStorage.getItem(TOKEN_STORAGE_KEY) || undefined;
-}
-
-function readStoredRefreshToken(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || undefined;
-}
-
-function writeStoredTokens(accessToken: string, refreshToken: string): void {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
-    window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
-  }
-}
-
 function removeStoredTokens(): void {
   if (typeof window !== 'undefined') {
-    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-    window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    try {
+      // Migrate by discarding old JS-readable credentials, never importing them.
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+      window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    } catch { /* Storage may be disabled by the browser's privacy policy. */ }
   }
 }
 
@@ -360,20 +347,31 @@ export class BlueAiApi {
   private accessToken?: string;
   private refreshToken?: string;
   private refreshing?: Promise<string>;
+  private readonly browserSession: boolean;
+  private browserSessionAvailable = true;
+  private sessionVersion = 0;
+  private readonly sessionClearedListeners = new Set<() => void>();
 
   constructor(private readonly options: BlueAiApiOptions = {}) {
     this.baseUrl = withoutTrailingSlash(options.baseUrl ?? DEFAULT_API_BASE_URL);
     this.fetchImpl = options.fetchImpl || globalThis.fetch.bind(globalThis);
-    this.accessToken = options.accessToken || readStoredToken();
-    this.refreshToken = options.refreshToken || readStoredRefreshToken();
+    this.browserSession = (options.sessionMode ?? (options.accessToken || options.refreshToken ? 'token' : 'browser')) === 'browser';
+    this.accessToken = options.accessToken;
+    this.refreshToken = this.browserSession ? undefined : options.refreshToken;
+    removeStoredTokens();
   }
 
   hasSession(): boolean {
-    return Boolean(this.accessToken || this.refreshToken);
+    return Boolean(this.accessToken || this.refreshToken || (this.browserSession && this.browserSessionAvailable));
+  }
+
+  onSessionCleared(listener: () => void): () => void {
+    this.sessionClearedListeners.add(listener);
+    return () => { this.sessionClearedListeners.delete(listener); };
   }
 
   async login(credentials: LoginCredentials): Promise<UserResponse> {
-    const response = await this.request<AuthResponse>('/api/v1/auth/login', {
+    const response = await this.request<AuthResponse>(this.authPath('login'), {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
@@ -386,12 +384,13 @@ export class BlueAiApi {
   }
 
   async logout(): Promise<void> {
-    const refreshToken = this.refreshToken;
     try {
-      if (refreshToken) {
-        await this.request<void>('/api/v1/auth/logout', {
+      // Finish a single-flight rotation before revoking the latest credential.
+      await this.refreshing?.catch(() => undefined);
+      if (this.browserSession || this.refreshToken) {
+        await this.request<void>(this.authPath('logout'), {
           method: 'POST',
-          body: JSON.stringify({ refreshToken }),
+          body: this.browserSession ? undefined : JSON.stringify({ refreshToken: this.refreshToken }),
         });
       }
     } finally {
@@ -400,10 +399,14 @@ export class BlueAiApi {
   }
 
   clearSession(): void {
+    const hadAuthenticatedSession = Boolean(this.accessToken || this.refreshToken);
+    this.sessionVersion++;
     this.accessToken = undefined;
     this.refreshToken = undefined;
     this.refreshing = undefined;
+    this.browserSessionAvailable = false;
     removeStoredTokens();
+    if (hadAuthenticatedSession) this.sessionClearedListeners.forEach(listener => listener());
   }
 
   async createConversation(title: string): Promise<ConversationResponse> {
@@ -492,6 +495,16 @@ export class BlueAiApi {
   }
 
   async uploadDocument(file: File): Promise<DocumentResponse> {
+    // UX guard only: Java still validates the actual streamed bytes and format.
+    if (file.size === 0) {
+      throw new BlueAiApiError('Tài liệu đang rỗng. Vui lòng chọn tệp có nội dung.', 400, 'EMPTY_FILE');
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      throw new BlueAiApiError('Tài liệu vượt giới hạn 20 MiB. Vui lòng chọn tệp nhỏ hơn.', 413, 'FILE_TOO_LARGE');
+    }
+    if (!/\.(pdf|docx|csv|txt|md)$/i.test(file.name)) {
+      throw new BlueAiApiError('Chỉ hỗ trợ PDF, DOCX, CSV, TXT hoặc Markdown.', 400, 'UNSUPPORTED_FILE_TYPE');
+    }
     const body = new FormData();
     body.append('file', file);
     return this.authorizedRequest<DocumentResponse>('/api/v1/documents', { method: 'POST', body });
@@ -617,49 +630,64 @@ export class BlueAiApi {
     try {
       return await this.request<T>(path, init, token);
     } catch (error) {
-      if (!(error instanceof BlueAiApiError) || error.status !== 401 || !this.refreshToken) {
+      if (!(error instanceof BlueAiApiError) || error.status !== 401 || !this.hasRefreshCredential()) {
         if (error instanceof BlueAiApiError && error.status === 401) this.clearSession();
         throw error;
       }
 
       const refreshedToken = await this.refreshAccessToken();
-      return this.request<T>(path, init, refreshedToken);
+      try {
+        return await this.request<T>(path, init, refreshedToken);
+      } catch (retryError) {
+        if (retryError instanceof BlueAiApiError && retryError.status === 401) this.clearSession();
+        throw retryError;
+      }
     }
   }
 
   private async ensureAccessToken(): Promise<string> {
     if (this.accessToken) return this.accessToken;
-    if (this.refreshToken) return this.refreshAccessToken();
+    if (this.hasRefreshCredential()) return this.refreshAccessToken();
     throw new BlueAiApiError('Vui lòng đăng nhập để tiếp tục.', 401, 'AUTH_REQUIRED');
   }
 
   private async refreshAccessToken(): Promise<string> {
     if (this.refreshing) return this.refreshing;
     const refreshToken = this.refreshToken;
-    if (!refreshToken) {
+    if (!this.hasRefreshCredential()) {
       throw new BlueAiApiError('Phiên đăng nhập đã hết hạn.', 401, 'AUTH_REQUIRED');
     }
 
-    this.refreshing = this.request<AuthResponse>('/api/v1/auth/refresh', {
+    const version = this.sessionVersion;
+    const pending = this.request<AuthResponse>(this.authPath('refresh'), {
       method: 'POST',
-      body: JSON.stringify({ refreshToken }),
+      body: this.browserSession ? undefined : JSON.stringify({ refreshToken }),
     }).then((response) => {
+      if (version !== this.sessionVersion) throw new BlueAiApiError('Phiên đăng nhập đã thay đổi.', 401, 'AUTH_REQUIRED');
       this.applyAuthResponse(response);
       return response.accessToken;
     }).catch((error) => {
-      this.clearSession();
+      if (version === this.sessionVersion) this.clearSession();
       throw error;
     }).finally(() => {
-      this.refreshing = undefined;
+      if (this.refreshing === pending) this.refreshing = undefined;
     });
-
+    this.refreshing = pending;
     return this.refreshing;
   }
 
   private applyAuthResponse(response: AuthResponse): void {
     this.accessToken = response.accessToken;
-    this.refreshToken = response.refreshToken;
-    writeStoredTokens(response.accessToken, response.refreshToken);
+    this.refreshToken = this.browserSession ? undefined : response.refreshToken;
+    this.browserSessionAvailable = true;
+  }
+
+  private hasRefreshCredential(): boolean {
+    return Boolean(this.refreshToken || (this.browserSession && this.browserSessionAvailable));
+  }
+
+  private authPath(action: 'login' | 'refresh' | 'logout'): string {
+    return `/api/v1/auth/${this.browserSession ? 'browser/' : ''}${action}`;
   }
 
   private async request<T>(path: string, init: RequestInit, token?: string): Promise<T> {
@@ -668,10 +696,13 @@ export class BlueAiApi {
       headers.set('Content-Type', 'application/json');
     }
     if (token) headers.set('Authorization', `Bearer ${token}`);
+    const cookieAuth = this.browserSession && path.startsWith('/api/v1/auth/browser/');
+    if (cookieAuth) headers.set('X-BlueAI-Browser', '1');
 
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       ...init,
       headers,
+      credentials: cookieAuth ? 'include' : 'omit',
     });
     if (!response.ok) throw await readApiError(response);
     if (response.status === 204) return undefined as T;

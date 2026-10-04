@@ -10,12 +10,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.Map;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -50,6 +54,7 @@ class ConversationIntegrationTest {
     @BeforeEach
     @AfterEach
     void cleanDatabase() {
+        messageRepository.deleteAll();
         conversationRepository.deleteAll();
         refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
@@ -196,6 +201,59 @@ class ConversationIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response).get("id").asText();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"' OR '1'='1", "'; DROP TABLE app_users;--", "100%_literal", "\\%_escape"})
+    void sqlShapedTitlesAndSearchStayLiteralAndOwnerScoped(String payload) throws Exception {
+        String ownerToken = registerAndGetAccessToken("sql-owner@example.test");
+        String otherToken = registerAndGetAccessToken("sql-other@example.test");
+        String json = objectMapper.writeValueAsString(Map.of("title", payload));
+        for (String token : new String[]{ownerToken, otherToken}) {
+            mockMvc.perform(post("/api/v1/conversations").header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON).content(json))
+                    .andExpect(status().isCreated()).andExpect(jsonPath("$.title").value(payload));
+        }
+        mockMvc.perform(get("/api/v1/conversations/search").header("Authorization", "Bearer " + ownerToken).param("q", payload))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.items[0].title").value(payload));
+        assertThat(conversationRepository.count()).isEqualTo(2);
+        assertThat(userRepository.count()).isEqualTo(2);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{", "[]", "{\"title\":{\"nested\":\"object\"}}"})
+    void malformedConversationInputDoesNotPersistAnyRecord(String payload) throws Exception {
+        String token = registerAndGetAccessToken("invalid-json@example.test");
+        mockMvc.perform(post("/api/v1/conversations").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MALFORMED_JSON"));
+        assertThat(conversationRepository.count()).isZero();
+    }
+
+    @Test
+    void oversizedTitleAndInjectedOwnershipCannotChangeOwnerOrMessageRole() throws Exception {
+        String ownerToken = registerAndGetAccessToken("tamper-owner@example.test");
+        registerAndGetAccessToken("tamper-other@example.test");
+        String otherId = userRepository.findByEmail("tamper-other@example.test").orElseThrow().getId();
+        mockMvc.perform(post("/api/v1/conversations").header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("title", "a".repeat(151)))))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+        assertThat(conversationRepository.count()).isZero();
+        String body = mockMvc.perform(post("/api/v1/conversations").header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("title", "safe fixture", "ownerId", otherId,
+                                "role", "ADMIN", "status", "PUBLISHED", "id", "attacker-controlled"))))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String id = objectMapper.readTree(body).get("id").asText();
+        assertThat(id).isNotEqualTo("attacker-controlled");
+        assertThat(conversationRepository.findByIdAndOwner_Id(id,
+                userRepository.findByEmail("tamper-owner@example.test").orElseThrow().getId())).isPresent();
+        assertThat(conversationRepository.findByIdAndOwner_Id(id, otherId)).isEmpty();
+        mockMvc.perform(post("/api/v1/conversations/{id}/messages", id).header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"content\":\"safe fixture\",\"role\":\"ASSISTANT\",\"ownerId\":\"" + otherId + "\"}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.role").value("USER"));
     }
 
     private String userId(String token) {

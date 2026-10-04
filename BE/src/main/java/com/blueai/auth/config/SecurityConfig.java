@@ -57,6 +57,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/logout",
+                                "/api/v1/auth/browser/login",
+                                "/api/v1/auth/browser/refresh",
+                                "/api/v1/auth/browser/logout",
                                 "/api/v1/internal/documents/**",
                                 "/api/v1/widget/**",
                                 "/api/v1/runtime/**",
@@ -151,7 +154,7 @@ public class SecurityConfig {
         CorsConfiguration applicationConfiguration = new CorsConfiguration();
         applicationConfiguration.setAllowedOrigins(properties.getAllowedOrigins());
         applicationConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        applicationConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
+        applicationConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID", "X-BlueAI-Browser"));
         applicationConfiguration.setExposedHeaders(List.of("X-Request-ID"));
         applicationConfiguration.setAllowCredentials(true);
         applicationConfiguration.setMaxAge(3600L);
