@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/blueai-knowledge-banner.png" alt="BlueAI: tri thức doanh nghiệp kết nối tài liệu, hội thoại và luồng công việc" width="1200">
+</p>
+
 <h1 align="center">BlueAI Platform</h1>
 
 <p align="center">
