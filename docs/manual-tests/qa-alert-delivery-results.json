@@ -1,0 +1,6 @@
+{
+  "startedAt": "2026-10-03T02:27:39.0392354Z",
+  "finishedAt": "2026-10-03T02:28:40.7118360Z",
+  "result": "PASS",
+  "stage": "real-alertmanager-delivery-to-local-stub"
+}

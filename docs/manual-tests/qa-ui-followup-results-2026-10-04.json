@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-04",
+  "scope": "Browser interactions on http://localhost:23000; synthetic QA only",
+  "tests": [
+    {
+      "id": "SEC-01-user-message",
+      "result": "PASS",
+      "actual": "Literal img/script payload visible in the chat; zero img[onerror] and zero script nodes containing the injected marker.",
+      "evidence": "evidence-2026-10-04/11-literal-user-message-XSS-PASS.jpg"
+    },
+    {
+      "id": "SEC-01-node-and-assistant-preview",
+      "result": "PASS",
+      "actual": "Selected fallback node and sent unmatched input through Try It Out; literal payload shown in node heading, assistant response and trace. Zero injected image/script nodes. Bot was not activated.",
+      "evidence": "evidence-2026-10-04/12-dialog-preview-XSS-PASS.jpg"
+    },
+    {
+      "id": "KB-08-browser-oversized-file",
+      "result": "PASS",
+      "actual": "After loading the rebuilt frontend, selected a synthetic 21 MiB TXT file. Vietnamese 20 MiB limit toast appeared; document table remained unchanged. Unit test separately proves no network request is sent.",
+      "evidence": "evidence-2026-10-04/14-oversized-upload-toast-PASS.jpg"
+    }
+  ],
+  "limitations": "Representative payloads, not a universal XSS proof; no customer documents or paid provider calls in this UI follow-up. Older FAILED document retained as prior failure evidence."
+}

@@ -1,0 +1,43 @@
+{
+  "generatedAt": "2026-10-04T03:08:25.235Z",
+  "scope": "QA-only readiness and durable fixture checks after containers were restarted",
+  "services": [
+    {
+      "name": "auth-api",
+      "image": "sha256:7a82d2603a8690a6b800d500becf13a4a08102a66ddbffc5a817d5e54e603e55",
+      "health": "healthy"
+    },
+    {
+      "name": "rag-ai",
+      "image": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb",
+      "health": "healthy"
+    },
+    {
+      "name": "frontend",
+      "image": "sha256:8e7952c45a66d760e85bb455a83c610efe854a5e003f40f5f7dfbd8c65b4ff87",
+      "health": "healthy"
+    },
+    {
+      "name": "mysql",
+      "image": "sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb",
+      "health": "healthy"
+    },
+    {
+      "name": "redis",
+      "image": "sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf",
+      "health": "healthy"
+    }
+  ],
+  "document": {
+    "id": "b35c58bf-d447-47cb-90b5-583d82bb489a",
+    "status": "READY",
+    "chunks": 1
+  },
+  "durableConversation": "807d4bea-5bbd-49fc-aa1a-2c685675d6f2",
+  "previewBot": {
+    "id": "9ba41c8f-83d9-40d2-a39e-02eaf3349d4b",
+    "active": false,
+    "blueAiCoreEnabled": false
+  },
+  "result": "PASS"
+}

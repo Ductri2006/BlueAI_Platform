@@ -1,0 +1,99 @@
+# LOCAL QA ONLY. This is not a production deployment bundle.
+# Start with an explicit non-secret env-file; provider key is supplied from
+# process memory. Do not write the provider key into this file or a report.
+name: blueai-preprod-20261003
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: blueai_auth
+      MYSQL_USER: acceptance
+      MYSQL_PASSWORD: qa-disposable-database-password
+      MYSQL_ROOT_PASSWORD: qa-disposable-root-password
+    volumes: [mysql-data:/var/lib/mysql]
+    healthcheck:
+      test: [CMD, mysqladmin, ping, -h, localhost, -uroot, -pqa-disposable-root-password]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7.4-alpine
+    command: [redis-server, --save, "", --appendonly, "no"]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  rag-ai:
+    image: blueai-preprod-rag:fbc8179
+    environment:
+      PYTHON_DOTENV_DISABLED: "1"
+      GOOGLE_API_KEY: "${QA_ACCEPTANCE_PROVIDER_KEY:?Supply an approved QA provider key in process memory}"
+      GEMINI_CHAT_MODEL: gemini-3.5-flash-lite
+      GEMINI_CHAT_FALLBACK_MODELS: gemini-3.6-flash
+      GEMINI_EMBEDDING_MODEL: models/gemini-embedding-001
+      JAVA_API_BASE_URL: http://auth-api:8080
+      JAVA_WORKER_API_KEY: qa-disposable-worker-secret-20261003-only
+      RAG_INDEX_DIR: /app/.rag-index
+    ports: ["127.0.0.1:23800:8000"]
+    volumes: [rag-index:/app/.rag-index]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  auth-api:
+    image: blueai-preprod-api:fbc8179
+    environment:
+      SPRING_PROFILES_ACTIVE: qa
+      JAVA_TOOL_OPTIONS: -Xmx512m
+      DB_URL: jdbc:mysql://mysql:3306/blueai_auth?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: acceptance
+      DB_PASSWORD: qa-disposable-database-password
+      APP_JWT_SECRET: "${QA_ACCEPTANCE_JWT_SECRET:?Supply a random disposable JWT secret in process memory}"
+      APP_PUBLIC_REGISTRATION_ENABLED: "false"
+      APP_BOOTSTRAP_ADMIN_EMAIL: acceptance-admin@example.test
+      APP_BOOTSTRAP_ADMIN_PASSWORD: QaAcceptance2026!Fixture-Only
+      APP_BOOTSTRAP_ADMIN_FULL_NAME: QA Acceptance Admin
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:23000,http://127.0.0.1:23000,https://app.example.test
+      APP_WIDGET_ALLOWED_ORIGINS: http://localhost:23000,http://127.0.0.1:23000,https://widget.example.test
+      APP_DOCUMENT_STORAGE_DIR: /app/storage/documents
+      APP_WORKER_API_KEY: qa-disposable-worker-secret-20261003-only
+      APP_WIDGET_REDIS_ENABLED: "true"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      APP_WIDGET_REDIS_KEY_PREFIX: "blueai:acceptance:20261003:"
+      APP_WIDGET_CLIENT_KEY_SALT: qa-disposable-widget-salt-20261003-only
+      APP_WIDGET_TRUST_FORWARDED_HEADERS: "false"
+      APP_WIDGET_TRUSTED_PROXY_CIDRS: ""
+      APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE: "false"
+      APP_RAG_RETRIEVAL_BASE_URL: http://rag-ai:8000
+      APP_LLM_BASE_URL: http://rag-ai:8000
+      APP_LLM_API_KEY: internal-rag-service
+      APP_LLM_MODEL: gemini-3.5-flash-lite
+    ports: ["127.0.0.1:23081:8080"]
+    volumes: [documents:/app/storage]
+    healthcheck:
+      test: [CMD, wget, -q, -T, "3", -O, /dev/null, http://127.0.0.1:8080/actuator/health]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      rag-ai: {condition: service_healthy}
+  frontend:
+    image: blueai-preprod-frontend:fbc8179
+    ports: ["127.0.0.1:23000:80"]
+    healthcheck:
+      test: [CMD, wget, -q, -T, "3", -O, /dev/null, http://127.0.0.1/index.html]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      auth-api: {condition: service_healthy}
+volumes:
+  mysql-data:
+  documents:
+  rag-index:

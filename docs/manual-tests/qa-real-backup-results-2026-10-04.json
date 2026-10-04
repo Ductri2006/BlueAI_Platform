@@ -1,0 +1,25 @@
+{
+  "scope": "Owned disposable QA only; plaintext never for production",
+  "startedAt": "2026-10-03T21:35:42.7147098Z",
+  "result": "PASS",
+  "snapshotConsistency": "quiesced-api-and-rag",
+  "artifacts": [
+    {
+      "name": "mysql.sql",
+      "bytes": 281548,
+      "sha256": "20ee7e17650be35f371e953d77cb445830b0e56371d7a259bb741a30ccad5355"
+    },
+    {
+      "name": "documents.tar.gz",
+      "bytes": 968,
+      "sha256": "d3259305b4a3d7f0b303725d4bee22a7310bf15fb8c0ae04b5244d3a1f293a2b"
+    },
+    {
+      "name": "faiss-index.tar.gz",
+      "bytes": 403124,
+      "sha256": "5686f473e94e0e1f434db0bd9b6d77b066202a2db731e1e2c392991dcf15855d"
+    }
+  ],
+  "providerCalls": 0,
+  "finishedAt": "2026-10-03T21:36:09.8679257Z"
+}

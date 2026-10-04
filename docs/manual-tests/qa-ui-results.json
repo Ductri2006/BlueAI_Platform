@@ -1,0 +1,32 @@
+{
+  "commit": "fbc8179f4aefec489f971fe304d01e97077b7bb8",
+  "environment": "blueai-preprod-20261003 / http://localhost:23000 / qa profile",
+  "date": "2026-10-03",
+  "recordType": "Agent observation log, not an automated browser runner",
+  "data": "Synthetic QA only; no real customer records",
+  "observations": [
+    {"case": "AUTH-02", "result": "PARTIAL", "actual": "Empty login required-field validation; incorrect dummy password rejected. Malformed-email variant not recorded."},
+    {"case": "AUTH-03", "result": "PARTIAL", "actual": "Correct admin identity/navigation; documents and Custom opened. Not every admin workspace exercised."},
+    {"case": "AUTH-04", "result": "PASS", "actual": "USER login shows only chat workspace and own conversations.", "image": "evidence/06-user-role-boundary.png"},
+    {"case": "AUTH-07", "result": "PARTIAL", "actual": "Admin and USER logout return login; reload stays logged out. Back-navigation variant not recorded."},
+    {"case": "KB-01", "result": "FAIL", "actual": "Uploaded qa-sales-policy.md, document fecc5848-651f-46e4-9272-d4daa10ba8bc; processing ends FAILED, zero ready documents/chunks.", "image": "evidence/01-kb-ingestion-failed.png"},
+    {"case": "CTX-03", "result": "PASS", "actual": "A records Minh An 40 sales / 3 million VND per month / this month; follow-up recalls those facts.", "image": "evidence/02-current-context.png"},
+    {"case": "CTX-04", "result": "PASS", "actual": "New B in CURRENT mode cannot report A's facts before explicit linking."},
+    {"case": "CTX-05", "result": "PASS", "actual": "B links A and returns 40 sales / 3 million / this month with context-source trace.", "image": "evidence/03-linked-context.png"},
+    {"case": "CTX-06", "result": "PASS", "actual": "A changes to 50 sales / 5 million / next month. B retains 40 / 3 million / this month before snapshot refresh, and returns 50 / 5 million / next month after refresh.", "image": "evidence/04-refreshed-context.png"},
+    {"case": "CTX-07", "result": "PARTIAL", "actual": "Unlink removes A from linked list. Source deletion and prompt-source exclusion after unlink not exercised; B still has copied facts in its own history."},
+    {"case": "CTX-09", "result": "PARTIAL", "actual": "Manual synthetic USER-scoped formatting memory saved and listed. Status-change variant not exercised."},
+    {"case": "CTX-10", "result": "PARTIAL", "actual": "Synthetic memory disappears from UI after removal; prompt omission in a new session not exercised."},
+    {"case": "KB-05", "result": "PARTIAL", "actual": "With no READY knowledge document, holiday-policy question receives explicit lack-of-evidence response, no invented policy. Populated-KB case blocked."},
+    {"case": "DLG-05", "result": "PASS", "actual": "Complete request product A / 20 / Hanoi immediately summarizes and waits for confirmation."},
+    {"case": "DLG-06", "result": "PASS", "actual": "Change to 30 retains product A and Hanoi, waits for confirmation, trace DIALOG."},
+    {"case": "DLG-07", "result": "PARTIAL", "actual": "Confirmation branch explicitly says no CRM, pricing or real order. Rejection branch verified by API, not this UI sequence.", "image": "evidence/05-dialog-context-confirmed.png"},
+    {"case": "DLG-11", "result": "PASS", "actual": "Temporary welcome draft, attempt to switch workspace, Stay editing retains draft and selected editor."},
+    {"case": "DLG-12", "result": "PARTIAL", "actual": "Temporary text was restored to original before leaving via Discard. Reopen confirms original saved welcome and revision 3; arbitrary changed-draft discard variant not exercised."},
+    {"case": "SEC-01", "result": "PARTIAL", "actual": "XSS-shaped title renders literal text; read-only DOM shows zero matching onerror image nodes, no active JS dialog. Message/node variants not exercised."},
+    {"case": "OPS-03", "result": "PARTIAL", "actual": "After QA restart, own conversation titles, bot revision and FAILED document record remain; all services healthy. Durable READY index cannot be validated due KB-01 failure."}
+  ],
+  "realProviderChatRequests": 8,
+  "providerLoadTesting": false,
+  "notes": "Morning context/KB observations and afternoon continuation belong to the same commit. UI pass and API pass are separate evidence; this file does not declare every whole manual case passed."
+}

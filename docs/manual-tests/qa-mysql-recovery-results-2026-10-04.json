@@ -1,0 +1,60 @@
+[
+  {
+    "stage": "full-backend-verify-before-mysql",
+    "counts": {
+      "tests": 360,
+      "skipped": 29,
+      "suites": 54,
+      "errors": 0,
+      "failures": 0
+    }
+  },
+  {
+    "exitCode": 0,
+    "counts": {
+      "tests": 1,
+      "skipped": 0,
+      "suites": 1,
+      "errors": 0,
+      "failures": 0
+    },
+    "stage": "mysql84-migrations-nonutc"
+  },
+  {
+    "exitCode": 0,
+    "counts": {
+      "tests": 45,
+      "skipped": 0,
+      "suites": 4,
+      "errors": 0,
+      "failures": 0
+    },
+    "stage": "mysql84-auth-and-ai-concurrency-nonutc"
+  },
+  {
+    "exitCode": 0,
+    "counts": {
+      "tests": 1,
+      "skipped": 0,
+      "suites": 1,
+      "errors": 0,
+      "failures": 0
+    },
+    "stage": "flyway1172-seed"
+  },
+  {
+    "exitCode": 0,
+    "counts": {
+      "tests": 1,
+      "skipped": 0,
+      "suites": 1,
+      "errors": 0,
+      "failures": 0
+    },
+    "stage": "flyway11203-upgrade"
+  },
+  {
+    "stage": "real-backend-process-crash-recovery",
+    "exitCode": 0
+  }
+]

@@ -1,0 +1,72 @@
+{
+  "scope": "Disposable QA only; no provider calls",
+  "startedAt": "2026-10-03T21:27:28.211Z",
+  "tests": [
+    {
+      "id": "AUTH-05-expiry",
+      "name": "Correctly signed but expired access JWT is rejected",
+      "result": "SUPERSEDED",
+      "note": "Original negative response used the wrong signing-key representation and is not expiry evidence. Use the HTTP 200 valid-signature control and HTTP 401 expired-signature control in qa-session-edge-results-2026-10-04.json instead. The harness source has been corrected."
+    },
+    {
+      "id": "AUTH-08-pagination",
+      "name": "Admin paging, name search, ACTIVE/DISABLED and includeDeleted filters",
+      "result": "PASS"
+    },
+    {
+      "id": "AUTH-10-includeDeleted",
+      "name": "Deleted account excluded by default and visible only in explicit deleted filter",
+      "result": "PASS"
+    },
+    {
+      "id": "CTX-11-duplicate",
+      "name": "Duplicate links are rejected without changing the existing snapshot",
+      "result": "PASS"
+    },
+    {
+      "id": "KB-02-filter",
+      "name": "Document READY/FAILED search, status filters and invalid page limits",
+      "result": "PASS"
+    },
+    {
+      "id": "DLG-01-starter",
+      "name": "Starter template creates isolated draft with default entities/intents",
+      "result": "PASS"
+    },
+    {
+      "id": "API-01-unpublished",
+      "name": "Unpublished and unknown public widget keys cannot create sessions",
+      "result": "PASS"
+    },
+    {
+      "id": "DLG-09-unknown-product",
+      "name": "Unknown product does not become a confirmed quote slot",
+      "result": "PASS"
+    },
+    {
+      "id": "AUTH-browser-CSRF",
+      "name": "Live cookie auth rejects missing marker and hostile Origin before issuing cookies",
+      "result": "PASS"
+    },
+    {
+      "id": "CTX-08-fixtures",
+      "name": "Create owned matching/unrelated histories and a separate fresh target for UI automatic recall",
+      "result": "PASS"
+    }
+  ],
+  "fixtures": {
+    "uiExpiryUser": {
+      "id": "bc8b92f7-02c0-43d3-8e88-8ef40826db4a",
+      "email": "qa-ui-expiry-muswkqfn@example.test"
+    },
+    "automaticSource": "1b887193-0986-4ce6-8b23-02490066130a",
+    "unrelatedSource": "326dbe2d-8539-40a1-b0c4-74bfc6e7f910",
+    "automaticTarget": "e36da99f-96d6-4bd6-a3b6-35ba048008ab"
+  },
+  "finishedAt": "2026-10-03T21:27:29.002Z",
+  "counts": {
+    "pass": 9,
+    "fail": 0,
+    "superseded": 1
+  }
+}

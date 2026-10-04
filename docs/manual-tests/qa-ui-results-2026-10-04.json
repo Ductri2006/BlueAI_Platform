@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-04",
+  "environment": "blueai-preprod-20261003 / http://localhost:23000 / qa profile",
+  "recordType": "Agent UI observation record; not an automated browser runner",
+  "scope": "Uncommitted working-tree remediation with synthetic data only",
+  "observations": [
+    { "case": "AUTH-02", "result": "PASS", "actual": "Malformed email without @ rejected by native browser form validation; empty/wrong-password evidence retained from baseline." },
+    { "case": "AUTH-03", "result": "PASS", "actual": "ADMIN identity/navigation; Chat, Documents, Custom, Token Gemini and System Admin loaded with real QA API data.", "image": "evidence-2026-10-04/09-admin-dashboard-runtime.jpg" },
+    { "case": "AUTH-04", "result": "PASS", "actual": "USER only sees chat and own customer/gardening/retest conversations, no admin workspaces." },
+    { "case": "AUTH-05", "result": "PASS", "actual": "Disabled exact disposable USER during an authenticated UI session. Context button triggers protected 401/refresh failure, reload clears old workspace and shows login. User re-enabled afterward. This is revocation, not a claim of waiting 30 days for cookie expiry.", "image": "evidence-2026-10-04/07-terminal-session-invalidation.jpg" },
+    { "case": "AUTH-07", "result": "PASS", "actual": "Logout/reload stays logged out; browser back reaches about:blank and forward returns login, not private cached workspace." },
+    { "case": "KB-01", "result": "PASS", "actual": "UI upload qa-sales-policy.md produced READY/1 chunk; source 61b78d0d-ae15-4743-a0e9-a91d6aed2d7b. After delete test, uploaded a new READY replacement b35c58bf-d447-47cb-90b5-583d82bb489a.", "image": "evidence-2026-10-04/15-ready-document-reloaded-for-handoff.jpg" },
+    { "case": "KB-02", "result": "PASS", "actual": "UI refresh and search by replacement ID show actual READY/1 chunk. API status/paging evidence is separate; not a claim of a paginated/filter-by-status UI." },
+    { "case": "KB-03", "result": "PASS", "actual": "Fresh chat after RAG/API replacement answers Standard 1.250.000 VND/month and 25 sales with real document citation.", "image": "evidence-2026-10-04/12-kb-citation-after-rag-restart.jpg" },
+    { "case": "KB-04", "result": "PASS", "actual": "Opened evidence panel: exact document ID, chunk :0, qa-sales-policy.md, original passage, verified READY at retrieval.", "image": "evidence-2026-10-04/13-verified-document-chunk.jpg" },
+    { "case": "KB-05", "result": "PASS", "actual": "With populated KB, holiday-policy question gets no invented policy and explicit lack of evidence.", "image": "evidence-2026-10-04/05-no-invented-holiday-policy.jpg" },
+    { "case": "KB-12", "result": "PASS", "actual": "After API soft-delete of the exact original fixture, NEW current-only UI chat has no source and no invented price. New replacement upload happened only after preserving negative evidence.", "image": "evidence-2026-10-04/14-deleted-document-not-cited.jpg" },
+    { "case": "CTX-03", "result": "PASS", "actual": "Sales follow-up retains Aurora 40 sales / 3 million VND, selects Pro 2.5 million with document citation.", "image": "evidence-2026-10-04/02-follow-up-context.jpg" },
+    { "case": "CTX-04", "result": "PASS", "actual": "Independent CURRENT-only conversation cannot report previous Aurora facts before linking." },
+    { "case": "CTX-05", "result": "PASS", "actual": "Linked snapshot recalls Aurora facts and combines them with KB pricing/deployment evidence.", "image": "evidence-2026-10-04/04-linked-context-and-knowledge-base.jpg" },
+    { "case": "CTX-08-before", "result": "FAIL", "actual": "Automatic lookup missed QATarvos source; provider hallucinated 15 sales / 50.000 USD / OP-88219. Failure saved before soft-deleting only the failed QA target.", "image": "evidence-2026-10-04/06-automatic-context-before-fix-FAIL.jpg" },
+    { "case": "CTX-08-after", "result": "PASS", "actual": "Fresh independent RELEVANT_HISTORY conversation returns 37 sales / 2.9 million VND / TV-4712, traces correct owned source and excludes gardening notes. Reload preserves answer and source.", "image": "evidence-2026-10-04/08-automatic-context-after-fix-PASS.jpg" },
+    { "case": "DLG-11", "result": "PASS", "actual": "Change real unsaved role text, attempt workspace switch, Stay editing keeps changed text and dirty state.", "image": "evidence-2026-10-04/10-dialog-cancel-preserves-unsaved-draft.jpg" },
+    { "case": "DLG-12", "result": "PASS", "actual": "Discard genuinely changed draft, reopen same QA bot: original Trợ lý BlueAI and saved revision3, clean state. No save/publish performed.", "image": "evidence-2026-10-04/11-dialog-discard-restores-saved-configuration.jpg" },
+    { "case": "SEC-06", "result": "PASS", "actual": "Cookie-based reload restores authorized workspace; terminal revocation clears workspace; CSP errors not recorded on opened QA pages. Cookie flags/storage policy also verified by separate API/unit/source evidence." },
+    { "case": "OPS-03", "result": "PASS", "actual": "New API/RAG images become healthy; persisted document is retrievable with valid citation after restart, history/config restored. FE image also replaced earlier in the remediation." }
+  ],
+  "realProviderUiChatRequestsThisRound": 9,
+  "providerLoadTesting": false,
+  "notes": "Provider count describes explicitly observed UI chat submissions, not embedding calls or a billing total. UI PASS is not a claim of every browser/real-production variant. See cumulative 90-case ledger for incomplete cases."
+}

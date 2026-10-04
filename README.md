@@ -101,6 +101,14 @@ API widget/runtime là public nhưng không phải không giới hạn: mỗi IP
 
 CORS của API đăng nhập dùng `APP_CORS_ALLOWED_ORIGINS`. CORS của widget dùng `APP_WIDGET_ALLOWED_ORIGINS` (mặc định `*` vì widget public, không dùng browser credentials); khi nhúng trên production nên đặt thành danh sách domain cụ thể, phân tách bằng dấu phẩy.
 
+Frontend dùng refresh cookie HttpOnly qua `/api/v1/auth/browser/*`, access token
+chỉ ở bộ nhớ. Khi nâng từ bản lưu token trong localStorage, người dùng phải
+đăng nhập lại. Production cần HTTPS và Origin cấu hình chính xác; khuyến nghị
+FE/API cùng origin. CSP mặc định chỉ cho kết nối cùng origin: nếu cấu hình
+`VITE_API_BASE_URL` khác origin, phải review và thêm đúng origin vào `connect-src`
+của `FE/security-headers.conf`, không mở wildcard. Tailwind 3 được giữ nguyên
+theo quyết định hiện tại; cảnh báo dependency build chưa được xử lý bằng nâng v4.
+
 Hướng dẫn deploy production đầy đủ (secret, CORS, Redis, proxy CIDR, Nginx edge limit, WAF và staging) nằm tại [`BE/PRODUCTION_DEPLOYMENT.md`](BE/PRODUCTION_DEPLOYMENT.md). Production dùng `BE/compose.production.yaml`, không expose Java API, MySQL hoặc RAG ra host.
 
 Các API chính:

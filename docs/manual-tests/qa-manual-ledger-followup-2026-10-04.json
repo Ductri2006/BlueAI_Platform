@@ -1,0 +1,712 @@
+{
+  "baseCommit": "fbc8179f4aefec489f971fe304d01e97077b7bb8",
+  "branch": "feature/conversation-context",
+  "scope": "90-case cumulative local acceptance; working tree uncommitted",
+  "generatedAt": "2026-10-04T03:08:49.660Z",
+  "decision": "NO-GO for production; ready for manual QA review",
+  "counts": {
+    "PARTIAL": 8,
+    "PASS": 73,
+    "NOT RUN": 8,
+    "FAIL": 1,
+    "BLOCKED": 0
+  },
+  "previousCounts": {
+    "PASS": 65,
+    "PARTIAL": 16,
+    "FAIL": 1,
+    "BLOCKED": 0,
+    "NOT RUN": 8
+  },
+  "evidenceNote": "Cumulative 90 original criteria. Carry-forward results are not new UI runs. Initial failed Redis drill and retest retained; final corrected drill PASS.",
+  "cases": [
+    {
+      "id": "REL-01",
+      "result": "PARTIAL",
+      "actual": "Ba image working-tree đã build/test; bản vá chưa commit/push và chưa có release registry/approval. Image IDs và source hashes được lưu, không nhận là release hoàn chỉnh.",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "REL-02",
+      "result": "PASS",
+      "actual": "3 Dockerfile builds succeeded; exact running API/RAG/FE image IDs scanned for secrets with zero candidates.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04",
+      "provenance": "qa-image-secrets-followup-2026-10-04.json"
+    },
+    {
+      "id": "REL-03",
+      "result": "PASS",
+      "actual": "Fresh QA tới V9, Hibernate validate, 5 services healthy",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "REL-04",
+      "result": "PASS",
+      "actual": "N: 3 health gates 200; không chứng minh ingestion READY",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "REL-05",
+      "result": "PASS",
+      "actual": "O: production Compose validation với secret giả",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "REL-06",
+      "result": "PARTIAL",
+      "actual": "Backend negative configuration tests đạt; chưa startup prod staging thật",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "REL-07",
+      "result": "NOT RUN",
+      "actual": "Chưa registry release approval/digest/schema fingerprint máy đích",
+      "previousResult": "NOT RUN",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "REL-08",
+      "result": "NOT RUN",
+      "actual": "Chưa đo VPS/disk/headroom",
+      "previousResult": "NOT RUN",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "AUTH-01",
+      "result": "PASS",
+      "actual": "A: protected 401; U logout về login",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "AUTH-02",
+      "result": "PASS",
+      "actual": "UI trống/sai credential từ lượt trước; UI malformed email bị native validation chặn trong lượt Oct4.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "AUTH-03",
+      "result": "PASS",
+      "actual": "UI ADMIN mở đủ Chat, Documents, Custom, Token Gemini và Quản trị; runtime ready, đúng role. Không có cảnh báo CSP ghi nhận ở các trang đã mở.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "AUTH-04",
+      "result": "PASS",
+      "actual": "U chỉ chat; A admin/Studio/docs/system 403",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "AUTH-05",
+      "result": "PASS",
+      "actual": "API JWT hợp lệ control 200 / chữ ký tương tự nhưng expired 401; UI tài khoản bị disable → protected request/refresh 401 → xóa workspace, về login. Không mô tả đây là chờ cookie 30 ngày tự hết hạn.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "AUTH-06",
+      "result": "PASS",
+      "actual": "A refresh rotation/replay từ chối",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "AUTH-07",
+      "result": "PASS",
+      "actual": "API logout revoke/refresh replay; UI logout/reload và back→about:blank/forward→login không khôi phục workspace cũ.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "AUTH-08",
+      "result": "PASS",
+      "actual": "API tạo user, tìm email/name, paging và ACTIVE/DISABLED; response không credential. UI danh sách admin tải được; không khẳng định UI có search/paging riêng.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "AUTH-09",
+      "result": "PASS",
+      "actual": "A reset fixture, old login/JWT/refresh vô hiệu, new login đạt",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "AUTH-10",
+      "result": "PASS",
+      "actual": "API disable/soft-delete/login từ chối; includeDeleted/filter đã chạy. UI disable giữa phiên xử lý terminal 401 đúng; fixture này đã bật lại.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "AUTH-11",
+      "result": "PASS",
+      "actual": "O real ingress 429 JSON/Retry-After, OPTIONS/no-backend guard",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "AUTH-12",
+      "result": "PASS",
+      "actual": "A retired public registration/password routes bị chặn",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "CTX-01",
+      "result": "PASS",
+      "actual": "API 6 hội thoại/3 trang không thiếu/trùng, navigation đúng, USER B thấy 0; UI reload giữ lịch sử. Bài paging không gọi provider.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "CTX-02",
+      "result": "PASS",
+      "actual": "A cross-user get/messages/context/delete/memory bị chặn",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "CTX-03",
+      "result": "PASS",
+      "actual": "U real-provider recall trong A đúng 40 / 3 triệu",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "CTX-04",
+      "result": "PASS",
+      "actual": "U B CURRENT không tự lấy A",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "CTX-05",
+      "result": "PASS",
+      "actual": "U link A → B, snapshot/trace/dữ kiện đúng",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "CTX-06",
+      "result": "PASS",
+      "actual": "U trước/sau refresh: 40/3 → 50/5 đúng, không snapshot drift",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "CTX-07",
+      "result": "PASS",
+      "actual": "UI unlink ở baseline; integration H2 xóa nguồn liên kết và kiểm request provider mới không chứa snapshot/source đã xóa. Không xóa dữ kiện đã chép vào history đích.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "CTX-08",
+      "result": "PASS",
+      "actual": "UI provider thật trước sửa FAIL, sau sửa đúng QATarvos 37/2.9 triệu/TV-4712 ở phiên độc lập; RELATED_HISTORY đúng owner, ghi chú làm vườn bị loại, reload giữ kết quả.",
+      "previousResult": "NOT RUN",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "CTX-09",
+      "result": "PASS",
+      "actual": "API/UI memory owner/scope; integration xác nhận CONFIRMED được dùng, PROPOSED/REPLACED/expired/scope phiên khác không vào request provider.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "CTX-10",
+      "result": "PASS",
+      "actual": "Integration qua controller/H2 xóa memory rồi tạo phiên độc lập: nội dung và key đã xóa vắng trong request provider. Không giả nhận là chat provider trả tiền.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "CTX-11",
+      "result": "PASS",
+      "actual": "API self/cross-user/bad mode và duplicate link 409, snapshot hiện có không đổi.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "CTX-12",
+      "result": "PASS",
+      "actual": "Integration 100 tin nhắn persist + summary oversized: <=20 history entries, <=6500 ký tự history, summary <=3000; giữ correction mới nhất, API latest100. Kiểm MockRestServiceServer, không phải 100 lượt chat model thật.",
+      "previousResult": "NOT RUN",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "KB-01",
+      "result": "PASS",
+      "actual": "UI upload tài liệu mẫu READY/1 chunk; regression non-root/staging/rollback sửa lỗi FAILED cũ. Upload lại sau tombstone test cũng READY.",
+      "previousResult": "FAIL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "KB-02",
+      "result": "PASS",
+      "actual": "API search READY/FAILED và limits/paging; UI search theo ID, reload READY/1 chunk phản ánh API. UI không có status filter/paging riêng để khẳng định.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "KB-03",
+      "result": "PASS",
+      "actual": "UI Standard sau restart: 1.250.000 VND/tháng, 25 sales, source document 61b78d0d-ae15-4743-a0e9-a91d6aed2d7b.",
+      "previousResult": "BLOCKED",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "KB-04",
+      "result": "PASS",
+      "actual": "UI evidence panel tên qa-sales-policy.md, ID/chunk :0, đoạn gốc và READY tại truy xuất; không chỉ marker S1.",
+      "previousResult": "BLOCKED",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "KB-05",
+      "result": "PASS",
+      "actual": "UI cả KB rỗng (baseline) và có READY document: không tự bịa chính sách ngày lễ; nói thiếu căn cứ.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "KB-06",
+      "result": "PASS",
+      "actual": "A USER docs upload/read bị 403",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "KB-07",
+      "result": "PASS",
+      "actual": "28 upload integration executions include empty/type/path/spoof/binary/ZIP bounds; real ingress fake PDF/DOCX/TXT returns 400 before DB/ingest.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04",
+      "provenance": "qa-followup-api-results-final-2026-10-04.json"
+    },
+    {
+      "id": "KB-08",
+      "result": "PASS",
+      "actual": "Real ingress accepts 2/20 MiB, rejects 21 MiB with 413; Java actual-byte bounds and browser Vietnamese 20 MiB toast verified, client no-network regression passes.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04",
+      "provenance": "qa-ui-followup-results-2026-10-04.json"
+    },
+    {
+      "id": "KB-09",
+      "result": "PASS",
+      "actual": "N invalid chunk size/overlap 400",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "KB-10",
+      "result": "PASS",
+      "actual": "8 worker integration tests include expired/new attempt 409, deleted-document result 409 and bounded retry; private key/claim validation evidence retained.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04",
+      "provenance": "BE/target/surefire-reports/TEST-com.blueai.rag.document.controller.WorkerDocumentIntegrationTest.xml"
+    },
+    {
+      "id": "KB-11",
+      "result": "PASS",
+      "actual": "3 failed attempts end FAILED, stale READY cannot overwrite; RAG tests cover empty extraction, provider exception redaction, timeout/HTTP status and 409 continuation. Representative deterministic regression, not live paid-provider chaos.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04",
+      "provenance": "feature-rag-chatbot/rag-chatbot/tests/test_ingestion_security.py"
+    },
+    {
+      "id": "KB-12",
+      "result": "PASS",
+      "actual": "Exact QA fixture DELETE204/GET404/list absent; phiên mới không cite/không đoán giá; đọc FAISS xác nhận vector cũ vắng. Bản mẫu mới được upload lại sau khi đã lưu negative evidence.",
+      "previousResult": "BLOCKED",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "DLG-01",
+      "result": "PASS",
+      "actual": "API Sales 3 intents/4 entities/13 nodes/Core off và Starter mới; UI cấu hình/reload. Chỉ bot QA, không áp dụng bot cho hệ thống thật.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "DLG-02",
+      "result": "PASS",
+      "actual": "A greeting; U welcome nêu demo scope",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-03",
+      "result": "PASS",
+      "actual": "A missing slot + 3 branches/Sài Gòn synonym",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-04",
+      "result": "PASS",
+      "actual": "A 3-slot multi-turn và interpolated summary",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-05",
+      "result": "PASS",
+      "actual": "A/U đủ slot một lượt, không hỏi dư",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-06",
+      "result": "PASS",
+      "actual": "A/U 20→30 giữ sản phẩm/chi nhánh, DIALOG",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-07",
+      "result": "PASS",
+      "actual": "A confirm/reject khác nhau; U confirm no real transaction",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-08",
+      "result": "PASS",
+      "actual": "A early agreement vẫn phải confirm sau summary",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-09",
+      "result": "PASS",
+      "actual": "API unknown quantity35/cancel reset và sản phẩm lạ không thành confirmed slot.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "DLG-10",
+      "result": "PASS",
+      "actual": "A configured fallback, không AI/KB",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-11",
+      "result": "PASS",
+      "actual": "U changed draft → workspace → Cancel giữ draft",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-12",
+      "result": "PASS",
+      "actual": "UI đổi role text thật → Cancel giữ draft → Discard → reopen đúng role gốc và revision3; không save/publish draft.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "DLG-13",
+      "result": "PASS",
+      "actual": "A stale revision 409/không overwrite",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-14",
+      "result": "PASS",
+      "actual": "API 7 invalid saves parent/self-cycle/two-node jump cycle/slot/entity/intent/jump unknown đều400; deep equality toàn cấu hình/revision không đổi. 43 validator unit tests cũng đạt.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "DLG-15",
+      "result": "PASS",
+      "actual": "A other admin read/save/publish 404",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "DLG-16",
+      "result": "PASS",
+      "actual": "A old widget session vẫn release cũ sau republish",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "API-01",
+      "result": "PASS",
+      "actual": "API published welcome/release, unpublished và unknown key bị404.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "API-02",
+      "result": "PASS",
+      "actual": "API thiếu/sai/cross-session401; expired token410 theo contract với valid-control200, không coi410 là lỗi ứng dụng.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "API-03",
+      "result": "PASS",
+      "actual": "A replay exact response với cùng requestId/body",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "API-04",
+      "result": "PASS",
+      "actual": "A đổi body cùng key conflict",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "API-05",
+      "result": "PASS",
+      "actual": "A repeated content/new key 429/Retry-After",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "API-06",
+      "result": "PARTIAL",
+      "actual": "N shared-IP across 3 sessions/XFF spoof chặn request 31; session/quota multi-IP chưa đủ Follow-up Redis outage returns 503 for new work, completed replay remains 200; recovery in 9742 ms and session quota 429 verified. Full quota/IP variants remain PARTIAL.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun.",
+      "provenance": "qa-followup-api-results-final-2026-10-04.json"
+    },
+    {
+      "id": "API-07",
+      "result": "PASS",
+      "actual": "A allowlist/preflight unknown origin 403/no credential wildcard",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "API-08",
+      "result": "PASS",
+      "actual": "A public response không lộ internal context/trace/intent",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "API-09",
+      "result": "PASS",
+      "actual": "API capability/unknown field/revoke, owned READY allowlist201/cross-admin400; không thực thi task có provider.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "API-10",
+      "result": "PASS",
+      "actual": "M task auth/concurrency/recovery; provider giả không bị duplicate replay",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "SEC-01",
+      "result": "PASS",
+      "actual": "Prior title evidence plus real browser user message/node/assistant preview render literal HTML; zero injected marker image/script DOM nodes. 12 SSR payload regression executions also pass.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04",
+      "provenance": "qa-ui-followup-results-2026-10-04.json"
+    },
+    {
+      "id": "SEC-02",
+      "result": "PARTIAL",
+      "actual": "A malformed/oversized title; N owner/role/status không thay quyền; chưa mọi input schema",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "SEC-03",
+      "result": "PASS",
+      "actual": "Conversation integration tests verify four SQL-shaped title/search inputs, literal wildcard escaping, owner isolation, intact users and server-generated identity. No claim about arbitrary future endpoints.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04",
+      "provenance": "BE/target/surefire-reports/TEST-com.blueai.rag.conversation.controller.ConversationIntegrationTest.xml"
+    },
+    {
+      "id": "SEC-04",
+      "result": "PARTIAL",
+      "actual": "S HEAD/history redacted scan; fixture/real review và revocation/artifact scan chưa đủ",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "SEC-05",
+      "result": "FAIL",
+      "actual": "API và FE runtime image0HIGH/0CRITICAL; RAG0PythonHIGH/0CRITICAL nhưng45OSHIGH (1fixavailable), npm all5HIGH build-chain Tailwind3. User hoãn v4. Không suppress/ignore để lấy PASS.",
+      "previousResult": "FAIL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "SEC-06",
+      "result": "PASS",
+      "actual": "Nginx live headers cả lỗi429; access token RAM, refresh HttpOnly/SameSite Strict cookie, prod Secure, Origin+marker CSRF; FE106 tests và UI restore/revoke/logout đạt. HTTPS staging là OPS09 chưa chạy.",
+      "previousResult": "FAIL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "OPS-01",
+      "result": "PASS",
+      "actual": "Verified legacy V1/V3 fixtures migrate directly to V9 retaining data/checksums, validate and rerun no-op; combine with earlier fresh/V5/V6/old-engine evidence, not rerun claims.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04",
+      "provenance": "qa-verification-summary-followup-2026-10-04.json"
+    },
+    {
+      "id": "OPS-02",
+      "result": "PASS",
+      "actual": "Probe dùng chính URL Compose: MySQL global+07 nhưng từng connection được ép+00, driver9.7.0. Disposable fixture đã dọn.",
+      "previousResult": "FAIL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "OPS-03",
+      "result": "PASS",
+      "actual": "Thay API/RAG image và restart FE QA; history/config/READY persisted FAISS dùng được, UI Standard/citation đúng sau restart, tất cả5services healthy.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "OPS-04",
+      "result": "PASS",
+      "actual": "M real process kill/expire/replay/fresh task đạt",
+      "previousResult": "PASS",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "OPS-05",
+      "result": "PASS",
+      "actual": "Quiesced snapshot SQL27tables/documents/FAISS34vectors restore isolated đúng dữ liệu; failure-injection fail-closed regression đạt; plaintext test temps đã dọn. Off-host/encryption/RPO thuộc OPS12 chưa chạy.",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "OPS-06",
+      "result": "PARTIAL",
+      "actual": "O 18 offline deploy/rollback cases; chưa actual production promotion",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "OPS-07",
+      "result": "PARTIAL",
+      "actual": "O real alert tới stub/private block/rules; chưa production scrape/webhook team",
+      "previousResult": "PARTIAL",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "OPS-08",
+      "result": "PARTIAL",
+      "actual": "Thay Promtail bằng Alloy pinned; native validate + Loki live/redaction/owner project/nested-flat ECS/fresh logs cả2formats sau restart đạt. Retention168h là config, chưa quan sát đủ7ngày; lifecycle/version/monitoring images cần rà định kỳ.",
+      "previousResult": "FAIL",
+      "evidenceDate": "2026-10-04"
+    },
+    {
+      "id": "OPS-09",
+      "result": "NOT RUN",
+      "actual": "Chưa domain/TLS/firewall/HTTPS staging",
+      "previousResult": "NOT RUN",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "OPS-10",
+      "result": "NOT RUN",
+      "actual": "Chưa 2 IP thật sau trusted proxy/CDN",
+      "previousResult": "NOT RUN",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "OPS-11",
+      "result": "NOT RUN",
+      "actual": "Chưa load/soak/capacity VPS",
+      "previousResult": "NOT RUN",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "OPS-12",
+      "result": "NOT RUN",
+      "actual": "Chưa encrypted off-host backup/RPO/RTO/on-call drill",
+      "previousResult": "NOT RUN",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "OPS-13",
+      "result": "NOT RUN",
+      "actual": "Chưa billing cap/provider prod 429/timeout/5xx acceptance",
+      "previousResult": "NOT RUN",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    },
+    {
+      "id": "OPS-14",
+      "result": "NOT RUN",
+      "actual": "Chưa team approval/promotion/writer drain/rollback V9 compatibility",
+      "previousResult": "NOT RUN",
+      "evidenceDate": "2026-10-03",
+      "note": "Original criterion/evidence retained; not an assertion that every UI variant was rerun."
+    }
+  ]
+}

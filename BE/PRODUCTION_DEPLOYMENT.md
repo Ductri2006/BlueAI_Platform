@@ -205,8 +205,12 @@ và kiểm tra theo thứ tự:
 
 8. Gửi `X-Forwarded-For` giả từ ngoài proxy: không đổi quota client. Test cả
    source trong trusted CIDR và source ngoài CIDR.
-9. Dừng Redis có chủ ý ở staging: log/metric `redis_fallback` xuất hiện; khôi
-   phục Redis rồi xác nhận metric không tiếp tục tăng và shared state hoạt động.
+9. Dừng Redis có chủ ý ở staging: request widget mới phải nhận `503`
+   `WIDGET_PROTECTION_UNAVAILABLE`, không chuyển quota sang bộ đếm từng instance
+   và không gọi provider. Log/metric `redis_fallback` (tên metric giữ tương thích)
+   ghi nhận sự cố; requestId đã hoàn tất có thể replay từ database mà không gọi AI.
+   Khôi phục Redis rồi xác nhận quota dùng chung hoạt động lại. Chế độ local chỉ
+   dùng bộ đếm RAM khi Redis được tắt rõ ràng; tối đa 10.000 key còn sống.
 10. Xác nhận auth-api/MySQL/RAG không có host port trong `docker compose ps`;
     `/actuator/metrics` không đi qua frontend public.
 
@@ -360,19 +364,29 @@ không đưa vào Git/log. Script từ chối overwrite `.env.next` nếu thiế
 
 ## 8. Monitoring, log aggregation và alerting
 
-Production compose thêm Prometheus, Alertmanager, Loki và Promtail; các service
-này không bind host port. Vì Promtail đọc Docker JSON logs qua host Docker
+Production compose thêm Prometheus, Alertmanager, Loki và Grafana Alloy; các service
+này không bind host port. Vì Alloy đọc Docker JSON logs qua host Docker
 socket, relabel rule đầu tiên chỉ giữ container có Compose project `blueai-auth`
 và loại các project khác trước khi ship log. Loki gắn nhãn project/service/level/logger;
 ECS `log.level` và `log.logger` được trích xuất, còn `trace.id` giữ trong JSON body
-để tránh label cardinality cao. Loki giữ 7 ngày trong volume. Truy cập công cụ
+để tránh label cardinality cao. Alloy hỗ trợ cả ECS nested object và field tên
+literal `log.level`; pipeline che Bearer/token/password trước khi gửi. Loki cấu
+hình retention 7 ngày trong volume; phải xác minh compactor/expiry trên staging,
+không coi config là bằng chứng đã quan sát xóa dữ liệu sau 7 ngày. Truy cập công cụ
 quan sát qua private network hoặc SSH tunnel.
 
-Kiểm tra allowlist Promtail offline (bao gồm fixture project ngoài stack):
+Kiểm tra Alloy static và ingestion thật trên fixture (không gửi tới Loki thật):
 
 ```powershell
-node .\ops\test-promtail-config.mjs
+node .\ops\test-alloy-config.mjs
+node .\ops\test-alloy-ingestion.mjs
 ```
+
+Alloy dùng volume `blueai-alloy-data` riêng, không tái sử dụng positions Promtail.
+File Promtail/test cũ chỉ là tham chiếu lịch sử, không được Production Compose
+sử dụng. Chuyển collector có thể tạo một lần replay log; review retention, disk,
+rate và dashboard trước rollout. Bind Docker socket `:ro` không chặn Docker API
+ghi: cần review quyền host/socket proxy trên staging. Không mở cổng Alloy ra public.
 
 Ops chọn management scrape private thay vì giữ JWT tĩnh: auth agent cần permit
 riêng `/actuator/prometheus` trên Docker monitoring network; `/actuator/metrics`
@@ -419,7 +433,7 @@ Alertmanager API và assert stub nhận payload; production Alertmanager có th�
 
 ```powershell
 docker compose -f compose.yaml -f compose.production.yaml ps
-docker compose -f compose.yaml -f compose.production.yaml logs --tail=100 prometheus alertmanager loki promtail
+docker compose -f compose.yaml -f compose.production.yaml logs --tail=100 prometheus alertmanager loki alloy
 ```
 
 ## 9. Staging load và security E2E
@@ -499,7 +513,7 @@ Script tự dọn container/network test; không dùng credential hoặc gọi G
 `node BE/ops/test-production-compose.mjs` kiểm tra Compose bằng credential giả
 và không in cấu hình chứa secret. Job MySQL 8.4 chạy
 `MySqlMigrationIntegrationTest` với database disposable `blueai_migration_test`,
-kiểm tra schema V5, nâng V6 giữ dữ liệu cũ rồi migrate/validate tới latest V8,
+kiểm tra schema V5, nâng V6 giữ dữ liệu cũ rồi migrate/validate tới latest V9,
 ghi usage/index và migrate lặp không làm thay đổi schema. Engine-upgrade test
 riêng kiểm tra history/data từ Flyway 11.7.2 tới 11.20.3 trên MySQL 8.4; kết quả
 CI không thay thế maintenance/recovery prerequisites ở section 11.
@@ -552,7 +566,8 @@ delete user-owned domain records.
 
 ## 11. Flyway schema migration cho database hiện hữu
 
-Migration chain hiện tại là **V1–V8**, latest schema version **V8**. Trong
+Migration chain hiện tại là **V1–V9**, latest schema version **V9**. V9 thêm
+`context_reuse_policy` với default `NONE`, không tự bật dùng lịch sử cho draft cũ. Trong
 `BE/pom.xml`, `flyway.version` pin **11.20.3**; giữ `flyway-core` và
 `flyway-mysql` cùng version này, không nâng riêng một module. Runner/CLI cho
 baseline/migrate phải dùng engine 11.20.3 và MySQL support module tương ứng;
@@ -594,8 +609,8 @@ cấp yêu cầu maintenance window:
    version đã baseline.
 4. Kiểm tra `flyway_schema_history` ghi đúng baseline version và trạng thái hợp
    lệ; sau đó triển khai ứng dụng. Với baseline V1, Flyway phải validate/chạy
-   V2–V8 theo thứ tự; với baseline V3, chạy V4–V8. Database mới chạy V1–V8.
-   Xác nhận history thành công tới V8, checksum/schema/index đúng và Hibernate
+   V2–V9 theo thứ tự; với baseline V3, chạy V4–V9. Database mới chạy V1–V9.
+   Xác nhận history thành công tới V9, checksum/schema/index đúng và Hibernate
    `ddl-auto=validate` pass trước readiness/security acceptance và mở traffic.
 5. Nếu preflight hoặc validate thất bại, dừng rollout và restore backup hoặc
    chuẩn bị migration forward đã review. Không xóa schema history, không chạy
@@ -628,10 +643,10 @@ bằng chứng session UTC. Xem [Connector/J datetime properties](https://dev.my
 
 Đây là **staging/production prerequisites**, không phải xác nhận đã chạy
 migration, ép UTC session hay recovery rehearsal trên production. Trước
-promotion phải lưu kết quả rehearsal fresh V1–V8, legacy baseline V1 hoặc V3
-lên V8 theo schema fingerprint, data preservation, migrate/validate lặp lại,
+promotion phải lưu kết quả rehearsal fresh V1–V9, legacy baseline V1 hoặc V3
+lên V9 theo schema fingerprint, data preservation, migrate/validate lặp lại,
 writer drain và partial-migration recovery. `FlywayMigrationIntegrationTest`,
 MySQL migration/engine-upgrade tests và CI verify là gate tự động, không thay
 thế preflight trên legacy schema thật hay production maintenance approval.
-Chỉ chọn baseline sau khi schema diff thực tế khớp mốc tương ứng; latest V8
-không phải lý do để baseline một database legacy thẳng lên V8.
+Chỉ chọn baseline sau khi schema diff thực tế khớp mốc tương ứng; latest V9
+không phải lý do để baseline một database legacy thẳng lên V9.
