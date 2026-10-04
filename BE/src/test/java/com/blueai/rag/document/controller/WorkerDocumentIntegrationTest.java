@@ -267,6 +267,77 @@ class WorkerDocumentIntegrationTest {
         return objectMapper.readTree(response).get("id").asText();
     }
 
+    @Test
+    void expiredClaimCannotDownloadOrOverwriteANewerAttempt() throws Exception {
+        String id = uploadDocument();
+        String oldAttempt = claimAttempt(id);
+        jdbcTemplate.update("update rag_documents set processing_started_at = ? where id = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(3600)), id);
+        mockMvc.perform(post("/api/v1/internal/documents/claim").header("X-Worker-Api-Key", WORKER_API_KEY))
+                .andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
+        jdbcTemplate.update("update rag_documents set next_attempt_at = ? where id = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(1)), id);
+        String newAttempt = claimAttempt(id);
+        assertThat(newAttempt).isNotEqualTo(oldAttempt);
+        mockMvc.perform(get("/api/v1/internal/documents/{id}/content", id)
+                        .header("X-Worker-Api-Key", WORKER_API_KEY).header("X-Worker-Attempt-Id", oldAttempt))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("STALE_PROCESSING_ATTEMPT"));
+        reportResult(id, oldAttempt, "READY", "\"producedChunkCount\":1", 409);
+        assertThat(documentRepository.findById(id).orElseThrow().getProcessingAttemptId()).isEqualTo(newAttempt);
+        reportResult(id, newAttempt, "READY", "\"producedChunkCount\":2", 204);
+        assertThat(documentRepository.findById(id).orElseThrow().getProducedChunkCount()).isEqualTo(2);
+    }
+
+    @Test
+    void failedProcessingRetriesAtMostThreeTimesAndRejectsAllOldResults() throws Exception {
+        String id = uploadDocument();
+        String firstAttempt = null;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            jdbcTemplate.update("update rag_documents set next_attempt_at = ? where id = ?",
+                    java.sql.Timestamp.from(Instant.now().minusSeconds(1)), id);
+            String currentAttempt = claimAttempt(id);
+            if (firstAttempt == null) { firstAttempt = currentAttempt; }
+            reportResult(id, currentAttempt, "FAILED", "\"failureReason\":\"Document processing failed.\"", 204);
+            RagDocument document = documentRepository.findById(id).orElseThrow();
+            assertThat(document.getAttemptCount()).isEqualTo(attempt);
+            assertThat(document.getStatus()).isEqualTo(attempt < 3 ? DocumentStatus.PENDING_CHUNKING : DocumentStatus.FAILED);
+            assertThat(document.getProcessingAttemptId()).isNull();
+            assertThat(document.getProducedChunkCount()).isNull();
+        }
+        mockMvc.perform(post("/api/v1/internal/documents/claim").header("X-Worker-Api-Key", WORKER_API_KEY))
+                .andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
+        reportResult(id, firstAttempt, "READY", "\"producedChunkCount\":99", 409);
+        assertThat(documentRepository.findById(id).orElseThrow().getStatus()).isEqualTo(DocumentStatus.FAILED);
+    }
+
+    @Test
+    void deletingClaimedDocumentInvalidatesDownloadAndLateResult() throws Exception {
+        String id = uploadDocument();
+        String attempt = claimAttempt(id);
+        String ownerId = documentRepository.findById(id).orElseThrow().getOwnerId();
+        documentService.softDelete(ownerId, id);
+        mockMvc.perform(get("/api/v1/internal/documents/{id}/content", id)
+                        .header("X-Worker-Api-Key", WORKER_API_KEY).header("X-Worker-Attempt-Id", attempt))
+                .andExpect(status().isConflict());
+        reportResult(id, attempt, "READY", "\"producedChunkCount\":99", 409);
+        assertThat(documentRepository.findByIdIncludingDeleted(id)).isPresent().get().extracting("deletedAt").isNotNull();
+    }
+
+    private String claimAttempt(String id) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/internal/documents/claim").header("X-Worker-Api-Key", WORKER_API_KEY))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(id))
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).get(0).get("attemptId").asText();
+    }
+
+    private void reportResult(String id, String attempt, String result, String fields, int expectedStatus) throws Exception {
+        mockMvc.perform(patch("/api/v1/internal/documents/{id}/result", id)
+                        .header("X-Worker-Api-Key", WORKER_API_KEY).header("X-Worker-Attempt-Id", attempt)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"attemptId\":\"" + attempt + "\",\"status\":\"" + result + "\"," + fields + "}"))
+                .andExpect(status().is(expectedStatus));
+    }
+
     private String registerAndGetAccessToken() throws Exception {
         userRepository.saveAndFlush(new User(
                 "worker-owner@example.com",

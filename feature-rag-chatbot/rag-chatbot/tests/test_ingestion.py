@@ -117,7 +117,7 @@ class IngestionTest(unittest.IsolatedAsyncioTestCase):
 
         await ingestion.run_worker_once(client, "http://java", "worker-key", failing_indexer)
         self.assertEqual({
-            "attemptId": "attempt-1", "status": "FAILED", "failureReason": "parser failed",
+            "attemptId": "attempt-1", "status": "FAILED", "failureReason": "Document format or content is invalid.",
         }, client.result)
         self.assertEqual("attempt-1", client.result_headers["X-Worker-Attempt-Id"])
 

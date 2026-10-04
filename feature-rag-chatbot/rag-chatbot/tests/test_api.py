@@ -373,6 +373,56 @@ class RagApiTest(unittest.TestCase):
             )
             purge.assert_called_once_with("doc-1")
 
+    def test_index_staging_needs_only_the_index_directory_not_its_parent(self):
+        store = PurgeableVectorStore()
+        with tempfile.TemporaryDirectory() as directory:
+            index_dir = Path(directory) / "mounted-index"
+            original_mkdtemp = tempfile.mkdtemp
+            with patch.object(api.tempfile, "mkdtemp", wraps=original_mkdtemp) as staging:
+                api.RagRuntime._save_vectorstore_atomically(store, index_dir)
+            self.assertEqual(index_dir, staging.call_args.kwargs["dir"])
+            self.assertEqual({"index.faiss", "index.pkl"}, {p.name for p in index_dir.iterdir()})
+
+    def test_index_file_swap_failure_restores_both_durable_files(self):
+        store = PurgeableVectorStore()
+        with tempfile.TemporaryDirectory() as directory:
+            index_dir = Path(directory)
+            store.save_local(directory)
+            old_files = {p.name: p.read_bytes() for p in index_dir.iterdir()}
+            store.delete(["vector-1"])
+            original_replace = api.os.replace
+            def fail_second_install(source, target):
+                source, target = Path(source), Path(target)
+                if source.parent.name.startswith(".staging-") and target.name == "index.pkl":
+                    raise OSError("injected second-file install failure")
+                return original_replace(source, target)
+            with patch.object(api.os, "replace", side_effect=fail_second_install):
+                with self.assertRaisesRegex(OSError, "second-file"):
+                    api.RagRuntime._save_vectorstore_atomically(store, index_dir)
+            self.assertEqual(old_files, {p.name: p.read_bytes() for p in index_dir.iterdir()})
+
+    def test_ingestion_save_failure_restores_memory_and_retry_does_not_duplicate(self):
+        runtime = api.RagRuntime()
+        store, durable_store = IngestionVectorStore(), IngestionVectorStore()
+        embeddings = unittest.mock.Mock()
+        embeddings.embed_documents.return_value = [[0.1]]
+        runtime._vectorstore = store
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.dict("os.environ", {"RAG_INDEX_DIR": directory}), \
+                patch.object(runtime, "_embeddings", return_value=embeddings):
+            store.save_local(directory)
+            before = Path(directory, "index.pkl").read_bytes()
+            store.fail_next_save = True
+            with patch.object(api.FAISS, "load_local", return_value=durable_store):
+                with self.assertRaises(OSError):
+                    runtime.add_user_document("new-doc", "user-1", "USER_DOCUMENT", "new.txt", "new content", 1200, 0)
+            self.assertIs(runtime._vectorstore, durable_store)
+            self.assertEqual({}, durable_store.docstore._dict)
+            self.assertEqual(before, Path(directory, "index.pkl").read_bytes())
+            for _ in range(2):
+                self.assertEqual(1, runtime.add_user_document("new-doc", "user-1", "USER_DOCUMENT", "new.txt", "new content", 1200, 0))
+            self.assertEqual(1, len(durable_store.docstore._dict))
+
     def test_index_metadata_detects_embedding_model_change(self):
         with tempfile.TemporaryDirectory() as directory:
             index_dir = Path(directory)

@@ -364,6 +364,11 @@ public class DocumentService {
     }
 
     private String extractFilename(String rawFilename) {
+        String raw = rawFilename == null ? "" : rawFilename.replace('\\', '/');
+        if (raw.chars().anyMatch(Character::isISOControl)
+                || java.util.Arrays.stream(raw.split("/")).anyMatch(segment -> segment.equals(".."))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_FILENAME", "Document filename is invalid.");
+        }
         String cleaned = StringUtils.cleanPath(rawFilename == null ? "" : rawFilename).replace('\\', '/');
         String filename = cleaned.substring(cleaned.lastIndexOf('/') + 1);
         if (!StringUtils.hasText(filename) || cleaned.contains("..") || filename.length() > 255) {
@@ -388,9 +393,26 @@ public class DocumentService {
     private void storeFile(MultipartFile file, Path destination) {
         try {
             Files.createDirectories(destination.getParent());
-            try (InputStream input = file.getInputStream()) {
-                Files.copy(input, destination);
+            long written = 0;
+            try (InputStream input = file.getInputStream(); var output = Files.newOutputStream(
+                    destination, java.nio.file.StandardOpenOption.CREATE_NEW, java.nio.file.StandardOpenOption.WRITE)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    written += read;
+                    if (written > maxSizeBytes) {
+                        throw new ApiException(HttpStatus.PAYLOAD_TOO_LARGE, "FILE_TOO_LARGE", "Document exceeds the upload limit.");
+                    }
+                    output.write(buffer, 0, read);
+                }
             }
+            if (written == 0 || written != file.getSize()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_FILE_CONTENT", "Document length is invalid.");
+            }
+            DocumentContentValidator.validate(destination, extensionOf(destination.getFileName().toString()));
+        } catch (ApiException exception) {
+            deleteStoredFile(destination);
+            throw exception;
         } catch (IOException exception) {
             deleteStoredFile(destination);
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "DOCUMENT_STORAGE_FAILED", "Unable to store document.");

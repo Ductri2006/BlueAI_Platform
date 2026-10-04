@@ -12,6 +12,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -272,6 +274,133 @@ class DocumentUploadIntegrationTest {
 
         mockMvc.perform(multipart("/api/v1/documents").file(file))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"fake.pdf", "fake.docx", "binary.txt", "binary.csv", "binary.md"})
+    void rejectsSpoofedDocumentContentWithoutPersistingBytesOrRows(String filename) throws Exception {
+        String token = registerAndGetAccessToken();
+        mockMvc.perform(multipart("/api/v1/documents")
+                        .file(new MockMultipartFile("file", filename, "application/octet-stream", new byte[]{'M', 'Z', 0, 1}))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FILE_CONTENT"));
+        assertNoDocumentStored();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"../guide.txt", "folder/../guide.txt", "..\\guide.txt", "bad\nname.txt", "bad\u0000name.txt"})
+    void rejectsUnsafeRawNamesBeforeNormalization(String filename) throws Exception {
+        String token = registerAndGetAccessToken();
+        mockMvc.perform(multipart("/api/v1/documents")
+                        .file(new MockMultipartFile("file", filename, "text/plain", "safe text".getBytes()))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FILENAME"));
+        assertNoDocumentStored();
+    }
+
+    @Test
+    void acceptsUtf8BomAndBrowserOctetStreamButRejectsMalformedUtf8() throws Exception {
+        String token = registerAndGetAccessToken();
+        mockMvc.perform(multipart("/api/v1/documents")
+                        .file(new MockMultipartFile("file", "guide.md", "application/octet-stream",
+                                "\ufeffXin chào, chính sách bán hàng".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.contentType").value("text/markdown"));
+        mockMvc.perform(multipart("/api/v1/documents")
+                        .file(new MockMultipartFile("file", "broken.txt", "text/plain", new byte[]{(byte) 0xc3, 0x28}))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FILE_CONTENT"));
+        assertThat(documentRepository.count()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {2, 20, 21})
+    void enforcesActualUploadBoundary(int megabytes) throws Exception {
+        String token = registerAndGetAccessToken();
+        byte[] bytes = new byte[megabytes * 1024 * 1024];
+        java.util.Arrays.fill(bytes, (byte) 'a');
+        var result = mockMvc.perform(multipart("/api/v1/documents")
+                .file(new MockMultipartFile("file", "boundary.txt", "text/plain", bytes))
+                .header("Authorization", "Bearer " + token));
+        if (megabytes <= 20) {
+            result.andExpect(status().isCreated()).andExpect(jsonPath("$.sizeBytes").value(bytes.length));
+        } else {
+            result.andExpect(status().isPayloadTooLarge()).andExpect(jsonPath("$.code").value("FILE_TOO_LARGE"));
+            assertNoDocumentStored();
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"../outside.xml", "word/vbaProject.bin", "word/embeddings/object.bin", "word/./bad.xml"})
+    void rejectsUnsafeDocxPackages(String extraEntry) throws Exception {
+        String token = registerAndGetAccessToken();
+        mockMvc.perform(multipart("/api/v1/documents")
+                        .file(new MockMultipartFile("file", "unsafe.docx", "application/octet-stream", docx(extraEntry, 1)))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FILE_CONTENT"));
+        assertNoDocumentStored();
+    }
+
+    @Test
+    void acceptsDocxPackageButRejectsHighlyExpandedArchiveEntry() throws Exception {
+        String token = registerAndGetAccessToken();
+        mockMvc.perform(multipart("/api/v1/documents")
+                        .file(new MockMultipartFile("file", "guide.docx", "application/octet-stream", docx(null, 0)))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated());
+        mockMvc.perform(multipart("/api/v1/documents")
+                        .file(new MockMultipartFile("file", "expanded.docx", "application/octet-stream",
+                                docx("word/media/oversized.bin", 16 * 1024 * 1024 + 1)))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FILE_CONTENT"));
+        assertThat(documentRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void checksStreamLengthRatherThanTrustingMultipartMetadata() throws Exception {
+        String token = registerAndGetAccessToken();
+        var file = new MockMultipartFile("file", "wrong-size.txt", "text/plain", "safe text".getBytes()) {
+            @Override public long getSize() { return 1; }
+        };
+        mockMvc.perform(multipart("/api/v1/documents").file(file).header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_FILE_CONTENT"));
+        assertNoDocumentStored();
+    }
+
+    private void assertNoDocumentStored() throws Exception {
+        assertThat(documentRepository.count()).isZero();
+        if (Files.exists(TEST_STORAGE)) {
+            try (var paths = Files.walk(TEST_STORAGE)) {
+                assertThat(paths.filter(Files::isRegularFile).toList()).isEmpty();
+            }
+        }
+    }
+
+    private byte[] docx(String extraEntry, int extraSize) throws Exception {
+        var bytes = new java.io.ByteArrayOutputStream();
+        try (var zip = new java.util.zip.ZipOutputStream(bytes)) {
+            for (String name : List.of("[Content_Types].xml", "_rels/.rels", "word/document.xml")) {
+                zip.putNextEntry(new java.util.zip.ZipEntry(name));
+                zip.write("<fixture/>".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                zip.closeEntry();
+            }
+            if (extraEntry != null) {
+                zip.putNextEntry(new java.util.zip.ZipEntry(extraEntry));
+                byte[] block = new byte[8192];
+                for (int remaining = extraSize; remaining > 0; remaining -= Math.min(remaining, block.length)) {
+                    zip.write(block, 0, Math.min(remaining, block.length));
+                }
+                zip.closeEntry();
+            }
+        }
+        return bytes.toByteArray();
     }
 
     private String registerAndGetAccessToken() throws Exception {

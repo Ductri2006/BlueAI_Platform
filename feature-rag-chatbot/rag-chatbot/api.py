@@ -362,11 +362,15 @@ class RagRuntime:
             # before its result PATCH completed. Replace this document's chunks
             # while holding the same lock used by search/purge so a retry cannot
             # accumulate duplicate vectors. Embedding remains outside the lock.
-            self._delete_document_vectors(vectorstore, document_id)
-            vectorstore.add_embeddings(list(zip(texts, vectors)), metadatas=metadatas)
             index_dir = _index_dir()
-            index_dir.mkdir(parents=True, exist_ok=True)
-            self._save_vectorstore_atomically(vectorstore, index_dir)
+            try:
+                self._delete_document_vectors(vectorstore, document_id)
+                vectorstore.add_embeddings(list(zip(texts, vectors)), metadatas=metadatas)
+                self._save_vectorstore_atomically(vectorstore, index_dir)
+            except Exception:
+                # Never expose unsaved chunks after a failed durable replacement.
+                self._reload_durable_index_after_failure(index_dir)
+                raise
             self._write_index_model(index_dir)
         return len(chunks)
 
@@ -388,14 +392,17 @@ class RagRuntime:
 
     @staticmethod
     def _save_vectorstore_atomically(vectorstore: FAISS, index_dir: Path) -> None:
-        """Stage FAISS files outside the live index and swap each file with rollback.
+        """Stage in the writable index volume and swap each file with rollback.
 
         FAISS.save_local writes more than one file. Staging prevents a failed save
         from mutating the durable directory; the short file swap is serialized by
         RagRuntime's lock and rolls back if any replacement fails.
         """
-        index_dir.parent.mkdir(parents=True, exist_ok=True)
-        temp_dir = Path(tempfile.mkdtemp(prefix=f".{index_dir.name}-", dir=index_dir.parent))
+        # Only the index volume is writable for the non-root runtime, not /app.
+        # Staging inside it also keeps file renames on the same filesystem.
+        # Never rename the mounted directory itself.
+        index_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix=".staging-", dir=index_dir))
         backup_dir = temp_dir / ".backup"
         try:
             vectorstore.save_local(str(temp_dir))
