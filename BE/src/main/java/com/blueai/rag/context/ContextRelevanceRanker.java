@@ -7,6 +7,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -15,6 +17,13 @@ import java.util.stream.Collectors;
  */
 @Component
 public class ContextRelevanceRanker {
+
+    private static final Pattern NAMED_SUBJECT = Pattern.compile(
+            "(?:^| )(?:khach(?: hang)?|customer|client|cong ty) ([a-z][a-z0-9]{2,})(?= |$)"
+    );
+    private static final Set<String> GENERIC_SUBJECTS = Set.of(
+            "hang", "can", "cu", "moi", "truoc", "nay", "kia", "has", "have", "needs", "need", "with", "the", "sales"
+    );
 
     private static final Set<String> STOP_WORDS = Set.of(
             "a", "anh", "ban", "cai", "cua", "cho", "co", "da", "day", "de", "do", "duoc",
@@ -49,7 +58,20 @@ public class ContextRelevanceRanker {
         String normalizedCandidate = normalize(candidate);
         double coverage = (double) overlap / queryTerms.size();
         double phraseBonus = normalizedQuery.length() > 8 && normalizedCandidate.contains(normalizedQuery) ? 0.25 : 0;
-        return Math.min(1, coverage + phraseBonus);
+        // A verbose or multilingual question must not dilute an explicit
+        // customer name below the relevance threshold. Match whole tokens;
+        // never grant the bonus for generic "customer needs/khách cần" text.
+        Matcher subjects = NAMED_SUBJECT.matcher(normalizedQuery);
+        double subjectBonus = 0;
+        while (subjects.find()) {
+            String subject = subjects.group(1);
+            if (!STOP_WORDS.contains(subject) && !GENERIC_SUBJECTS.contains(subject)
+                    && candidateTerms.contains(subject)) {
+                subjectBonus = 0.35;
+                break;
+            }
+        }
+        return Math.min(1, coverage + phraseBonus + subjectBonus);
     }
 
     public boolean isFollowUpQuestion(String question) {
