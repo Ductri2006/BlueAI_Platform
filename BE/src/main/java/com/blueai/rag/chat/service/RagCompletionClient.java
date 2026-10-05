@@ -2,6 +2,7 @@ package com.blueai.rag.chat.service;
 
 import com.blueai.auth.exception.ApiException;
 import com.blueai.rag.chat.RagChatProperties;
+import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -23,10 +24,16 @@ public class RagCompletionClient {
 
     private final RagChatProperties properties;
     private final RagRestClientFactory restClientFactory;
+    private final String workerApiKey;
 
-    public RagCompletionClient(RagChatProperties properties, RagRestClientFactory restClientFactory) {
+    public RagCompletionClient(
+            RagChatProperties properties,
+            RagRestClientFactory restClientFactory,
+            @Value("${app.worker.api-key}") String workerApiKey
+    ) {
         this.properties = properties;
         this.restClientFactory = restClientFactory;
+        this.workerApiKey = workerApiKey;
     }
 
     public String complete(List<LlmChatMessage> messages) {
@@ -45,6 +52,7 @@ public class RagCompletionClient {
                 RestClient client = restClientFactory.create()
                         .baseUrl(properties.getLlmBaseUrl())
                         .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getLlmApiKey())
+                        .defaultHeader("X-Worker-Api-Key", workerApiKey)
                         .build();
                 LlmResponse response = client
                     .post()

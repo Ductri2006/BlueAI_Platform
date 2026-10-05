@@ -41,19 +41,23 @@ class RagApiTest(unittest.TestCase):
             id="chat-test", model="mock-model",
             choices=[api.CompletionChoice(message=api.ChatMessage(role="assistant", content="Answer"))],
         )
-        with patch.object(api, "start_worker", return_value=None), TestClient(api.app) as client:
+        worker_headers = {"X-Worker-Api-Key": "worker-key"}
+        with patch.dict("os.environ", {"JAVA_WORKER_API_KEY": "worker-key"}), \
+                patch.object(api, "start_worker", return_value=None), TestClient(api.app) as client:
             self.assertEqual(200, client.get("/health").status_code)
             with patch.object(api.runtime, "search", return_value=[match]) as search:
-                response = client.post("/v1/retrieval/search", json={
+                response = client.post("/v1/retrieval/search", headers=worker_headers, json={
                     "userId": "user-1", "query": "policy", "limit": 4,
                 })
             self.assertEqual(200, response.status_code)
             self.assertEqual("doc-1", response.json()["matches"][0]["documentId"])
             search.assert_called_once_with("user-1", "policy", 4)
-            self.assertEqual(422, client.post("/v1/retrieval/search", json={"query": "policy"}).status_code)
+            self.assertEqual(422, client.post(
+                "/v1/retrieval/search", headers=worker_headers, json={"query": "policy"}
+            ).status_code)
 
             with patch.object(api.runtime, "complete", return_value=answer):
-                response = client.post("/v1/chat/completions", json={
+                response = client.post("/v1/chat/completions", headers=worker_headers, json={
                     "messages": [{"role": "user", "content": "Hello"}],
                 })
             self.assertEqual(200, response.status_code)
@@ -126,8 +130,12 @@ class RagApiTest(unittest.TestCase):
             sourceType="SYNTHETIC_DEMO",
             approvalStatus="PENDING_OWNER_REVIEW",
         )
-        with patch.object(api.runtime, "search", return_value=[match]) as search:
-            response = api.retrieval_search(api.RetrievalRequest(userId="user-1", query="question", limit=4))
+        with patch.dict("os.environ", {"JAVA_WORKER_API_KEY": "worker-key"}), \
+                patch.object(api.runtime, "search", return_value=[match]) as search:
+            response = api.retrieval_search(
+                api.RetrievalRequest(userId="user-1", query="question", limit=4),
+                x_worker_api_key="worker-key",
+            )
         search.assert_called_once_with("user-1", "question", 4)
         self.assertEqual("DOC-DEMO", response.matches[0].documentId)
 
@@ -287,8 +295,9 @@ class RagApiTest(unittest.TestCase):
             model="test-model",
             messages=[api.ChatMessage(role="user", content="question")],
         )
-        with patch.object(api.runtime, "complete", return_value=expected):
-            response = api.chat_completions(request)
+        with patch.dict("os.environ", {"JAVA_WORKER_API_KEY": "worker-key"}), \
+                patch.object(api.runtime, "complete", return_value=expected):
+            response = api.chat_completions(request, x_worker_api_key="worker-key")
         self.assertEqual("answer", response.choices[0].message.content)
 
     def test_completion_budget_has_no_nested_sdk_retries(self):

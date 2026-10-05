@@ -10,13 +10,11 @@ services:
       GEMINI_CHAT_FALLBACK_MODELS: ${GEMINI_CHAT_FALLBACK_MODELS:-gemini-3.6-flash}
       GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-models/gemini-embedding-001}
       JAVA_API_BASE_URL: http://auth-api:8080
-      JAVA_WORKER_API_KEY: ${APP_WORKER_API_KEY:-local-worker-api-key-change-before-production}
+      JAVA_WORKER_API_KEY: ${APP_WORKER_API_KEY:?Set APP_WORKER_API_KEY to a unique random secret}
       RAG_INDEX_DIR: /app/.rag-index
       RAG_MIN_RELEVANCE: ${RAG_MIN_RELEVANCE:-0}
       RAG_MAX_CHUNKS_PER_DOCUMENT: ${RAG_MAX_CHUNKS_PER_DOCUMENT:-3}
       RAG_CANDIDATE_MULTIPLIER: ${RAG_CANDIDATE_MULTIPLIER:-8}
-    ports:
-      - "8000:8000"
     volumes:
       - blueai-rag-index:/app/.rag-index
     healthcheck:
@@ -88,7 +86,7 @@ services:
       APP_WIDGET_DUPLICATE_REPLAY_LIMIT: ${APP_WIDGET_DUPLICATE_REPLAY_LIMIT:-2}
       APP_WIDGET_DUPLICATE_WINDOW: ${APP_WIDGET_DUPLICATE_WINDOW:-2m}
       APP_WIDGET_REQUEST_LOCK_TTL: ${APP_WIDGET_REQUEST_LOCK_TTL:-60s}
-      APP_WORKER_API_KEY: ${APP_WORKER_API_KEY:-local-worker-api-key-change-before-production}
+      APP_WORKER_API_KEY: ${APP_WORKER_API_KEY:?Set APP_WORKER_API_KEY to a unique random secret}
       APP_DOCUMENT_STORAGE_DIR: /app/storage/documents
       APP_RAG_RETRIEVAL_BASE_URL: ${APP_RAG_RETRIEVAL_BASE_URL:-http://rag-ai:8000}
       APP_RAG_RETRIEVAL_SEARCH_PATH: ${APP_RAG_RETRIEVAL_SEARCH_PATH:-/v1/retrieval/search}

@@ -32,6 +32,8 @@ import java.util.List;
 public class WorkerDocumentController {
 
     private static final String WORKER_API_KEY_HEADER = "X-Worker-Api-Key";
+    private static final byte[] DEVELOPMENT_WORKER_API_KEY =
+            "local-worker-api-key-change-before-production".getBytes(StandardCharsets.UTF_8);
 
     private final DocumentService documentService;
     private final byte[] workerApiKey;
@@ -85,6 +87,13 @@ public class WorkerDocumentController {
     }
 
     private void requireWorkerApiKey(String providedApiKey) {
+        if (workerApiKey.length == 0 || MessageDigest.isEqual(workerApiKey, DEVELOPMENT_WORKER_API_KEY)) {
+            throw new ApiException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "WORKER_API_KEY_NOT_CONFIGURED",
+                    "Document worker authentication is not configured."
+            );
+        }
         byte[] candidate = providedApiKey == null ? new byte[0] : providedApiKey.getBytes(StandardCharsets.UTF_8);
         if (!MessageDigest.isEqual(workerApiKey, candidate)) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_WORKER_API_KEY", "Worker API key is invalid.");

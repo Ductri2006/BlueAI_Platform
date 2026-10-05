@@ -37,6 +37,7 @@ import com.blueai.studio.service.BotSnapshot;
 import com.blueai.studio.service.DialogRuntimeService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -68,6 +69,7 @@ public class RagChatService {
     private final BotReleaseRepository releaseRepository;
     private final DialogRuntimeService dialogRuntimeService;
     private final ObjectMapper objectMapper;
+    private final String workerApiKey;
 
     public RagChatService(
             UserRepository userRepository,
@@ -82,7 +84,8 @@ public class RagChatService {
             BotRepository botRepository,
             BotReleaseRepository releaseRepository,
             DialogRuntimeService dialogRuntimeService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            @Value("${app.worker.api-key}") String workerApiKey
     ) {
         this.userRepository = userRepository;
         this.conversationRepository = conversationRepository;
@@ -97,6 +100,7 @@ public class RagChatService {
         this.releaseRepository = releaseRepository;
         this.dialogRuntimeService = dialogRuntimeService;
         this.objectMapper = objectMapper;
+        this.workerApiKey = workerApiKey;
     }
 
     @Transactional
@@ -213,6 +217,7 @@ public class RagChatService {
                     .build()
                     .post()
                     .uri(properties.getRetrievalSearchPath())
+                    .header("X-Worker-Api-Key", workerApiKey)
                     .body(new RetrievalRequest(ownerId, question, RETRIEVAL_LIMIT))
                     .retrieve()
                     .body(RetrievalResponse.class);

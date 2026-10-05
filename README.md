@@ -152,7 +152,7 @@ Chỉ `GOOGLE_API_KEY` là bắt buộc, còn lại đều có giá trị mặc 
 | `RAG_CANDIDATE_MULTIPLIER` | `8` | Số ứng viên lấy từ FAISS = limit × giá trị này, tối đa 200 |
 | `DB_PASSWORD` / `MYSQL_ROOT_PASSWORD` | `blueai-local` / `blueai-root-local` | Mật khẩu MySQL |
 | `APP_JWT_SECRET` | secret dev | Khoá HS256 ký access token |
-| `APP_WORKER_API_KEY` | `local-worker-api-key-...` | Key BE ↔ worker Python, hai bên phải giống nhau |
+| `APP_WORKER_API_KEY` | Bắt buộc: secret ngẫu nhiên riêng, tối thiểu 32 byte | Khóa xác thực giữa BE và worker Python; hai bên dùng cùng giá trị |
 | `APP_BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD` | `admin@blueai.local` / `BlueAiAdmin123!` | Admin đầu tiên, chỉ tạo khi email chưa tồn tại |
 
 Toàn bộ mặc định trên là credential local-dev. Phải đổi hết trước khi chạy ở bất cứ đâu ngoài máy cá nhân.

@@ -23,17 +23,19 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Mở `.env`, thay placeholder bằng Gemini API key của riêng bạn. Có thể dùng
-`GEMINI_API_KEY` hoặc `GOOGLE_API_KEY`; nếu đặt cả hai thì Google client ưu tiên
-`GOOGLE_API_KEY`. Sau đó chạy service cùng document worker:
+Mở `.env`, đặt Gemini API key và `JAVA_WORKER_API_KEY` thành secret riêng, ngẫu
+nhiên tối thiểu 32 byte; dùng cùng giá trị `APP_WORKER_API_KEY` trong
+`backend/BE/.env`. Có thể dùng `GEMINI_API_KEY` hoặc `GOOGLE_API_KEY`; nếu đặt cả
+hai thì Google client ưu tiên `GOOGLE_API_KEY`. Sau đó chạy service cùng document worker:
 
 ```powershell
 .\scripts\start-rag-local.ps1
 ```
 
 Service cung cấp `GET /health`, `GET /ready`, `POST /v1/retrieval/search` và endpoint tương thích
-OpenAI `POST /v1/chat/completions`. Java BE gọi cả hai endpoint này; `chatbot.py`
-vẫn có thể chạy riêng như CLI để thử nhanh một câu hỏi.
+OpenAI `POST /v1/chat/completions`. Java BE gọi hai API nội bộ với header
+`X-Worker-Api-Key`; thiếu hoặc sai khóa sẽ bị từ chối. `chatbot.py` vẫn có thể
+chạy riêng như CLI để thử nhanh một câu hỏi.
 
 `/health` là liveness và trả trạng thái cấu hình không chứa secret. `/ready` chỉ
 trả `200` khi đã có Gemini key; Docker dùng endpoint này để không báo hệ thống AI
