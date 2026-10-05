@@ -1,0 +1,41 @@
+{
+  "scope": "Owned QA draft only; invalid saves must be atomic, no provider calls",
+  "tests": [
+    {
+      "id": "unknown-parent",
+      "result": "PASS",
+      "status": 400
+    },
+    {
+      "id": "parent-self-cycle",
+      "result": "PASS",
+      "status": 400
+    },
+    {
+      "id": "two-node-jump-cycle",
+      "result": "PASS",
+      "status": 400
+    },
+    {
+      "id": "unknown-required-slot",
+      "result": "PASS",
+      "status": 400
+    },
+    {
+      "id": "unknown-match-entity",
+      "result": "PASS",
+      "status": 400
+    },
+    {
+      "id": "unknown-match-intent",
+      "result": "PASS",
+      "status": 400
+    },
+    {
+      "id": "unknown-jump-target",
+      "result": "PASS",
+      "status": 400
+    }
+  ],
+  "finishedAt": "2026-10-03T22:06:57.154Z"
+}

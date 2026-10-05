@@ -44,8 +44,8 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['"Be Vietnam Pro"', 'Inter', 'system-ui', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'Geist Mono', 'monospace'],
+        sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       borderRadius: {
         'card': '20px',

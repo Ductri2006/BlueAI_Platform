@@ -38,6 +38,11 @@ public class BotStudioController {
         return botStudioService.list(jwt.getSubject());
     }
 
+    @GetMapping("/active")
+    BotConfigurationResponse active() {
+        return botStudioService.active();
+    }
+
     @PostMapping
     ResponseEntity<BotConfigurationResponse> create(
             @AuthenticationPrincipal Jwt jwt,
@@ -72,5 +77,10 @@ public class BotStudioController {
     @PostMapping("/{botId}/publish")
     PublishResponse publish(@AuthenticationPrincipal Jwt jwt, @PathVariable String botId) {
         return botStudioService.publish(jwt.getSubject(), botId);
+    }
+
+    @PostMapping("/{botId}/activate")
+    BotConfigurationResponse activate(@AuthenticationPrincipal Jwt jwt, @PathVariable String botId) {
+        return botStudioService.activate(jwt.getSubject(), botId);
     }
 }

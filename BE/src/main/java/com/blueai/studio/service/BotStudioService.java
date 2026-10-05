@@ -2,11 +2,14 @@ package com.blueai.studio.service;
 
 import com.blueai.auth.exception.ApiException;
 import com.blueai.auth.model.User;
+import com.blueai.auth.model.UserRole;
 import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.UserRepository;
+import com.blueai.rag.chat.service.RagChatService;
 import com.blueai.studio.dto.BotStudioDtos.BotConfigurationResponse;
 import com.blueai.studio.dto.BotStudioDtos.BotSummaryResponse;
 import com.blueai.studio.dto.BotStudioDtos.CreateBotRequest;
+import com.blueai.studio.dto.BotStudioDtos.CustomizationInput;
 import com.blueai.studio.dto.BotStudioDtos.DialogNodeInput;
 import com.blueai.studio.dto.BotStudioDtos.EntityInput;
 import com.blueai.studio.dto.BotStudioDtos.EntityValueInput;
@@ -16,6 +19,7 @@ import com.blueai.studio.dto.BotStudioDtos.PublishResponse;
 import com.blueai.studio.dto.BotStudioDtos.RuntimeResponse;
 import com.blueai.studio.dto.BotStudioDtos.SaveConfigurationRequest;
 import com.blueai.studio.model.Bot;
+import com.blueai.studio.model.BotCreationTemplate;
 import com.blueai.studio.model.BotDialogNode;
 import com.blueai.studio.model.BotEntityDefinition;
 import com.blueai.studio.model.BotEntityValue;
@@ -55,6 +59,7 @@ public class BotStudioService {
     private final BotDialogNodeRepository dialogNodeRepository;
     private final BotReleaseRepository releaseRepository;
     private final DialogRuntimeService runtimeService;
+    private final RagChatService ragChatService;
     private final ObjectMapper objectMapper;
 
     public BotStudioService(
@@ -66,6 +71,7 @@ public class BotStudioService {
             BotDialogNodeRepository dialogNodeRepository,
             BotReleaseRepository releaseRepository,
             DialogRuntimeService runtimeService,
+            RagChatService ragChatService,
             ObjectMapper objectMapper
     ) {
         this.userRepository = userRepository;
@@ -76,6 +82,7 @@ public class BotStudioService {
         this.dialogNodeRepository = dialogNodeRepository;
         this.releaseRepository = releaseRepository;
         this.runtimeService = runtimeService;
+        this.ragChatService = ragChatService;
         this.objectMapper = objectMapper;
     }
 
@@ -96,7 +103,13 @@ public class BotStudioService {
                 locale,
                 timezone
         ));
-        if (!Boolean.FALSE.equals(request.includeStarterTemplate())) {
+        if (request.template() == BotCreationTemplate.SALES_DEMO) {
+            var template = SalesDialogDemoTemplate.load(objectMapper);
+            validate(template.intents(), template.entities(), template.dialogNodes());
+            bot.updateCustomization(false, null);
+            persistConfiguration(bot, template.intents(), template.entities(), template.dialogNodes());
+        } else if (request.template() == BotCreationTemplate.STARTER
+                || !Boolean.FALSE.equals(request.includeStarterTemplate())) {
             persistConfiguration(bot, starterIntents(), starterEntities(), starterNodes());
         }
         return configuration(bot);
@@ -126,7 +139,19 @@ public class BotStudioService {
         );
         bot.updateCustomization(
                 !Boolean.FALSE.equals(request.blueAiCoreEnabled()),
-                trimToNull(request.customInstructions())
+                trimToNull(request.customInstructions()),
+                customization(request.customization()).identityRole(),
+                customization(request.customization()).tonePreset(),
+                customization(request.customization()).answerLength(),
+                customization(request.customization()).responseStructure(),
+                customization(request.customization()).proactivity(),
+                customization(request.customization()).citationPolicy(),
+                customization(request.customization()).noSourcePolicy(),
+                customization(request.customization()).preferredTerms(),
+                customization(request.customization()).forbiddenTerms(),
+                customization(request.customization()).fallbackMessage(),
+                customization(request.customization()).escalationMessage(),
+                customization(request.customization()).responseProfile()
         );
         replaceConfiguration(bot, request.intents(), request.entities(), request.dialogNodes());
         bot.advanceDraftRevision();
@@ -138,7 +163,17 @@ public class BotStudioService {
     public RuntimeResponse preview(String ownerId, String botId, PreviewRequest request) {
         Bot bot = requireOwnedBot(ownerId, botId);
         BotSnapshot snapshot = snapshot(bot);
-        return runtimeService.evaluate(snapshot, request.context(), request.message().trim());
+        if ((request.conversationId() != null && !request.conversationId().isBlank()) || !request.history().isEmpty()) {
+            return ragChatService.previewWithSnapshot(ownerId, snapshot, request);
+        }
+        RuntimeResponse deterministic = runtimeService.evaluate(snapshot, request.context(), request.message().trim());
+        if (deterministic.fallback()
+                && deterministic.context().pendingEntity() == null
+                && !deterministic.dialogHandled()
+                && bot.isBlueAiCoreEnabled()) {
+            return ragChatService.previewWithSnapshot(ownerId, snapshot, request);
+        }
+        return deterministic;
     }
 
     @Transactional
@@ -157,6 +192,37 @@ public class BotStudioService {
         return new PublishResponse(release.getId(), release.getRevision(), bot.getPublicKey(), release.getCreatedAt());
     }
 
+    @Transactional
+    public BotConfigurationResponse activate(String ownerId, String botId) {
+        User owner = requireActiveUser(ownerId);
+        if (owner.getRole() != UserRole.ADMIN) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "STUDIO_ADMIN_REQUIRED", "Chỉ Admin mới có thể áp dụng cấu hình cho Hỏi BlueAI.");
+        }
+        Bot bot = requireOwnedBot(ownerId, botId);
+        if (bot.getStatus() != com.blueai.studio.model.BotStatus.PUBLISHED
+                || bot.getPublishedReleaseId() == null) {
+            throw new ApiException(HttpStatus.CONFLICT, "BOT_NOT_PUBLISHED", "Chỉ cấu hình đã phát hành mới có thể dùng cho Hỏi BlueAI.");
+        }
+        activateBot(bot);
+        return configuration(bot);
+    }
+
+    @Transactional(readOnly = true)
+    public BotConfigurationResponse active() {
+        return botRepository.findByActiveTrueOrderByUpdatedAtDesc().stream()
+                .filter(bot -> bot.getStatus() == com.blueai.studio.model.BotStatus.PUBLISHED
+                        && bot.getPublishedReleaseId() != null)
+                .findFirst()
+                .flatMap(bot -> {
+                    String releaseId = bot.getActiveReleaseId() == null
+                            ? bot.getPublishedReleaseId()
+                            : bot.getActiveReleaseId();
+                    return releaseRepository.findByIdAndBot_Id(releaseId, bot.getId());
+                })
+                .map(this::activeConfiguration)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "ACTIVE_BLUEAI_NOT_CONFIGURED", "Chưa có cấu hình BlueAI chính được kích hoạt."));
+    }
+
     BotSnapshot snapshot(Bot bot) {
         BotConfigurationResponse configuration = configuration(bot);
         return new BotSnapshot(
@@ -164,11 +230,13 @@ public class BotStudioService {
                 bot.getId(),
                 bot.getOwner().getId(),
                 bot.getName(),
+                bot.getDescription(),
                 bot.getDraftRevision(),
                 bot.getLocale(),
                 bot.getTimezone(),
                 bot.isBlueAiCoreEnabled(),
                 bot.getCustomInstructions(),
+                customization(bot),
                 configuration.intents(),
                 configuration.entities(),
                 configuration.dialogNodes()
@@ -207,10 +275,40 @@ public class BotStudioService {
                         node.getNextStep() == null ? DialogNextStep.WAIT_FOR_REPLY : node.getNextStep(),
                         node.getJumpToNode(),
                         node.getIrrelevantResponseText(),
-                        node.getPriority()
+                        node.getPriority(),
+                        node.getContextReusePolicy()
                 ))
                 .toList();
-        return new BotConfigurationResponse(summary(bot), intents, entities, nodes);
+        return new BotConfigurationResponse(summary(bot), intents, entities, nodes, customization(bot));
+    }
+
+    private BotConfigurationResponse activeConfiguration(BotRelease release) {
+        Bot bot = release.getBot();
+        BotSnapshot snapshot = readJson(release.getConfigurationSnapshot());
+        CustomizationInput activeCustomization = customization(snapshot.customization());
+        BotSummaryResponse activeSummary = new BotSummaryResponse(
+                bot.getId(),
+                valueOrDefault(snapshot.name(), bot.getName()),
+                snapshot.description(),
+                valueOrDefault(snapshot.locale(), bot.getLocale()),
+                valueOrDefault(snapshot.timezone(), bot.getTimezone()),
+                snapshot.blueAiCoreEnabled() == null ? bot.isBlueAiCoreEnabled() : snapshot.blueAiCoreEnabled(),
+                snapshot.customInstructions(),
+                com.blueai.studio.model.BotStatus.PUBLISHED,
+                bot.getPublicKey(),
+                snapshot.revision(),
+                release.getId(),
+                release.getCreatedAt(),
+                true,
+                activeCustomization
+        );
+        return new BotConfigurationResponse(
+                activeSummary,
+                snapshot.intents() == null ? List.of() : snapshot.intents(),
+                snapshot.entities() == null ? List.of() : snapshot.entities(),
+                snapshot.dialogNodes() == null ? List.of() : snapshot.dialogNodes(),
+                activeCustomization
+        );
     }
 
     Bot requireOwnedBot(String ownerId, String botId) {
@@ -263,23 +361,34 @@ public class BotStudioService {
             }
         }
         for (DialogNodeInput input : nodes) {
-            dialogNodeRepository.save(new BotDialogNode(
+            String matchEntity = canonicalReference(entities.stream().map(EntityInput::name).toList(), input.matchEntityName());
+            List<String> matchValues = entities.stream().filter(entity -> entity.name().trim().equals(matchEntity))
+                    .flatMap(entity -> entity.values().stream()).map(EntityValueInput::value).toList();
+            BotDialogNode node = new BotDialogNode(
                     bot,
                     input.name().trim(),
                     input.type(),
-                    trimToNull(input.parentNode()),
-                    trimToNull(input.matchIntent()),
-                    trimToNull(input.matchEntityName()),
-                    trimToNull(input.matchEntityValue()),
-                    trimToNull(input.requiredEntityName()),
+                    canonicalReference(nodes.stream().map(DialogNodeInput::name).toList(), input.parentNode()),
+                    canonicalReference(intents.stream().map(IntentInput::name).toList(), input.matchIntent()),
+                    matchEntity,
+                    canonicalReference(matchValues, input.matchEntityValue()),
+                    canonicalReference(entities.stream().map(EntityInput::name).toList(), input.requiredEntityName()),
                     blankToDefault(input.responseText(), ""),
                     trimToNull(input.missingEntityPrompt()),
                     input.nextStep() == null ? DialogNextStep.WAIT_FOR_REPLY : input.nextStep(),
-                    trimToNull(input.jumpToNode()),
+                    canonicalReference(nodes.stream().map(DialogNodeInput::name).toList(), input.jumpToNode()),
                     trimToNull(input.irrelevantResponseText()),
                     input.priority()
-            ));
+            );
+            node.setContextReusePolicy(input.contextReusePolicy());
+            dialogNodeRepository.save(node);
         }
+    }
+
+    private String canonicalReference(List<String> names, String supplied) {
+        if (isBlank(supplied)) return null;
+        return names.stream().filter(name -> key(name).equals(key(supplied)))
+                .map(String::trim).findFirst().orElse(supplied.trim());
     }
 
     private void validate(List<IntentInput> intents, List<EntityInput> entities, List<DialogNodeInput> nodes) {
@@ -328,6 +437,7 @@ public class BotStudioService {
             DialogNextStep nextStep = node.nextStep() == null ? DialogNextStep.WAIT_FOR_REPLY : node.nextStep();
             if (node.type() != DialogNodeType.FOLDER
                     && nextStep != DialogNextStep.SKIP_USER_INPUT
+                    && nextStep != DialogNextStep.JUMP_TO
                     && isBlank(node.responseText())) {
                 invalid("Node ‘" + node.name() + "’ chưa có nội dung phản hồi.");
             }
@@ -366,6 +476,7 @@ public class BotStudioService {
             }
         }
         validateParentCycles(nodes);
+        new DialogConfigurationValidator().validate(nodes, entities);
     }
 
     private void validateParentCycles(List<DialogNodeInput> nodes) {
@@ -404,8 +515,40 @@ public class BotStudioService {
         return new BotSummaryResponse(
                 bot.getId(), bot.getName(), bot.getDescription(), bot.getLocale(), bot.getTimezone(),
                 bot.isBlueAiCoreEnabled(), bot.getCustomInstructions(),
-                bot.getStatus(), bot.getPublicKey(), bot.getDraftRevision(), bot.getPublishedReleaseId(), bot.getUpdatedAt()
+                bot.getStatus(), bot.getPublicKey(), bot.getDraftRevision(), bot.getPublishedReleaseId(), bot.getUpdatedAt(),
+                bot.isActiveForRelease(bot.getPublishedReleaseId()), customization(bot)
         );
+    }
+
+    private CustomizationInput customization(Bot bot) {
+        return new CustomizationInput(
+                bot.getIdentityRole(), bot.getTonePreset(), bot.getAnswerLength(), bot.getResponseStructure(),
+                bot.getProactivity(), bot.getCitationPolicy(), bot.getNoSourcePolicy(), bot.getPreferredTerms(),
+                bot.getForbiddenTerms(), bot.getFallbackMessage(), bot.getEscalationMessage(), bot.getResponseProfile()
+        ).withDefaults();
+    }
+
+    private CustomizationInput customization(CustomizationInput value) {
+        return (value == null ? CustomizationInput.defaults() : value).withDefaults();
+    }
+
+    private BotSnapshot readJson(String value) {
+        try {
+            return objectMapper.readValue(value, BotSnapshot.class);
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "SNAPSHOT_INVALID", "Bản phát hành BlueAI không hợp lệ.");
+        }
+    }
+
+    private String valueOrDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private void activateBot(Bot selected) {
+        botRepository.findAllByOrderByUpdatedAtDesc().forEach(bot -> {
+            if (!bot.getId().equals(selected.getId())) bot.deactivate();
+        });
+        selected.activate();
     }
 
     private void invalid(String message) {

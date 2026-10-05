@@ -21,15 +21,12 @@
   <a href="#4-chạy-local">Chạy local</a> ·
   <a href="#5-tri-thức-và-context">Tri thức &amp; context</a> ·
   <a href="#6-blueai-custom--dialog">BlueAI Custom</a> ·
-  <a href="https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/BE/PRODUCTION_DEPLOYMENT.md">Deploy runbook</a> ·
-  <a href="https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/TEAM_REVIEW_HANDOFF_2026-10-04.md">Team handoff</a>
+  <a href="BE/PRODUCTION_DEPLOYMENT.md">Deploy runbook</a> ·
+  <a href="docs/manual-tests/TEAM_REVIEW_HANDOFF_2026-10-04.md">Team handoff</a>
 </p>
 
 > [!IMPORTANT]
 > Sales là phạm vi nghiệp vụ được demo và kiểm thử hiện tại, không phải giới hạn kiến trúc của sản phẩm. Mở rộng sang bộ phận khác cần xác định tài liệu được phép chia sẻ, quyền truy cập và kịch bản sử dụng. **Bản hiện tại chưa có phân quyền kho tri thức theo phòng ban và chưa được duyệt deploy production.**
-
-> [!NOTE]
-> **Trang giới thiệu trên `main` mô tả bản pilot đang được review ở [feature/conversation-context](https://github.com/Ductri2006/BlueAI_Platform/tree/feature/conversation-context), mốc kiểm thử `b9079fd`.** Các tính năng, kiến trúc và lệnh chạy bên dưới áp dụng cho bản pilot đó, không khẳng định code trên `main` đã có đầy đủ. Lần cập nhật này chỉ đưa README lên `main`, không merge code ứng dụng. Link tài liệu/ảnh được ghim vào bản đã kiểm thử để không bị thiếu trên `main`.
 
 ## Mục lục
 
@@ -145,14 +142,14 @@ Không cần cài riêng Java, Maven, Node hoặc Python nếu chạy bằng Doc
 ### Bước 1 — Lấy source và chuẩn bị cấu hình
 
 ```powershell
-git clone --branch feature/conversation-context https://github.com/Ductri2006/BlueAI_Platform.git
+git clone https://github.com/Ductri2006/BlueAI_Platform.git
 cd BlueAI_Platform
-# Clone branch pilot để chạy đúng phiên bản được mô tả trong README.
+# Nếu test bản chưa merge, chọn branch team đang review trước khi build.
 cd BE
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-Nếu đã có checkout hoặc `BE/.env`, giữ cấu hình/công việc hiện có; không ghi đè bằng example. Nhánh bàn giao ngày 04/10/2026 là `feature/conversation-context`, xem [team handoff](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/TEAM_REVIEW_HANDOFF_2026-10-04.md) để pull đúng bản.
+Nếu đã có checkout hoặc `BE/.env`, giữ cấu hình/công việc hiện có; không ghi đè bằng example. Nhánh bàn giao ngày 04/10/2026 là `feature/conversation-context`, xem [team handoff](docs/manual-tests/TEAM_REVIEW_HANDOFF_2026-10-04.md) để pull đúng bản.
 
 ### Bước 2 — Sửa `BE/.env`
 
@@ -245,7 +242,7 @@ Mở **http://localhost:3000**, đăng nhập bằng email/mật khẩu bootstra
 
 Backend đối chiếu nguồn với record tài liệu đủ điều kiện trong MySQL. File chưa `READY`, tài liệu đã xóa hoặc dữ liệu mẫu không được phép không phải nguồn hợp lệ. Request đầu có thể chậm do embedding/index; tốc độ phụ thuộc tài liệu và provider.
 
-`Papers/*.csv` là dữ liệu tổng hợp, không phải chính sách doanh nghiệp được duyệt. Compose hiện **cố định tắt** shared demo knowledge; chỉ thêm `APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE=true` vào `.env` không bật được nó. Để test citation, ưu tiên upload [fixture QA](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/fixtures/qa-sales-policy.md), không dùng giá trong fixture cho khách thật.
+`Papers/*.csv` là dữ liệu tổng hợp, không phải chính sách doanh nghiệp được duyệt. Compose hiện **cố định tắt** shared demo knowledge; chỉ thêm `APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE=true` vào `.env` không bật được nó. Để test citation, ưu tiên upload [fixture QA](docs/manual-tests/fixtures/qa-sales-policy.md), không dùng giá trong fixture cho khách thật.
 
 ### Nhớ thông tin giữa các phiên như thế nào?
 
@@ -265,15 +262,15 @@ Context có budget, không gửi toàn bộ lịch sử vô hạn cho mô hình.
 <details>
 <summary><strong>Xem ảnh kiểm thử giao diện — dữ liệu QA, không phải khách hàng thật</strong></summary>
 
-**Câu trả lời có nguồn tri thức — mở ảnh trong repository:**
+**Câu trả lời có nguồn tri thức:**
 
-[QA: nguồn tài liệu và đoạn trích của câu trả lời](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/evidence-2026-10-04/01-knowledge-base-citation.jpg)
+![QA: nguồn tài liệu và đoạn trích của câu trả lời](docs/manual-tests/evidence-2026-10-04/01-knowledge-base-citation.jpg)
 
-**Nhớ thông tin giữa các phiên qua lịch sử liên quan — mở ảnh trong repository:**
+**Nhớ thông tin giữa các phiên qua lịch sử liên quan:**
 
-[QA: nhớ 37 sales, ngân sách 2,9 triệu và mã cơ hội TV-4712](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/evidence-2026-10-04/08-automatic-context-after-fix-PASS.jpg)
+![QA: nhớ 37 sales, ngân sách 2,9 triệu và mã cơ hội TV-4712](docs/manual-tests/evidence-2026-10-04/08-automatic-context-after-fix-PASS.jpg)
 
-Ảnh là bằng chứng ngày 04/10/2026, không phải cam kết mọi câu hỏi đều thành công. Xem [báo cáo tổng hợp](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/RESULTS_FOLLOWUP_2026-10-04.md) để biết điều kiện test và phần chưa chạy.
+Ảnh là bằng chứng ngày 04/10/2026, không phải cam kết mọi câu hỏi đều thành công. Xem [báo cáo tổng hợp](docs/manual-tests/RESULTS_FOLLOWUP_2026-10-04.md) để biết điều kiện test và phần chưa chạy.
 
 </details>
 
@@ -289,7 +286,7 @@ Context có budget, không gửi toàn bộ lịch sử vô hạn cho mô hình.
 
 Luồng: **tạo bản nháp → sửa cấu hình → lưu → thử bot → phát hành → chọn cách sử dụng**. Lưu dùng `expectedRevision` để tránh ghi đè bản nháp đã đổi ở nơi khác; publish tạo snapshot release.
 
-Mẫu **Demo sales — 6 kịch bản Dialog** gồm chào hỏi, giờ chi nhánh, thu thập báo giá, xác nhận/từ chối, sửa dữ kiện và fallback. Mẫu không tính giá thật, tạo đơn hàng hay kết nối CRM; Core được tắt để thử Dialog độc lập. Xem [hướng dẫn 6 kịch bản](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/SALES_DIALOG_SIX_SCENARIOS_DEMO_2026-10-03.md).
+Mẫu **Demo sales — 6 kịch bản Dialog** gồm chào hỏi, giờ chi nhánh, thu thập báo giá, xác nhận/từ chối, sửa dữ kiện và fallback. Mẫu không tính giá thật, tạo đơn hàng hay kết nối CRM; Core được tắt để thử Dialog độc lập. Xem [hướng dẫn 6 kịch bản](docs/SALES_DIALOG_SIX_SCENARIOS_DEMO_2026-10-03.md).
 
 > [!WARNING]
 > **Phát hành bot và áp dụng làm BlueAI chính là hai thao tác khác nhau.** Cấu hình active cho **Hỏi BlueAI** dùng chung ở cấp nền tảng; kích hoạt một bot sẽ bỏ active của bot khác. Chưa có tự chọn cấu hình theo phòng ban. Đừng áp dụng bot QA làm cấu hình chính nếu chưa được team đồng ý.
@@ -316,7 +313,7 @@ Quota application mặc định qua Redis: **10 phiên/client/phút, 30 tin/clie
 
 ## 8. Cấu hình
 
-Đọc [example local](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/BE/.env.example), [example production](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/BE/.env.production.example) và Compose để biết biến được chuyển vào container. Biến chỉ có trong `.env` nhưng không được Compose tham chiếu không tự xuất hiện trong ứng dụng.
+Đọc [example local](BE/.env.example), [example production](BE/.env.production.example) và Compose để biết biến được chuyển vào container. Biến chỉ có trong `.env` nhưng không được Compose tham chiếu không tự xuất hiện trong ứng dụng.
 
 | Nhóm | Biến chính | Lưu ý |
 | --- | --- | --- |
@@ -337,7 +334,7 @@ Tên model là **giá trị trong source**, không bảo đảm provider cho ph�
 Source có kiểm tra quyền server/ownership, password hashing, refresh rotation, cookie HttpOnly/SameSite, Origin guard, upload validation, quota/idempotency, security headers và CI. Chúng không chứng minh hệ thống hết mọi rủi ro.
 
 - Browser dùng refresh cookie, access token trong RAM; nâng từ bản localStorage cũ cần đăng nhập lại.
-- Production cần HTTPS/cookie Secure; ưu tiên FE/API cùng origin. Nếu `VITE_API_BASE_URL` khác origin, review CORS và CSP `connect-src` trong [security headers](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/FE/security-headers.conf), không mở wildcard cho tiện.
+- Production cần HTTPS/cookie Secure; ưu tiên FE/API cùng origin. Nếu `VITE_API_BASE_URL` khác origin, review CORS và CSP `connect-src` trong [security headers](FE/security-headers.conf), không mở wildcard cho tiện.
 - Dùng `compose.yaml` **cùng** `compose.production.yaml`, không chạy override một mình. Runbook nêu điều kiện secret, proxy CIDR, mạng và readiness.
 - Không publish API/RAG/MySQL ra Internet; giới hạn metrics và quyền Docker socket của log collector.
 - `.gitignore` không thu hồi key từng bị lộ: cần revoke/rotate, kiểm tra lịch sử Git/release artifact.
@@ -348,11 +345,11 @@ Source có kiểm tra quyền server/ownership, password hashing, refresh rotati
 > [!CAUTION]
 > **CI xanh không đồng nghĩa production-ready.** Snapshot QA 04/10/2026 còn 5 HIGH ở npm build-chain (giữ Tailwind 3 theo quyết định hiện tại), 45 OS HIGH trên RAG image và các gate staging chưa hoàn tất. Finding cần xử lý hoặc risk acceptance đúng thẩm quyền, không chỉ ẩn cảnh báo.
 
-Điểm vào: [production runbook](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/BE/PRODUCTION_DEPLOYMENT.md). Cần team review, HTTPS/proxy thật, tải/soak, ngân sách provider, backup mã hóa ngoài máy chủ, restore/RPO/RTO và migration/rollback trước khi duyệt release.
+Điểm vào: [production runbook](BE/PRODUCTION_DEPLOYMENT.md). Cần team review, HTTPS/proxy thật, tải/soak, ngân sách provider, backup mã hóa ngoài máy chủ, restore/RPO/RTO và migration/rollback trước khi duyệt release.
 
 ## 10. Kiểm thử
 
-[Workflow Verify](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/.github/workflows/verify.yml) chạy backend, Flyway/MySQL, migration/concurrency, RAG/audit, frontend/build và Compose/Nginx/ops. Xem [GitHub Actions](https://github.com/Ductri2006/BlueAI_Platform/actions?query=branch%3Afeature%2Fconversation-context) theo **đúng SHA** muốn triển khai.
+[Workflow Verify](.github/workflows/verify.yml) chạy backend, Flyway/MySQL, migration/concurrency, RAG/audit, frontend/build và Compose/Nginx/ops. Xem [GitHub Actions](https://github.com/Ductri2006/BlueAI_Platform/actions/workflows/verify.yml) theo **đúng SHA** muốn triển khai.
 
 ### Snapshot bằng chứng — 04/10/2026
 
@@ -365,7 +362,7 @@ Source có kiểm tra quyền server/ownership, password hashing, refresh rotati
 | Manual ledger — 90 tiêu chí | 73 PASS / 8 PARTIAL / 1 FAIL / 8 NOT RUN | Tích lũy, chưa duyệt production |
 | Bản bàn giao `b9079fd` | CI 6/6 nhóm PASS | [Run theo SHA này](https://github.com/Ductri2006/BlueAI_Platform/actions/runs/37195333024); không mặc định áp dụng cho SHA khác |
 
-Đọc [manual test plan](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/MANUAL_TEST_PRODUCTION_GATE_2026-10-03.md), [báo cáo follow-up](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/RESULTS_FOLLOWUP_2026-10-04.md) và [hướng dẫn tự test](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/SELF_TEST_FOLLOWUP_2026-10-04.md). Script `qa-*` có giả định stack/port/path riêng; đọc guard trước khi chạy, không trỏ nguyên trạng vào production.
+Đọc [manual test plan](docs/manual-tests/MANUAL_TEST_PRODUCTION_GATE_2026-10-03.md), [báo cáo follow-up](docs/manual-tests/RESULTS_FOLLOWUP_2026-10-04.md) và [hướng dẫn tự test](docs/manual-tests/SELF_TEST_FOLLOWUP_2026-10-04.md). Script `qa-*` có giả định stack/port/path riêng; đọc guard trước khi chạy, không trỏ nguyên trạng vào production.
 
 ## 11. Vận hành và xử lý sự cố
 
@@ -402,15 +399,15 @@ docker compose down
 
 | Bạn cần gì? | Đọc ở đâu? |
 | --- | --- |
-| Backend, auth và API | [BE/README.md](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/BE/README.md) |
-| Hợp đồng Java ↔ RAG/worker | [RAG_WORKER_CONTRACT.md](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/BE/RAG_WORKER_CONTRACT.md) |
-| Python service | [RAG README](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/feature-rag-chatbot/rag-chatbot/README.md) |
-| Cấu hình Dialog | [6 kịch bản Sales](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/SALES_DIALOG_SIX_SCENARIOS_DEMO_2026-10-03.md) |
-| Context + knowledge base | [QA context/KB](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/QA_CONTEXT_KB_2026-09-23.md), [follow-up](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/RESULTS_FOLLOWUP_2026-10-04.md) |
-| Pull và chuẩn bị môi trường | [Team handoff](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/TEAM_REVIEW_HANDOFF_2026-10-04.md) |
-| 5 nhóm bản vá đã push | [Push notes](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/PUSH_NOTES_2026-10-04.md) |
-| Kiểm thử trước release | [Manual plan](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/MANUAL_TEST_PRODUCTION_GATE_2026-10-03.md), [self-test](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/docs/manual-tests/SELF_TEST_FOLLOWUP_2026-10-04.md) |
-| Deploy, monitoring, backup/restore | [Production runbook](https://github.com/Ductri2006/BlueAI_Platform/blob/b9079fd464c768db0864a809d711bb4c5de30b8e/BE/PRODUCTION_DEPLOYMENT.md) |
+| Backend, auth và API | [BE/README.md](BE/README.md) |
+| Hợp đồng Java ↔ RAG/worker | [RAG_WORKER_CONTRACT.md](BE/RAG_WORKER_CONTRACT.md) |
+| Python service | [RAG README](feature-rag-chatbot/rag-chatbot/README.md) |
+| Cấu hình Dialog | [6 kịch bản Sales](docs/SALES_DIALOG_SIX_SCENARIOS_DEMO_2026-10-03.md) |
+| Context + knowledge base | [QA context/KB](docs/QA_CONTEXT_KB_2026-09-23.md), [follow-up](docs/manual-tests/RESULTS_FOLLOWUP_2026-10-04.md) |
+| Pull và chuẩn bị môi trường | [Team handoff](docs/manual-tests/TEAM_REVIEW_HANDOFF_2026-10-04.md) |
+| 5 nhóm bản vá đã push | [Push notes](docs/manual-tests/PUSH_NOTES_2026-10-04.md) |
+| Kiểm thử trước release | [Manual plan](docs/manual-tests/MANUAL_TEST_PRODUCTION_GATE_2026-10-03.md), [self-test](docs/manual-tests/SELF_TEST_FOLLOWUP_2026-10-04.md) |
+| Deploy, monitoring, backup/restore | [Production runbook](BE/PRODUCTION_DEPLOYMENT.md) |
 
 Khi mở rộng sang bộ phận mới, thống nhất **nghiệp vụ → chủ sở hữu tài liệu → quyền chia sẻ → cấu hình AI → bộ câu hỏi kiểm thử → người duyệt**. CRM/ERP, SSO hay phân quyền phòng ban là phạm vi triển khai riêng; README này không khẳng định các tích hợp đó đã có.
 

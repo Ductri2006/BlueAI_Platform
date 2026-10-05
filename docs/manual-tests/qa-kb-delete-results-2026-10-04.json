@@ -1,0 +1,31 @@
+{
+  "scope": "Owned QA only; real UI before/after tombstone",
+  "documentId": "61b78d0d-ae15-4743-a0e9-a91d6aed2d7b",
+  "startedAt": "2026-10-03T22:05:04.948Z",
+  "before": {
+    "result": "PASS",
+    "conversationId": "e92fe830-f14b-4a9d-a89f-f192211bf394",
+    "answer": "Theo tài liệu QA Aurora trong kho tri thức, gói Standard có giá minh họa là 1.250.000 VND mỗi tháng và hỗ trợ 25 nhân viên sales [S1]. \n\n*Lưu ý: Đây là tài liệu kiểm thử (QA) với dữ liệu giả định [S1].*",
+    "sources": [
+      {
+        "documentId": "61b78d0d-ae15-4743-a0e9-a91d6aed2d7b",
+        "filename": "qa-sales-policy.md",
+        "chunkId": "61b78d0d-ae15-4743-a0e9-a91d6aed2d7b:0",
+        "score": 0.8004145324230194,
+        "excerpt": "# QA ACCEPTANCE ONLY — Not a real Bluecom policy\n\nMã kiểm chứng: QA-SALES-20261003-FBC8179.\n\nSản phẩm QA Aurora là sản phẩm giả dành riêng cho kiểm thử. Gói Standard có\ngiá minh họa 1.250.000 VND mỗi tháng, hỗ trợ 25 nhân viên sales. Gói Pro có\ngiá minh họa 2.500.000 VND mỗi tháng, hỗ trợ 60 nhân viên sales. Mọi giá trong\ntài liệu này đều là dữ liệu giả; không được gửi như báo giá thật cho khách hàng.\n\nThời gian triển khai minh họa là 7 ngày làm việc kể từ khi nhận đủ thông tin.\nChính sách đổi gói minh họa: được đổi vào kỳ thanh toán tiếp theo, không hoàn\ntiền phần thời gian đã sử dụng. Hỗ trợ kỹ thuật mẫu từ 08:00 đến 18:00 từ\nthứ Hai đến thứ Sáu. Tài liệu không quy định thời gian hoạt động ngày lễ.\n\nNếu khách hàng yêu cầu dữ liệu không có trong tài liệu, assistant phải nói\nrõ chưa có căn cứ hoặc cần xác minh, không tự bịa chính sách.\n\nĐây là tài liệu kiểm thử tổng hợp, không chứa dữ liệu khách hàng hay bí mật.",
+        "sourceType": "ENTERPRISE_DOCUMENT",
+        "approvalStatus": "READY"
+      }
+    ],
+    "contextSources": []
+  },
+  "after": {
+    "result": "PASS",
+    "conversationId": "b256da2b-c8fd-4909-b5c4-d9c84f267725",
+    "answer": "Mình chưa tìm thấy đủ thông tin trong kho tri thức để trả lời chắc chắn. Kho tri thức hiện tại không có tài liệu hợp lệ nào chứa thông tin về giá và số lượng sales của gói Standard (tài liệu liên quan có thể đã bị xóa hoặc không còn trong hệ thống). Bạn có thể yêu cầu quản trị viên tải lên tài liệu liên quan để mình có thể hỗ trợ tốt hơn nhé.",
+    "sources": [],
+    "contextSources": []
+  },
+  "tombstone": "DELETE 204, GET 404, absent from owned document list",
+  "finishedAt": "2026-10-03T22:07:23.591Z"
+}

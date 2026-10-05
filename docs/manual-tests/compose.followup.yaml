@@ -1,0 +1,8 @@
+# Apply only to the isolated acceptance stack, after the remediation override.
+services:
+  frontend:
+    image: blueai-preprod-frontend:followup-20261004
+  auth-api:
+    image: blueai-preprod-api:followup-20261004
+  rag-ai:
+    image: blueai-preprod-rag:followup-20261004

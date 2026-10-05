@@ -1,0 +1,37 @@
+{
+  "scope": "QA UI regression; not a production quality guarantee",
+  "before": {
+    "result": "FAIL",
+    "answer": "Trong lịch sử liên quan, khách hàng QATarvos có các thông tin được ghi nhận như sau:\n- Số lượng nhân viên sales: 15 người\n- Ngân sách tháng: 50.000 USD\n- Mã cơ hội: OP-88219",
+    "contextSources": [
+      {
+        "type": "CURRENT_CONVERSATION",
+        "conversationId": "e36da99f-96d6-4bd6-a3b6-35ba048008ab",
+        "title": "QA automatic recall target muswkqfn"
+      }
+    ]
+  },
+  "expected": {
+    "sales": 37,
+    "budget": 2900000,
+    "opportunity": "TV-4712"
+  },
+  "targetId": "ecbc650e-fd42-42a0-8221-298cadbbb02d",
+  "after": {
+    "result": "PASS",
+    "answer": "Dựa trên lịch sử liên quan, khách hàng QATarvos có các thông tin sau:\n- Số lượng nhân viên sales: 37 sales\n- Ngân sách hàng tháng: 2,9 triệu VND\n- Mã cơ hội: TV-4712",
+    "contextSources": [
+      {
+        "type": "CURRENT_CONVERSATION",
+        "conversationId": "ecbc650e-fd42-42a0-8221-298cadbbb02d",
+        "title": "QA automatic recall AFTER FIX 20261004"
+      },
+      {
+        "type": "RELATED_HISTORY",
+        "conversationId": "1b887193-0986-4ce6-8b23-02490066130a",
+        "title": "QATarvos customer notes muswkqfn"
+      }
+    ]
+  },
+  "finishedAt": "2026-10-03T22:00:16.087Z"
+}

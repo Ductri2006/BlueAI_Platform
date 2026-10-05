@@ -14,6 +14,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.UUID;
 
 @Entity
@@ -62,6 +63,21 @@ public class RagDocument {
     @Column(name = "failure_reason", length = 1_000)
     private String failureReason;
 
+    @Column(name = "attempt_count", nullable = false)
+    private int attemptCount;
+
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
+
+    @Column(name = "processing_attempt_id", length = 36)
+    private String processingAttemptId;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    @Column(name = "purge_attempted_at")
+    private Instant purgeAttemptedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -86,6 +102,7 @@ public class RagDocument {
         this.requestedChunkSize = requestedChunkSize;
         this.requestedChunkOverlap = requestedChunkOverlap;
         this.status = DocumentStatus.PENDING_CHUNKING;
+        this.attemptCount = 0;
     }
 
     @PrePersist
@@ -99,6 +116,9 @@ public class RagDocument {
     public void markProcessing() {
         this.status = DocumentStatus.PROCESSING;
         this.processingStartedAt = Instant.now();
+        this.processingAttemptId = UUID.randomUUID().toString();
+        this.attemptCount++;
+        this.nextAttemptAt = null;
         this.processedAt = null;
         this.producedChunkCount = null;
         this.failureReason = null;
@@ -108,25 +128,61 @@ public class RagDocument {
         this.status = DocumentStatus.READY;
         this.producedChunkCount = producedChunkCount;
         this.processedAt = Instant.now();
+        this.processingStartedAt = null;
+        this.processingAttemptId = null;
+        this.nextAttemptAt = null;
         this.failureReason = null;
     }
 
-    public void markFailed(String failureReason) {
-        this.status = DocumentStatus.FAILED;
+    public void markFailed(String failureReason, int maxAttempts, Duration retryDelay) {
         this.processedAt = Instant.now();
         this.failureReason = failureReason;
+        this.processingStartedAt = null;
+        this.processingAttemptId = null;
+        if (this.attemptCount >= maxAttempts) {
+            this.status = DocumentStatus.FAILED;
+            this.nextAttemptAt = null;
+        } else {
+            this.status = DocumentStatus.PENDING_CHUNKING;
+            this.nextAttemptAt = Instant.now().plus(retryDelay);
+        }
     }
 
     /**
      * Puts a document that was claimed but never reported back into the queue, so a worker
      * that died mid-processing cannot strand the row in PROCESSING forever.
      */
-    public void markPendingAgain(String reason) {
-        this.status = DocumentStatus.PENDING_CHUNKING;
+    public void markPendingAgain(String reason, int maxAttempts, Duration retryDelay) {
+        this.failureReason = reason;
         this.processingStartedAt = null;
+        this.processingAttemptId = null;
         this.processedAt = null;
         this.producedChunkCount = null;
-        this.failureReason = reason;
+        if (this.attemptCount >= maxAttempts) {
+            this.status = DocumentStatus.FAILED;
+            this.processedAt = Instant.now();
+            this.nextAttemptAt = null;
+        } else {
+            this.status = DocumentStatus.PENDING_CHUNKING;
+            this.nextAttemptAt = Instant.now().plus(retryDelay);
+        }
+    }
+
+    public void softDelete() {
+        if (this.deletedAt == null) {
+            this.deletedAt = Instant.now();
+        }
+        this.processingAttemptId = null;
+        this.processingStartedAt = null;
+        this.nextAttemptAt = null;
+    }
+
+    public void markPurgeAttempted(Instant attemptedAt) {
+        this.purgeAttemptedAt = attemptedAt;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
     }
 
     public String getId() {
@@ -183,6 +239,26 @@ public class RagDocument {
 
     public String getFailureReason() {
         return failureReason;
+    }
+
+    public int getAttemptCount() {
+        return attemptCount;
+    }
+
+    public Instant getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public String getProcessingAttemptId() {
+        return processingAttemptId;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public Instant getPurgeAttemptedAt() {
+        return purgeAttemptedAt;
     }
 
     public Instant getCreatedAt() {

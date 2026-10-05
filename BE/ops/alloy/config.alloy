@@ -1,0 +1,72 @@
+// Limit discovery at the Docker API and again before shipping log streams.
+// A read-only socket mount still grants Docker API authority: secure the host
+// and consider an allowlisted socket proxy before production.
+discovery.docker "blueai" {
+  host = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+  filter {
+    name = "label"
+    values = ["com.docker.compose.project=blueai-auth"]
+  }
+}
+
+discovery.relabel "blueai" {
+  targets = []
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex = "blueai-auth"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex = "/(.*)"
+    target_label = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label = "compose_service"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label = "compose_project"
+  }
+}
+
+loki.source.docker "blueai" {
+  host = "unix:///var/run/docker.sock"
+  targets = discovery.docker.blueai.targets
+  relabel_rules = discovery.relabel.blueai.rules
+  forward_to = [loki.process.redacted.receiver]
+}
+
+loki.process "redacted" {
+  // Capturing only the credential preserves surrounding JSON and diagnostics.
+  stage.replace {
+    expression = "(?i)Bearer\\s+([a-z0-9._~+/-]+=*)"
+    replace = "[REDACTED]"
+  }
+  // Redact entire quoted JSON credentials, including spaces and escaped
+  // quotes. The fallback below handles unquoted key=value diagnostics.
+  stage.replace {
+    expression = "(?i)(?:password|api[_-]?key|access[_-]?token|refresh[_-]?token|worker[_-]?key)\"?\\s*[:=]\\s*\"((?:[^\"\\\\]|\\\\.)*)\""
+    replace = "[REDACTED]"
+  }
+  stage.replace {
+    expression = "(?i)(?:password|api[_-]?key|access[_-]?token|refresh[_-]?token|worker[_-]?key)\\\"?\\s*[:=]\\s*\\\"?([^\\\"\\s,};&]+)"
+    replace = "[REDACTED]"
+  }
+  stage.json {
+    // Spring ECS uses nested log.level; some emitters use a literal dotted key.
+    expressions = {level = "log.level || \"log.level\"", logger = "log.logger || \"log.logger\""}
+  }
+  stage.labels {
+    values = {level = "", logger = ""}
+  }
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

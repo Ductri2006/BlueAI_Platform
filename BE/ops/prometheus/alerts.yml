@@ -1,0 +1,109 @@
+groups:
+  - name: blueai-availability
+    rules:
+      - alert: BlueAiAuthApiMetricsDown
+        expr: up{job="auth-api"} != 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: BlueAI auth-api metrics scrape is down
+          description: Prometheus cannot scrape the /actuator/prometheus endpoint on the private application network for 2 minutes.
+
+      - alert: BlueAiHighHttp5xxRate
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{job="auth-api",status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(http_server_requests_seconds_count{job="auth-api"}[5m])), 0.000001)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: BlueAI auth-api 5xx rate is above 5%
+          description: The five-minute HTTP 5xx ratio is {{ $value | humanizePercentage }}.
+
+      - alert: BlueAiAuthEndpoint429Burst
+        expr: |
+          sum(rate(http_server_requests_seconds_count{
+            job="auth-api",
+            uri="/api/v1/auth/login",
+            status="429"
+          }[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BlueAI login 429 burst detected
+          description: Login is returning more than 6 HTTP 429 responses per minute; inspect edge/WAF and credential-abuse telemetry.
+
+      - alert: BlueAiLogin401Burst
+        expr: |
+          sum(rate(http_server_requests_seconds_count{
+            job="auth-api",
+            uri="/api/v1/auth/login",
+            status="401"
+          }[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BlueAI login 401 burst detected
+          description: Login is rejecting more than 6 requests per minute; inspect credential-stuffing attempts and edge rate limits.
+
+      - alert: BlueAiAuthEndpoint5xxRate
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{
+              job="auth-api",
+              uri="/api/v1/auth/login",
+              status=~"5.."
+            }[5m]))
+            /
+            clamp_min(sum(rate(http_server_requests_seconds_count{
+              job="auth-api",
+              uri="/api/v1/auth/login"
+            }[5m])), 0.000001)
+          ) > 0.05
+          and
+          sum(rate(http_server_requests_seconds_count{
+            job="auth-api",
+            uri="/api/v1/auth/login"
+          }[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: BlueAI login 5xx rate is above 5%
+          description: Login 5xx ratio is {{ $value | humanizePercentage }}; inspect bcrypt saturation, database and dependencies.
+
+      - alert: BlueAiHighApiLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{job="auth-api"}[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: BlueAI API p95 latency is above 2 seconds
+          description: The five-minute API p95 latency is {{ $value | humanizeDuration }}.
+
+      - alert: BlueAiWidgetRedisFallback
+        expr: increase(blueai_widget_protection_events_total{job="auth-api",event="redis_fallback"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Widget protection fell back from Redis
+          description: Shared rate limiting/idempotency state is degraded; inspect Redis and auth-api logs.
+
+      - alert: BlueAiWidgetBlockedBurst
+        expr: increase(blueai_widget_protection_events_total{job="auth-api",event=~"rate_limited|duplicate_blocked"}[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Widget abuse protection is blocking a burst
+          description: More than 100 rate-limit or duplicate blocks occurred in five minutes.

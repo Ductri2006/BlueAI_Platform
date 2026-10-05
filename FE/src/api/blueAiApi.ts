@@ -26,7 +26,7 @@ export interface UserResponse {
 
 export interface AuthResponse {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
   tokenType: string;
   expiresIn: number;
   user: UserResponse;
@@ -40,8 +40,50 @@ export interface LoginCredentials {
 export interface ConversationResponse {
   id: string;
   title: string;
+  contextMode: ConversationContextMode;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ConversationContextMode = 'CURRENT_CONVERSATION' | 'LINKED_CONVERSATIONS' | 'RELEVANT_HISTORY';
+
+export interface ConversationLinkResponse {
+  id: string;
+  sourceConversationId: string;
+  sourceConversationTitle: string;
+  sourceSnapshotAt: string;
+  createdAt: string;
+}
+
+export interface ConversationContextSettingsResponse {
+  mode: ConversationContextMode;
+  links: ConversationLinkResponse[];
+}
+
+export type MemoryScope = 'USER' | 'CONVERSATION';
+export type MemoryStatus = 'PROPOSED' | 'CONFIRMED' | 'REPLACED';
+
+export interface UserMemoryResponse {
+  key: string;
+  content: string;
+  scope: MemoryScope;
+  status: MemoryStatus;
+  conversationId?: string;
+  sourceMessageId?: string;
+  expiresAt?: string;
+  replacedByMemoryKey?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertUserMemoryInput {
+  content: string;
+  scope?: MemoryScope;
+  conversationId?: string;
+  sourceMessageId?: string;
+  expiresAt?: string;
+  status?: Exclude<MemoryStatus, 'REPLACED'>;
+  replacesMemoryKey?: string;
 }
 
 export interface ConversationMessageResponse {
@@ -49,6 +91,9 @@ export interface ConversationMessageResponse {
   role: 'USER' | 'ASSISTANT';
   content: string;
   createdAt: string;
+  evidence?: (Pick<RagAnswerResponse, 'sources' | 'contextSources'> & {
+    origin?: 'CORE' | 'DIALOG' | 'DIALOG_CONTEXT_CONFIRMATION' | null;
+  }) | null;
 }
 
 export interface RagSourceResponse {
@@ -65,6 +110,12 @@ export interface RagAnswerResponse {
   userMessage: ConversationMessageResponse;
   assistantMessage: ConversationMessageResponse;
   sources: RagSourceResponse[];
+  contextSources?: Array<{
+    type: 'LINKED_CONVERSATION' | 'RELATED_HISTORY' | 'USER_MEMORY' | string;
+    conversationId?: string;
+    title: string;
+    memoryKey?: string;
+  }>;
 }
 
 export interface DocumentResponse {
@@ -100,6 +151,22 @@ export interface SystemMetricsResponse {
   generatedAt: string;
 }
 
+export interface GeminiUsageTotals {
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface GeminiUsageReport {
+  last24Hours: GeminiUsageTotals;
+  last7Days: GeminiUsageTotals;
+  lifetime: GeminiUsageTotals;
+  daily: Array<GeminiUsageTotals & { date: string }>;
+  recent: Array<Omit<GeminiUsageTotals, 'requests'> & { id: string; model: string; recordedAt: string }>;
+  generatedAt: string;
+}
+
 export type StudioBotStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type StudioDialogNodeType = 'WELCOME' | 'ROUTE' | 'FALLBACK' | 'FOLDER';
 export type StudioDialogNextStep = 'WAIT_FOR_REPLY' | 'SKIP_USER_INPUT' | 'JUMP_TO';
@@ -117,6 +184,23 @@ export interface StudioBotSummary {
   draftRevision: number;
   publishedReleaseId?: string;
   updatedAt: string;
+  active?: boolean;
+  customization?: StudioCustomization;
+}
+
+export interface StudioCustomization {
+  identityRole?: string;
+  tonePreset?: string;
+  answerLength?: string;
+  responseStructure?: string;
+  proactivity?: string;
+  citationPolicy?: string;
+  noSourcePolicy?: string;
+  preferredTerms?: string;
+  forbiddenTerms?: string;
+  fallbackMessage?: string;
+  escalationMessage?: string;
+  responseProfile?: string;
 }
 
 export interface StudioIntent {
@@ -150,6 +234,7 @@ export interface StudioDialogNode {
   jumpToNode?: string;
   irrelevantResponseText?: string;
   priority: number;
+  contextReusePolicy?: 'NONE' | 'CONFIRMED_ONLY';
 }
 
 export interface StudioBotConfiguration {
@@ -157,6 +242,7 @@ export interface StudioBotConfiguration {
   intents: StudioIntent[];
   entities: StudioEntity[];
   dialogNodes: StudioDialogNode[];
+  customization?: StudioCustomization;
 }
 
 export interface StudioPreviewContext {
@@ -165,6 +251,28 @@ export interface StudioPreviewContext {
   lastIntent?: string;
   variables: Record<string, string>;
   waitingNode?: string;
+  suggestedVariables?: Record<string, string>;
+  suggestionSource?: string;
+}
+
+export interface StudioDialogTrace {
+  route: string;
+  reason: string;
+  visitedNodes: string[];
+  confirmedEntities: Record<string, string>;
+  contextSource?: string;
+}
+
+export interface ConversationContextSourceResponse {
+  type: string;
+  conversationId?: string;
+  title: string;
+  memoryKey?: string;
+}
+
+export interface StudioPreviewHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 export interface StudioRuntimeResponse {
@@ -174,6 +282,10 @@ export interface StudioRuntimeResponse {
   matchedNode?: string;
   context: StudioPreviewContext;
   fallback: boolean;
+  dialogHandled?: boolean;
+  trace?: StudioDialogTrace;
+  sources?: RagSourceResponse[];
+  contextSources?: ConversationContextSourceResponse[];
 }
 
 export interface StudioPublishResponse {
@@ -187,6 +299,7 @@ export interface BlueAiApiOptions {
   baseUrl?: string;
   accessToken?: string;
   refreshToken?: string;
+  sessionMode?: 'browser' | 'token';
   fetchImpl?: FetchImplementation;
 }
 
@@ -205,27 +318,13 @@ function withoutTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-function readStoredToken(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.localStorage.getItem(TOKEN_STORAGE_KEY) || undefined;
-}
-
-function readStoredRefreshToken(): string | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || undefined;
-}
-
-function writeStoredTokens(accessToken: string, refreshToken: string): void {
-  if (typeof window !== 'undefined') {
-    window.localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
-    window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
-  }
-}
-
 function removeStoredTokens(): void {
   if (typeof window !== 'undefined') {
-    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-    window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    try {
+      // Migrate by discarding old JS-readable credentials, never importing them.
+      window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+      window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+    } catch { /* Storage may be disabled by the browser's privacy policy. */ }
   }
 }
 
@@ -248,20 +347,31 @@ export class BlueAiApi {
   private accessToken?: string;
   private refreshToken?: string;
   private refreshing?: Promise<string>;
+  private readonly browserSession: boolean;
+  private browserSessionAvailable = true;
+  private sessionVersion = 0;
+  private readonly sessionClearedListeners = new Set<() => void>();
 
   constructor(private readonly options: BlueAiApiOptions = {}) {
     this.baseUrl = withoutTrailingSlash(options.baseUrl ?? DEFAULT_API_BASE_URL);
     this.fetchImpl = options.fetchImpl || globalThis.fetch.bind(globalThis);
-    this.accessToken = options.accessToken || readStoredToken();
-    this.refreshToken = options.refreshToken || readStoredRefreshToken();
+    this.browserSession = (options.sessionMode ?? (options.accessToken || options.refreshToken ? 'token' : 'browser')) === 'browser';
+    this.accessToken = options.accessToken;
+    this.refreshToken = this.browserSession ? undefined : options.refreshToken;
+    removeStoredTokens();
   }
 
   hasSession(): boolean {
-    return Boolean(this.accessToken || this.refreshToken);
+    return Boolean(this.accessToken || this.refreshToken || (this.browserSession && this.browserSessionAvailable));
+  }
+
+  onSessionCleared(listener: () => void): () => void {
+    this.sessionClearedListeners.add(listener);
+    return () => { this.sessionClearedListeners.delete(listener); };
   }
 
   async login(credentials: LoginCredentials): Promise<UserResponse> {
-    const response = await this.request<AuthResponse>('/api/v1/auth/login', {
+    const response = await this.request<AuthResponse>(this.authPath('login'), {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
@@ -274,12 +384,13 @@ export class BlueAiApi {
   }
 
   async logout(): Promise<void> {
-    const refreshToken = this.refreshToken;
     try {
-      if (refreshToken) {
-        await this.request<void>('/api/v1/auth/logout', {
+      // Finish a single-flight rotation before revoking the latest credential.
+      await this.refreshing?.catch(() => undefined);
+      if (this.browserSession || this.refreshToken) {
+        await this.request<void>(this.authPath('logout'), {
           method: 'POST',
-          body: JSON.stringify({ refreshToken }),
+          body: this.browserSession ? undefined : JSON.stringify({ refreshToken: this.refreshToken }),
         });
       }
     } finally {
@@ -288,10 +399,14 @@ export class BlueAiApi {
   }
 
   clearSession(): void {
+    const hadAuthenticatedSession = Boolean(this.accessToken || this.refreshToken);
+    this.sessionVersion++;
     this.accessToken = undefined;
     this.refreshToken = undefined;
     this.refreshing = undefined;
+    this.browserSessionAvailable = false;
     removeStoredTokens();
+    if (hadAuthenticatedSession) this.sessionClearedListeners.forEach(listener => listener());
   }
 
   async createConversation(title: string): Promise<ConversationResponse> {
@@ -319,11 +434,77 @@ export class BlueAiApi {
     );
   }
 
+  async getConversationContext(conversationId: string): Promise<ConversationContextSettingsResponse> {
+    return this.authorizedRequest<ConversationContextSettingsResponse>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/context`,
+      { method: 'GET' },
+    );
+  }
+
+  async updateConversationContext(
+    conversationId: string,
+    mode: ConversationContextMode,
+  ): Promise<ConversationContextSettingsResponse> {
+    return this.authorizedRequest<ConversationContextSettingsResponse>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/context`,
+      { method: 'PUT', body: JSON.stringify({ mode }) },
+    );
+  }
+
+  async createConversationLink(conversationId: string, sourceConversationId: string): Promise<ConversationLinkResponse> {
+    return this.authorizedRequest<ConversationLinkResponse>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/context-links`,
+      { method: 'POST', body: JSON.stringify({ sourceConversationId }) },
+    );
+  }
+
+  async refreshConversationLink(conversationId: string, linkId: string): Promise<ConversationLinkResponse> {
+    return this.authorizedRequest<ConversationLinkResponse>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/context-links/${encodeURIComponent(linkId)}/refresh`,
+      { method: 'POST' },
+    );
+  }
+
+  async deleteConversationLink(conversationId: string, linkId: string): Promise<void> {
+    return this.authorizedRequest<void>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}/context-links/${encodeURIComponent(linkId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async listMemories(): Promise<UserMemoryResponse[]> {
+    return this.authorizedRequest<UserMemoryResponse[]>('/api/v1/me/memories', { method: 'GET' });
+  }
+
+  async upsertMemory(memoryKey: string, input: UpsertUserMemoryInput): Promise<UserMemoryResponse> {
+    return this.authorizedRequest<UserMemoryResponse>(
+      `/api/v1/me/memories/${encodeURIComponent(memoryKey)}`,
+      { method: 'PUT', body: JSON.stringify(input) },
+    );
+  }
+
+  async deleteMemory(memoryKey: string): Promise<void> {
+    return this.authorizedRequest<void>(
+      `/api/v1/me/memories/${encodeURIComponent(memoryKey)}`,
+      { method: 'DELETE' },
+    );
+  }
+
   async listDocuments(): Promise<DocumentResponse[]> {
     return this.authorizedRequest<DocumentResponse[]>('/api/v1/documents', { method: 'GET' });
   }
 
   async uploadDocument(file: File): Promise<DocumentResponse> {
+    // UX guard only: Java still validates the actual streamed bytes and format.
+    if (file.size === 0) {
+      throw new BlueAiApiError('Tài liệu đang rỗng. Vui lòng chọn tệp có nội dung.', 400, 'EMPTY_FILE');
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      throw new BlueAiApiError('Tài liệu vượt giới hạn 20 MiB. Vui lòng chọn tệp nhỏ hơn.', 413, 'FILE_TOO_LARGE');
+    }
+    if (!/\.(pdf|docx|csv|txt|md)$/i.test(file.name)) {
+      throw new BlueAiApiError('Chỉ hỗ trợ PDF, DOCX, CSV, TXT hoặc Markdown.', 400, 'UNSUPPORTED_FILE_TYPE');
+    }
     const body = new FormData();
     body.append('file', file);
     return this.authorizedRequest<DocumentResponse>('/api/v1/documents', { method: 'POST', body });
@@ -331,6 +512,10 @@ export class BlueAiApi {
 
   async getSystemMetrics(): Promise<SystemMetricsResponse> {
     return this.authorizedRequest<SystemMetricsResponse>('/api/v1/system/metrics', { method: 'GET' });
+  }
+
+  async getGeminiUsage(): Promise<GeminiUsageReport> {
+    return this.authorizedRequest<GeminiUsageReport>('/api/v1/system/gemini-usage', { method: 'GET' });
   }
 
   async listStudioBots(): Promise<StudioBotSummary[]> {
@@ -343,6 +528,7 @@ export class BlueAiApi {
     locale?: string;
     timezone?: string;
     includeStarterTemplate?: boolean;
+    template?: 'STARTER' | 'SALES_DEMO';
   }): Promise<StudioBotConfiguration> {
     return this.authorizedRequest<StudioBotConfiguration>('/api/v1/studio/bots', {
       method: 'POST',
@@ -357,6 +543,10 @@ export class BlueAiApi {
     );
   }
 
+  async getActiveStudioBot(): Promise<StudioBotConfiguration> {
+    return this.authorizedRequest<StudioBotConfiguration>('/api/v1/studio/bots/active', { method: 'GET' });
+  }
+
   async saveStudioBotConfiguration(
     botId: string,
     configuration: Omit<StudioBotConfiguration, 'bot'> & {
@@ -367,6 +557,7 @@ export class BlueAiApi {
       timezone: string;
       blueAiCoreEnabled?: boolean;
       customInstructions?: string;
+      customization?: StudioCustomization;
     },
   ): Promise<StudioBotConfiguration> {
     return this.authorizedRequest<StudioBotConfiguration>(
@@ -379,16 +570,24 @@ export class BlueAiApi {
     botId: string,
     message: string,
     context?: StudioPreviewContext,
+    options: { conversationId?: string; history?: StudioPreviewHistoryMessage[] } = {},
   ): Promise<StudioRuntimeResponse> {
     return this.authorizedRequest<StudioRuntimeResponse>(
       `/api/v1/studio/bots/${encodeURIComponent(botId)}/preview`,
-      { method: 'POST', body: JSON.stringify({ message, context }) },
+      { method: 'POST', body: JSON.stringify({ message, context, ...options }) },
     );
   }
 
   async publishStudioBot(botId: string): Promise<StudioPublishResponse> {
     return this.authorizedRequest<StudioPublishResponse>(
       `/api/v1/studio/bots/${encodeURIComponent(botId)}/publish`,
+      { method: 'POST' },
+    );
+  }
+
+  async activateStudioBot(botId: string): Promise<StudioBotConfiguration> {
+    return this.authorizedRequest<StudioBotConfiguration>(
+      `/api/v1/studio/bots/${encodeURIComponent(botId)}/activate`,
       { method: 'POST' },
     );
   }
@@ -431,49 +630,64 @@ export class BlueAiApi {
     try {
       return await this.request<T>(path, init, token);
     } catch (error) {
-      if (!(error instanceof BlueAiApiError) || error.status !== 401 || !this.refreshToken) {
+      if (!(error instanceof BlueAiApiError) || error.status !== 401 || !this.hasRefreshCredential()) {
         if (error instanceof BlueAiApiError && error.status === 401) this.clearSession();
         throw error;
       }
 
       const refreshedToken = await this.refreshAccessToken();
-      return this.request<T>(path, init, refreshedToken);
+      try {
+        return await this.request<T>(path, init, refreshedToken);
+      } catch (retryError) {
+        if (retryError instanceof BlueAiApiError && retryError.status === 401) this.clearSession();
+        throw retryError;
+      }
     }
   }
 
   private async ensureAccessToken(): Promise<string> {
     if (this.accessToken) return this.accessToken;
-    if (this.refreshToken) return this.refreshAccessToken();
+    if (this.hasRefreshCredential()) return this.refreshAccessToken();
     throw new BlueAiApiError('Vui lòng đăng nhập để tiếp tục.', 401, 'AUTH_REQUIRED');
   }
 
   private async refreshAccessToken(): Promise<string> {
     if (this.refreshing) return this.refreshing;
     const refreshToken = this.refreshToken;
-    if (!refreshToken) {
+    if (!this.hasRefreshCredential()) {
       throw new BlueAiApiError('Phiên đăng nhập đã hết hạn.', 401, 'AUTH_REQUIRED');
     }
 
-    this.refreshing = this.request<AuthResponse>('/api/v1/auth/refresh', {
+    const version = this.sessionVersion;
+    const pending = this.request<AuthResponse>(this.authPath('refresh'), {
       method: 'POST',
-      body: JSON.stringify({ refreshToken }),
+      body: this.browserSession ? undefined : JSON.stringify({ refreshToken }),
     }).then((response) => {
+      if (version !== this.sessionVersion) throw new BlueAiApiError('Phiên đăng nhập đã thay đổi.', 401, 'AUTH_REQUIRED');
       this.applyAuthResponse(response);
       return response.accessToken;
     }).catch((error) => {
-      this.clearSession();
+      if (version === this.sessionVersion) this.clearSession();
       throw error;
     }).finally(() => {
-      this.refreshing = undefined;
+      if (this.refreshing === pending) this.refreshing = undefined;
     });
-
+    this.refreshing = pending;
     return this.refreshing;
   }
 
   private applyAuthResponse(response: AuthResponse): void {
     this.accessToken = response.accessToken;
-    this.refreshToken = response.refreshToken;
-    writeStoredTokens(response.accessToken, response.refreshToken);
+    this.refreshToken = this.browserSession ? undefined : response.refreshToken;
+    this.browserSessionAvailable = true;
+  }
+
+  private hasRefreshCredential(): boolean {
+    return Boolean(this.refreshToken || (this.browserSession && this.browserSessionAvailable));
+  }
+
+  private authPath(action: 'login' | 'refresh' | 'logout'): string {
+    return `/api/v1/auth/${this.browserSession ? 'browser/' : ''}${action}`;
   }
 
   private async request<T>(path: string, init: RequestInit, token?: string): Promise<T> {
@@ -482,10 +696,13 @@ export class BlueAiApi {
       headers.set('Content-Type', 'application/json');
     }
     if (token) headers.set('Authorization', `Bearer ${token}`);
+    const cookieAuth = this.browserSession && path.startsWith('/api/v1/auth/browser/');
+    if (cookieAuth) headers.set('X-BlueAI-Browser', '1');
 
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       ...init,
       headers,
+      credentials: cookieAuth ? 'include' : 'omit',
     });
     if (!response.ok) throw await readApiError(response);
     if (response.status === 204) return undefined as T;
@@ -541,10 +758,31 @@ export function ragSourceToCitation(source: RagSourceResponse): Citation {
   };
 }
 
+export function conversationMessageToChatMessage(message: ConversationMessageResponse): ChatMessage {
+  if (message.role === 'ASSISTANT' && message.evidence) {
+    return ragAnswerToChatMessage({
+      userMessage: message,
+      assistantMessage: message,
+      ...message.evidence,
+    });
+  }
+  const createdAt = new Date(message.createdAt);
+  return {
+    id: message.id,
+    sender: message.role === 'USER' ? 'user' : 'assistant',
+    content: message.role === 'USER' ? message.content : normalizeAssistantContent(message.content),
+    timestamp: Number.isNaN(createdAt.getTime()) ? '' : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    // Legacy messages did not persist evidence. Never invent provenance for them.
+  };
+}
+
 export function ragAnswerToChatMessage(response: RagAnswerResponse): ChatMessage {
   const citations = (response.sources || []).map(ragSourceToCitation);
+  const contextSources = response.contextSources || [];
   const hasUnapprovedSource = citations.some(citation => citation.status === 'scope_mismatch');
   const createdAt = new Date(response.assistantMessage.createdAt);
+  const origin = response.assistantMessage.evidence?.origin;
+  const isDialog = origin === 'DIALOG' || origin === 'DIALOG_CONTEXT_CONFIRMATION';
   return {
     id: response.assistantMessage.id,
     sender: 'assistant',
@@ -554,11 +792,15 @@ export function ragAnswerToChatMessage(response: RagAnswerResponse): ChatMessage
       : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     // No verified source is not an error: the assistant is expected to say the
     // knowledge base does not cover the question. Red is reserved for real failures.
-    confidence: citations.length === 0
-      ? 'ungrounded'
+    confidence: origin === 'DIALOG_CONTEXT_CONFIRMATION' ? 'context_confirmation'
+      : origin === 'DIALOG' ? 'dialog'
+      : citations.length === 0
+      ? contextSources.length > 0 ? 'context' : 'ungrounded'
       : hasUnapprovedSource ? 'inferred' : 'confirmed',
     citations,
-    toolsUsed: ['RAG_Retrieval_API', 'LLM_Chat_API'],
+    contextSources,
+    toolsUsed: isDialog ? ['Dialog_Runtime']
+      : citations.length > 0 ? ['RAG_Retrieval_API', 'LLM_Chat_API'] : ['LLM_Chat_API'],
   };
 }
 

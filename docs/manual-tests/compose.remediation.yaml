@@ -1,0 +1,16 @@
+# Apply after compose.acceptance.yaml; never combine with the real app stack.
+services:
+  rag-ai:
+    image: blueai-preprod-rag:remediation-20261004
+    build:
+      context: ../../feature-rag-chatbot/rag-chatbot
+  auth-api:
+    image: blueai-preprod-api:remediation-20261004
+    build:
+      context: ../../BE
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/blueai_auth?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+  frontend:
+    image: blueai-preprod-frontend:remediation-20261004
+    build:
+      context: ../../FE

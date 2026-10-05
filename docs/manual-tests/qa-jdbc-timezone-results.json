@@ -1,0 +1,10 @@
+{
+  "result": "REPRODUCED_CONFIGURATION_GAP",
+  "output": [
+    "serverTimezone=UTC | session=+07:00 | global=+07:00",
+    "connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true | session=+00:00 | global=+07:00"
+  ],
+  "startedAt": "2026-10-03T09:20:57.2346303Z",
+  "stage": "actual-compose-jdbc-timezone-on-nonutc-mysql",
+  "finishedAt": "2026-10-03T09:21:05.8455467Z"
+}

@@ -1,8 +1,10 @@
 package com.blueai.rag.memory.controller;
 
-import com.blueai.auth.BlueAiAuthApplication;
+import com.blueai.BlueAiAuthApplication;
 import com.blueai.auth.repository.RefreshTokenRepository;
 import com.blueai.auth.repository.UserRepository;
+import com.blueai.rag.conversation.repository.ConversationMessageRepository;
+import com.blueai.rag.conversation.repository.ConversationRepository;
 import com.blueai.rag.memory.repository.UserMemoryRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +40,12 @@ class UserMemoryIntegrationTest {
     private UserMemoryRepository memoryRepository;
 
     @Autowired
+    private ConversationMessageRepository messageRepository;
+
+    @Autowired
+    private ConversationRepository conversationRepository;
+
+    @Autowired
     private RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
@@ -47,6 +55,8 @@ class UserMemoryIntegrationTest {
     @AfterEach
     void cleanDatabase() {
         memoryRepository.deleteAll();
+        messageRepository.deleteAll();
+        conversationRepository.deleteAll();
         refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -84,16 +94,101 @@ class UserMemoryIntegrationTest {
                 .andExpect(jsonPath("$").isEmpty());
     }
 
+    @Test
+    void conversationScopedMemoryRequiresAnOwnedConversationAndIsRemovedWithIt() throws Exception {
+        String ownerToken = registerAndGetAccessToken("scoped-memory-owner@example.com");
+        String otherToken = registerAndGetAccessToken("scoped-memory-other@example.com");
+        String conversationId = createConversation(ownerToken, "Thông tin khách hàng");
+
+        String messageBody = mockMvc.perform(post("/api/v1/conversations/{conversationId}/messages", conversationId)
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"Khách hàng muốn nhận tư vấn bằng tiếng Việt.\"}"))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String sourceMessageId = objectMapper.readTree(messageBody).path("id").asText();
+
+        String request = """
+                {
+                  "content":"Ưu tiên trả lời khách hàng này bằng tiếng Việt.",
+                  "scope":"CONVERSATION",
+                  "conversationId":"%s",
+                  "sourceMessageId":"%s"
+                }
+                """.formatted(conversationId, sourceMessageId);
+        mockMvc.perform(put("/api/v1/me/memories/{memoryKey}", "customer-language")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scope").value("CONVERSATION"))
+                .andExpect(jsonPath("$.conversationId").value(conversationId))
+                .andExpect(jsonPath("$.sourceMessageId").value(sourceMessageId));
+
+        mockMvc.perform(put("/api/v1/me/memories/{memoryKey}", "other-user-memory")
+                        .header("Authorization", "Bearer " + otherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content":"Không được phép lưu vào hội thoại của người khác.",
+                                  "scope":"CONVERSATION",
+                                  "conversationId":"%s"
+                                }
+                                """.formatted(conversationId)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("CONVERSATION_NOT_FOUND"));
+
+        mockMvc.perform(put("/api/v1/me/memories/{memoryKey}", "invalid-user-scope")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "content":"Không hợp lệ.",
+                                  "scope":"USER",
+                                  "conversationId":"%s"
+                                }
+                                """.formatted(conversationId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MEMORY_SCOPE_CONVERSATION_UNEXPECTED"));
+
+        mockMvc.perform(delete("/api/v1/conversations/{conversationId}", conversationId)
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/me/memories")
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    private String createConversation(String accessToken, String title) throws Exception {
+        String response = mockMvc.perform(post("/api/v1/conversations")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"%s\"}".formatted(title)))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        return objectMapper.readTree(response).path("id").asText();
+    }
+
     private String registerAndGetAccessToken() throws Exception {
+        return registerAndGetAccessToken("memory-owner@example.com");
+    }
+
+    private String registerAndGetAccessToken(String email) throws Exception {
         String response = mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "email": "memory-owner@example.com",
+                                  "email": "%s",
                                   "password": "StrongPassword123!",
                                   "fullName": "Memory Owner"
                                 }
-                                """))
+                                """.formatted(email)))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()

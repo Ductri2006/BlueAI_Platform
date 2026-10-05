@@ -2,6 +2,7 @@ package com.blueai.rag.document.controller;
 
 import com.blueai.rag.document.dto.DocumentUploadResponse;
 import com.blueai.rag.document.dto.DocumentResponse;
+import com.blueai.rag.document.dto.DocumentPageResponse;
 import com.blueai.rag.document.model.DocumentStatus;
 import com.blueai.rag.document.service.DocumentIngestionTrigger;
 import com.blueai.rag.document.service.DocumentService;
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -52,11 +54,31 @@ public class DocumentController {
         return documentService.listDocuments(jwt.getSubject(), status);
     }
 
+    @GetMapping("/search")
+    DocumentPageResponse search(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) DocumentStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return documentService.searchDocuments(jwt.getSubject(), q, status, page, size);
+    }
+
     @GetMapping("/{documentId}")
     DocumentResponse get(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String documentId
     ) {
         return documentService.getDocument(jwt.getSubject(), documentId);
+    }
+
+    @DeleteMapping("/{documentId}")
+    ResponseEntity<Void> delete(@AuthenticationPrincipal Jwt jwt, @PathVariable String documentId) {
+        documentService.softDelete(jwt.getSubject(), documentId);
+        // The Java tombstone is authoritative immediately. The best-effort nudge
+        // removes vectors and is retried by the retention/purge integration.
+        ingestionTrigger.requestDocumentPurge(documentId);
+        return ResponseEntity.noContent().build();
     }
 }

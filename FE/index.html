@@ -4,15 +4,22 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%231E4FD8'/><circle cx='68' cy='32' r='14' fill='%2338BDF8'/><path d='M35 68V32h14c10 0 16 5 16 12 0 5-3 9-8 11 6 2 9 6 9 13 0 8-7 12-18 12H35zm12-22h3c4 0 6-2 6-5s-2-5-6-5h-3v10zm0 14h4c5 0 7-2 7-6s-2-6-7-6h-4v12z' fill='white'/></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#F8FAFD" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#060B14" media="(prefers-color-scheme: dark)" />
+    <meta id="theme-color" name="theme-color" content="#F8FAFD" />
+    <script>
+      (() => {
+        let storedTheme = null;
+        try { storedTheme = window.localStorage.getItem('blueai-theme'); } catch {}
+        const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+        const isDark = storedTheme === 'dark' || (storedTheme !== 'light' && prefersDark);
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+        document.documentElement.style.backgroundColor = isDark ? '#060B14' : '#F8FAFD';
+        document.querySelector('#theme-color')?.setAttribute('content', isDark ? '#060B14' : '#F8FAFD');
+      })();
+    </script>
     <title>BlueAI Platform — Operational Intelligence & Enterprise Workspaces</title>
-    <!-- Google Fonts: Be Vietnam Pro & IBM Plex Mono -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   </head>
-  <body class="bg-canvas-light text-[#0B132B] dark:bg-canvas-dark dark:text-[#F1F5F9] antialiased selection:bg-cobalt-500 selection:text-white font-sans transition-colors duration-200 overflow-hidden">
+  <body class="bg-canvas-light text-[#0B132B] dark:bg-canvas-dark dark:text-[#F1F5F9] antialiased selection:bg-cobalt-500 selection:text-white font-sans overflow-hidden">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

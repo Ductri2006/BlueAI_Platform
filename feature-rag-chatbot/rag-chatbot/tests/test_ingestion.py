@@ -1,4 +1,5 @@
 import asyncio
+import io
 import unittest
 from unittest.mock import patch
 
@@ -6,9 +7,10 @@ import ingestion
 
 
 class FakeResponse:
-    def __init__(self, body=None, content=b""):
+    def __init__(self, body=None, content=b"", status_code=200):
         self._body = body
         self.content = content
+        self.status_code = status_code
 
     def raise_for_status(self):
         return None
@@ -20,23 +22,59 @@ class FakeResponse:
 class FakeClient:
     def __init__(self):
         self.result = None
+        self.purge_calls = 0
+        self.content_headers = None
+        self.result_headers = None
 
-    async def post(self, *_args, **_kwargs):
+    async def post(self, url, *_args, **_kwargs):
+        if url.endswith("/documents/purge"):
+            self.purge_calls += 1
+            return FakeResponse({"purged": 0})
         return FakeResponse([{
             "id": "doc-1", "ownerId": "owner-1", "contentType": "text/markdown",
             "sourceType": "ENTERPRISE_DOCUMENT",
             "originalFilename": "guide.md", "requestedChunkSize": 800, "requestedChunkOverlap": 100,
+            "attemptId": "attempt-1",
         }])
 
-    async def get(self, *_args, **_kwargs):
+    async def get(self, *_args, **kwargs):
+        self.content_headers = kwargs.get("headers")
         return FakeResponse(content=b"# Real uploaded guide")
 
     async def patch(self, *_args, **kwargs):
         self.result = kwargs["json"]
+        self.result_headers = kwargs.get("headers")
         return FakeResponse()
 
 
 class IngestionTest(unittest.IsolatedAsyncioTestCase):
+    def test_extracts_text_from_a_valid_pdf(self):
+        # Build a tiny PDF in memory so this exercises the installed pypdf
+        # version without relying on an external fixture or service.
+        stream = b"BT /F1 12 Tf 50 250 Td (BlueAI PDF smoke test) Tj ET"
+        objects = [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] "
+            b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            b"<< /Length %d >>\nstream\n%s\nendstream" % (len(stream), stream),
+        ]
+        pdf = io.BytesIO(b"%PDF-1.4\n")
+        pdf.seek(0, io.SEEK_END)
+        offsets = [0]
+        for number, value in enumerate(objects, start=1):
+            offsets.append(pdf.tell())
+            pdf.write(b"%d 0 obj\n%s\nendobj\n" % (number, value))
+        xref_offset = pdf.tell()
+        pdf.write(b"xref\n0 6\n0000000000 65535 f \n")
+        for offset in offsets[1:]:
+            pdf.write(b"%010d 00000 n \n" % offset)
+        pdf.write(b"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % xref_offset)
+
+        text = ingestion.extract_text(pdf.getvalue(), "application/pdf", "guide.pdf")
+        self.assertIn("BlueAI PDF smoke test", text)
+
     def test_extracts_utf8_text(self):
         self.assertEqual("Xin chào", ingestion.extract_text("Xin chào".encode(), "text/plain", "note.txt"))
 
@@ -66,7 +104,22 @@ class IngestionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, count)
         self.assertEqual("owner-1", indexed[0][1])
         self.assertEqual("ENTERPRISE_DOCUMENT", indexed[0][2])
-        self.assertEqual({"status": "READY", "producedChunkCount": 2}, client.result)
+        self.assertEqual({"attemptId": "attempt-1", "status": "READY", "producedChunkCount": 2}, client.result)
+        self.assertEqual("attempt-1", client.content_headers["X-Worker-Attempt-Id"])
+        self.assertEqual("attempt-1", client.result_headers["X-Worker-Attempt-Id"])
+        self.assertEqual(1, client.purge_calls)
+
+    async def test_worker_reports_failure_with_the_same_attempt_token(self):
+        client = FakeClient()
+
+        def failing_indexer(*_args):
+            raise ValueError("parser failed")
+
+        await ingestion.run_worker_once(client, "http://java", "worker-key", failing_indexer)
+        self.assertEqual({
+            "attemptId": "attempt-1", "status": "FAILED", "failureReason": "Document format or content is invalid.",
+        }, client.result)
+        self.assertEqual("attempt-1", client.result_headers["X-Worker-Attempt-Id"])
 
     async def test_trigger_wakes_the_loop_before_the_interval_elapses(self):
         ingestion.request_run()
