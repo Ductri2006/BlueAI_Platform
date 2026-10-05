@@ -13,10 +13,12 @@ from pypdf import PdfReader
 LOGGER = logging.getLogger("blueai.rag.ingestion")
 
 Indexer = Callable[[str, str, str, str, str, int, int], int]
+MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
 
 # Set by the web app right after an upload so chunking starts immediately instead of
 # waiting for the next poll. The pull model itself is unchanged: the loop still claims.
 _run_requested = asyncio.Event()
+_worker_task: asyncio.Task | None = None
 
 _state: dict[str, object] = {
     "lastRunAt": None,
@@ -47,6 +49,7 @@ def worker_status() -> dict[str, object]:
     """Non-secret worker telemetry for /health, so a misconfigured worker is visible."""
     return {
         "configured": bool(os.getenv("JAVA_API_BASE_URL") and os.getenv("JAVA_WORKER_API_KEY")),
+        "running": _worker_task is not None and not _worker_task.done(),
         "javaApiBaseUrl": os.getenv("JAVA_API_BASE_URL") or "",
         "intervalSeconds": _interval(),
         **_state,
@@ -69,6 +72,8 @@ async def _sleep_or_trigger(delay: float) -> None:
 
 
 def extract_text(content: bytes, content_type: str, filename: str) -> str:
+    if not content or len(content) > MAX_DOCUMENT_BYTES:
+        raise ValueError("Document size is outside the supported limit.")
     lowered = filename.lower()
     if content_type in {"text/plain", "text/markdown"} or lowered.endswith((".txt", ".md")):
         return content.decode("utf-8-sig")
@@ -79,6 +84,17 @@ def extract_text(content: bytes, content_type: str, filename: str) -> str:
     if lowered.endswith(".docx"):
         return "\n".join(paragraph.text for paragraph in DocxDocument(io.BytesIO(content)).paragraphs)
     raise ValueError(f"Unsupported document type: {content_type}")
+
+
+def _safe_failure_reason(error: Exception) -> str:
+    """Return bounded public diagnostics, never provider bodies, URLs or credentials."""
+    if isinstance(error, httpx.TimeoutException):
+        return "Document service timed out."
+    if isinstance(error, httpx.HTTPStatusError):
+        return f"Document service returned HTTP {error.response.status_code}."
+    if isinstance(error, (ValueError, UnicodeError)):
+        return "Document format or content is invalid."
+    return "Document processing failed."
 
 
 def _extract_csv_text(content: bytes) -> str:
@@ -122,15 +138,34 @@ def _extract_csv_text(content: bytes) -> str:
 
 async def run_worker_once(client: httpx.AsyncClient, base_url: str, api_key: str, indexer: Indexer) -> int:
     headers = {"X-Worker-Api-Key": api_key}
+    purge_response = await client.post(
+        f"{base_url}/api/v1/internal/documents/purge",
+        params={"limit": 100},
+        headers=headers,
+    )
+    # A rolling deployment may briefly run an older Java API without the purge
+    # endpoint. Keep ingestion compatible during that window, but surface any
+    # other failure so the loop's bounded telemetry records it.
+    if getattr(purge_response, "status_code", 200) not in (200, 404):
+        purge_response.raise_for_status()
     response = await client.post(f"{base_url}/api/v1/internal/documents/claim", params={"limit": 5}, headers=headers)
     response.raise_for_status()
     documents = response.json()
     for document in documents:
         document_id = document["id"]
+        attempt_id = document["attemptId"]
+        attempt_headers = {**headers, "X-Worker-Attempt-Id": attempt_id}
         try:
-            content_response = await client.get(f"{base_url}/api/v1/internal/documents/{document_id}/content", headers=headers)
+            content_response = await client.get(
+                f"{base_url}/api/v1/internal/documents/{document_id}/content", headers=attempt_headers
+            )
             content_response.raise_for_status()
-            text = extract_text(content_response.content, document["contentType"], document["originalFilename"])
+            # Parsers are blocking and must not stall health checks or other requests.
+            text = await asyncio.to_thread(
+                extract_text, content_response.content, document["contentType"], document["originalFilename"]
+            )
+            if not text.strip():
+                raise ValueError("Document contains no extractable text.")
             chunk_count = await asyncio.to_thread(
                 indexer,
                 document_id,
@@ -141,14 +176,21 @@ async def run_worker_once(client: httpx.AsyncClient, base_url: str, api_key: str
                 document["requestedChunkSize"],
                 document["requestedChunkOverlap"],
             )
-            result = {"status": "READY", "producedChunkCount": chunk_count}
+            result = {"attemptId": attempt_id, "status": "READY", "producedChunkCount": chunk_count}
             LOGGER.info("Indexed document %s into %s chunks", document_id, chunk_count)
         except Exception as exception:
-            result = {"status": "FAILED", "failureReason": str(exception)[:1000]}
-            LOGGER.warning("Document %s failed: %s", document_id, exception)
+            if isinstance(exception, httpx.HTTPStatusError) and exception.response.status_code == 409:
+                LOGGER.info("Skipping stale document claim %s", document_id)
+                continue
+            reason = _safe_failure_reason(exception)
+            result = {"attemptId": attempt_id, "status": "FAILED", "failureReason": reason}
+            LOGGER.warning("Document %s failed: %s", document_id, reason)
         result_response = await client.patch(
-            f"{base_url}/api/v1/internal/documents/{document_id}/result", headers=headers, json=result,
+            f"{base_url}/api/v1/internal/documents/{document_id}/result", headers=attempt_headers, json=result,
         )
+        if getattr(result_response, "status_code", 200) == 409:
+            LOGGER.info("Document claim %s expired before its result was accepted", document_id)
+            continue
         result_response.raise_for_status()
     return len(documents)
 
@@ -178,12 +220,15 @@ async def worker_loop(indexer: Indexer) -> None:
                 )
                 delay = _interval()
             except Exception as error:
-                _record_failure(f"{type(error).__name__} calling {base_url}: {error}")
+                _record_failure(_safe_failure_reason(error))
                 delay = _interval()
             await _sleep_or_trigger(delay)
 
 
 def start_worker(indexer: Indexer) -> asyncio.Task | None:
+    global _worker_task
     if not os.getenv("JAVA_API_BASE_URL") or not os.getenv("JAVA_WORKER_API_KEY"):
+        _worker_task = None
         return None
-    return asyncio.create_task(worker_loop(indexer))
+    _worker_task = asyncio.create_task(worker_loop(indexer))
+    return _worker_task

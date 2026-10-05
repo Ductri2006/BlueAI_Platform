@@ -2,9 +2,12 @@ package com.blueai.rag.chat.service;
 
 import com.blueai.auth.exception.ApiException;
 import com.blueai.rag.chat.RagChatProperties;
+import com.blueai.system.service.GeminiUsageService;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.beans.factory.annotation.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,15 +27,15 @@ public class RagCompletionClient {
 
     private final RagChatProperties properties;
     private final RagRestClientFactory restClientFactory;
+    private final GeminiUsageService usageService;
     private final String workerApiKey;
 
-    public RagCompletionClient(
-            RagChatProperties properties,
-            RagRestClientFactory restClientFactory,
-            @Value("${app.worker.api-key}") String workerApiKey
-    ) {
+    public RagCompletionClient(RagChatProperties properties, RagRestClientFactory restClientFactory,
+                               GeminiUsageService usageService,
+                               @Value("${app.worker.api-key}") String workerApiKey) {
         this.properties = properties;
         this.restClientFactory = restClientFactory;
+        this.usageService = usageService;
         this.workerApiKey = workerApiKey;
     }
 
@@ -70,6 +73,15 @@ public class RagCompletionClient {
                             "LLM_INVALID_RESPONSE",
                             "LLM returned an empty response."
                     );
+                }
+                if (response.usage() != null && response.usage().isComplete()) {
+                    try {
+                        usageService.record(response.model() == null ? properties.getLlmModel() : response.model(),
+                                response.usage().promptTokens(), response.usage().completionTokens(),
+                                response.usage().totalTokens());
+                    } catch (DataAccessException exception) {
+                        LOG.warn("Could not persist Gemini token usage for a successful completion.", exception);
+                    }
                 }
                 return response.choices().getFirst().message().content().trim();
             } catch (RestClientException | UncheckedIOException exception) {
@@ -133,9 +145,17 @@ public class RagCompletionClient {
     private record LlmRequest(String model, List<LlmChatMessage> messages, double temperature) {
     }
 
-    private record LlmResponse(List<LlmChoice> choices) {
+    private record LlmResponse(String model, List<LlmChoice> choices, LlmUsage usage) {
     }
 
     private record LlmChoice(LlmChatMessage message) {
+    }
+
+    private record LlmUsage(@JsonProperty("prompt_tokens") Long promptTokens,
+                            @JsonProperty("completion_tokens") Long completionTokens,
+                            @JsonProperty("total_tokens") Long totalTokens) {
+        boolean isComplete() {
+            return promptTokens != null && completionTokens != null && totalTokens != null;
+        }
     }
 }

@@ -13,6 +13,23 @@ class MessageEvidenceConverterTest {
     private final MessageEvidenceConverter converter = new MessageEvidenceConverter();
 
     @Test
+    void readsLegacyJsonWithoutInventingAnswerOrigin() {
+        MessageEvidence legacy = converter.convertToEntityAttribute("{\"sources\":[],\"contextSources\":[]}");
+        assertThat(legacy.sources()).isEmpty();
+        assertThat(legacy.contextSources()).isEmpty();
+        assertThat(legacy.origin()).isNull();
+    }
+
+    @Test
+    void roundTripsAllServerAnswerOrigins() {
+        for (AnswerOrigin origin : AnswerOrigin.values()) {
+            MessageEvidence evidence = new MessageEvidence(List.of(), List.of(), origin);
+            assertThat(converter.convertToEntityAttribute(converter.convertToDatabaseColumn(evidence)))
+                    .isEqualTo(evidence);
+        }
+    }
+
+    @Test
     void roundTripsUnicodeEvidenceAndKeepsLegacyRowsReadable() {
         MessageEvidence evidence = new MessageEvidence(
                 List.of(new RagSourceResponse("doc", "Kiến thức.csv", "chunk", 0.8,

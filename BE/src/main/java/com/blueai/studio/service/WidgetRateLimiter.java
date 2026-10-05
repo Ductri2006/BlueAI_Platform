@@ -27,12 +27,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>When configured, the counter lives in Redis and is consequently shared
  * by all API instances. The Lua script increments the counter and applies its
- * TTL atomically. A short-lived in-process fallback keeps a single local
- * developer instance safe if Redis is intentionally disabled or unavailable;
- * it must not be mistaken for distributed protection.</p>
+ * TTL atomically. Redis-enabled protection fails closed if shared counters are
+ * unavailable. The bounded in-process counter is only for local development
+ * with Redis intentionally disabled, never distributed protection.</p>
  */
 @Service
 public class WidgetRateLimiter {
+
+    private static final int MAX_LOCAL_WINDOWS = 10_000;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(WidgetRateLimiter.class);
     private static final DefaultRedisScript<Long> INCREMENT_WITH_TTL = new DefaultRedisScript<>(
@@ -88,8 +90,8 @@ public class WidgetRateLimiter {
     }
 
     private long increment(String key, Duration window) {
-        if (properties.isRedisEnabled() && redisTemplateProvider != null) {
-            StringRedisTemplate redis = redisTemplateProvider.getIfAvailable();
+        if (properties.isRedisEnabled()) {
+            StringRedisTemplate redis = redisTemplateProvider == null ? null : redisTemplateProvider.getIfAvailable();
             if (redis != null) {
                 try {
                     Long result = redis.execute(
@@ -105,12 +107,19 @@ public class WidgetRateLimiter {
                     logRedisFallback(exception);
                 }
             }
+            throw protectionUnavailable();
         }
         return incrementLocal(key, window);
     }
 
-    private long incrementLocal(String key, Duration window) {
+    private synchronized long incrementLocal(String key, Duration window) {
         Instant now = Instant.now();
+        if (!localWindows.containsKey(key) && localWindows.size() >= MAX_LOCAL_WINDOWS) {
+            localWindows.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
+            if (localWindows.size() >= MAX_LOCAL_WINDOWS) {
+                throw protectionUnavailable();
+            }
+        }
         Window updated = localWindows.compute(key, (ignored, current) -> {
             if (current == null || !current.expiresAt().isAfter(now)) {
                 return new Window(now.plus(window), 1);
@@ -118,11 +127,12 @@ public class WidgetRateLimiter {
             return new Window(current.expiresAt(), current.count() + 1);
         });
 
-        // Bound memory in the local fallback. Redis keys expire automatically.
-        if (localWindows.size() > 10_000) {
-            localWindows.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
-        }
         return updated.count();
+    }
+
+    private ApiException protectionUnavailable() {
+        return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "WIDGET_PROTECTION_UNAVAILABLE",
+                "Widget protection is temporarily unavailable. Please try again later.");
     }
 
     private String redisKey(String suffix) {
@@ -132,7 +142,7 @@ public class WidgetRateLimiter {
     private void logRedisFallback(DataAccessException exception) {
         if (redisFailureLogged.compareAndSet(false, true)) {
             protectionMetrics.record(WidgetProtectionMetrics.Event.REDIS_FALLBACK, WidgetProtectionMetrics.Scope.RATE_LIMIT);
-            LOGGER.warn("Widget Redis protection is unavailable; using per-instance fallback until it recovers.", exception);
+            LOGGER.warn("Widget Redis protection is unavailable; widget requests are blocked until shared counters recover.");
         }
     }
 

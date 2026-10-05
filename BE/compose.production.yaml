@@ -33,13 +33,96 @@ services:
       APP_BOOTSTRAP_ADMIN_FULL_NAME: "${APP_BOOTSTRAP_ADMIN_FULL_NAME:-BlueAI Administrator}"
       APP_CORS_ALLOWED_ORIGINS: "${APP_CORS_ALLOWED_ORIGINS:?Set APP_CORS_ALLOWED_ORIGINS to the admin UI origin}"
       APP_WIDGET_ALLOWED_ORIGINS: "${APP_WIDGET_ALLOWED_ORIGINS:?Set APP_WIDGET_ALLOWED_ORIGINS to widget host origins}"
+      # Retention is disabled unless explicitly opted in. User soft-delete
+      # tombstones are never removed by these jobs.
+      APP_RETENTION_ENABLED: "${APP_RETENTION_ENABLED:-false}"
+      APP_RETENTION_CLEANUP_INTERVAL: "${APP_RETENTION_CLEANUP_INTERVAL:-1h}"
+      APP_RETENTION_CONVERSATION: "${APP_RETENTION_CONVERSATION:-365d}"
+      APP_DOCUMENT_RETENTION: "${APP_DOCUMENT_RETENTION:-30d}"
+      APP_AUTH_RETENTION_SCHEDULED_ENABLED: "${APP_AUTH_RETENTION_SCHEDULED_ENABLED:-false}"
+      APP_AUTH_RETENTION_RETENTION_DAYS: "${APP_AUTH_RETENTION_RETENTION_DAYS:-90}"
+      APP_AUTH_RETENTION_INTERVAL: "${APP_AUTH_RETENTION_INTERVAL:-24h}"
+      APP_AUTH_RETENTION_INITIAL_DELAY: "${APP_AUTH_RETENTION_INITIAL_DELAY:-24h}"
       APP_WIDGET_REDIS_ENABLED: "true"
       APP_WIDGET_CLIENT_KEY_SALT: "${APP_WIDGET_CLIENT_KEY_SALT:?Set APP_WIDGET_CLIENT_KEY_SALT in the deployment environment}"
       APP_WIDGET_TRUST_FORWARDED_HEADERS: "true"
       APP_WIDGET_TRUSTED_PROXY_CIDRS: "${APP_WIDGET_TRUSTED_PROXY_CIDRS:?Set APP_WIDGET_TRUSTED_PROXY_CIDRS to only the trusted proxy CIDR}"
       APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE: "false"
       APP_WORKER_API_KEY: "${APP_WORKER_API_KEY:?Set APP_WORKER_API_KEY in the deployment environment}"
+    networks:
+      - default
+      # Private scrape path; auth-agent must permit only /actuator/prometheus
+      # on this network. FE/public ingress never joins this network.
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./ops/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - blueai-prometheus-data:/prometheus
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    secrets:
+      - alertmanager_webhook_url
+    volumes:
+      - ./ops/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - blueai-alertmanager-data:/alertmanager
+    networks:
+      - monitoring
+      # Egress-only path for the configured incident/ChatOps webhook. No host
+      # port is published; Prometheus/Loki remain on the internal network.
+      - default
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.4.2
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./ops/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - blueai-loki-data:/loki
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f
+    command: [run, /etc/alloy/config.alloy, --storage.path=/var/lib/alloy/data, --server.http.listen-addr=127.0.0.1:12345]
+    volumes:
+      - ./ops/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - blueai-alloy-data:/var/lib/alloy/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+    networks:
+      - monitoring
+    restart: unless-stopped
 
   frontend:
     ports: !override
       - "80:80"
+
+volumes:
+  blueai-prometheus-data:
+  blueai-alertmanager-data:
+  blueai-loki-data:
+  blueai-alloy-data:
+
+secrets:
+  alertmanager_webhook_url:
+    environment: ALERTMANAGER_WEBHOOK_URL
+
+networks:
+  monitoring:
+    internal: true

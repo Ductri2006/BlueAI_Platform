@@ -59,7 +59,7 @@ const state: Omit<AppState,
   'insertToSalesComposer' | 'openHITLModal' | 'closeHITLModal' | 'approveHITL' | 'showToast'
 > = {
   activeRole: 'employee',
-  isDarkMode: false,
+  isDarkMode: typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
   isSidebarCollapsed: false,
   sessions: [],
   activeSessionId: '',
@@ -223,6 +223,14 @@ export function useAppStore(): AppState {
     toggleDarkMode: () => {
       state.isDarkMode = !state.isDarkMode;
       document.documentElement.classList.toggle('dark', state.isDarkMode);
+      document.documentElement.style.colorScheme = state.isDarkMode ? 'dark' : 'light';
+      document.documentElement.style.backgroundColor = state.isDarkMode ? '#060B14' : '#F8FAFD';
+      document.querySelector<HTMLMetaElement>('#theme-color')?.setAttribute('content', state.isDarkMode ? '#060B14' : '#F8FAFD');
+      try {
+        window.localStorage.setItem('blueai-theme', state.isDarkMode ? 'dark' : 'light');
+      } catch {
+        // The visual toggle should still work when storage is blocked.
+      }
       notify();
     },
     toggleSidebar: () => { state.isSidebarCollapsed = !state.isSidebarCollapsed; notify(); },

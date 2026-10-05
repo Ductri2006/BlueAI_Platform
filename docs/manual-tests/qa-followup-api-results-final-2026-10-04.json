@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2026-10-03T23:32:27.749Z",
+  "scope": "Isolated QA only; synthetic inputs; no provider chat calls",
+  "tests": [
+    {
+      "id": "KB-07-spoofed-file-through-real-ingress",
+      "result": "PASS"
+    },
+    {
+      "id": "KB-08-2MB-20MB-21MB-real-ingress",
+      "result": "PASS"
+    },
+    {
+      "id": "SEC-01-create-literal-conversation-message-fixture",
+      "result": "PASS"
+    },
+    {
+      "id": "SEC-01-literal-node-and-preview-fixture",
+      "result": "PASS"
+    },
+    {
+      "id": "API-06-live-Redis-outage-fails-closed-and-recovers",
+      "result": "PASS"
+    },
+    {
+      "id": "API-06-live-session-window-quota",
+      "result": "PASS"
+    }
+  ],
+  "fixtures": {
+    "payload": "<img src=x onerror=\"window.__qaXss=1\"><script>window.__qaXss=1</script>",
+    "size2Document": "acfeee84-27cc-45fe-a870-0cbfcf3166fd",
+    "size20Document": "5b34cc51-7031-4c90-86e2-e8f43f955a51",
+    "conversationId": "807d4bea-5bbd-49fc-aa1a-2c685675d6f2",
+    "botId": "9ba41c8f-83d9-40d2-a39e-02eaf3349d4b",
+    "botName": "QA security preview mut11h75",
+    "widgetSessionId": "8d89fab4-79c1-4b3a-9639-7a1e4dec27c3"
+  },
+  "redisRecoveryMs": 9742,
+  "summary": {
+    "pass": 6,
+    "fail": 0
+  }
+}

@@ -23,6 +23,112 @@ jobs:
           java-version: '21'
           cache: maven
       - run: mvn -B verify
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test durable AI task recovery after killing the backend process
+        env:
+          BLUEAI_TEST_ARTIFACT_VOLUME: blueai-ci-ai-recovery-target
+        run: |
+          trap 'docker rm -f blueai-ci-ai-artifact 2>/dev/null || true; docker volume rm blueai-ci-ai-recovery-target 2>/dev/null || true' EXIT
+          docker volume create blueai-ci-ai-recovery-target
+          docker create --name blueai-ci-ai-artifact -v blueai-ci-ai-recovery-target:/artifacts alpine:3.22
+          docker cp target/blueai-auth-api-0.1.0-SNAPSHOT.jar blueai-ci-ai-artifact:/artifacts/blueai-auth-api-0.1.0-SNAPSHOT.jar
+          node ops/test-ai-task-recovery.mjs
+
+  mysql-migrations:
+    name: MySQL 8.4 migration and session concurrency gates
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: blueai_migration_test
+          MYSQL_USER: migration_test
+          MYSQL_PASSWORD: ci-disposable-migration-password
+          MYSQL_ROOT_PASSWORD: ci-disposable-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -pci-disposable-root-password"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+      mysql-auth:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: blueai_auth_test
+          MYSQL_USER: auth_test
+          MYSQL_PASSWORD: ci-disposable-auth-password
+          MYSQL_ROOT_PASSWORD: ci-disposable-root-password
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -pci-disposable-root-password"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      MYSQL_MIGRATION_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_migration_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      MYSQL_MIGRATION_TEST_USERNAME: migration_test
+      MYSQL_MIGRATION_TEST_PASSWORD: ci-disposable-migration-password
+      MYSQL_LEGACY_V1_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_legacy_v1_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      MYSQL_LEGACY_V3_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_legacy_v3_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      MYSQL_AUTH_TEST_URL: jdbc:mysql://127.0.0.1:3307/blueai_auth_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      MYSQL_AUTH_TEST_USERNAME: auth_test
+      MYSQL_AUTH_TEST_PASSWORD: ci-disposable-auth-password
+    defaults:
+      run:
+        working-directory: BE
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Create separate legacy migration fixtures
+        env:
+          MYSQL_CONTAINER_ID: ${{ job.services.mysql.id }}
+        run: |
+          docker exec "$MYSQL_CONTAINER_ID" mysql --protocol=TCP -h127.0.0.1 -uroot -pci-disposable-root-password -e "CREATE DATABASE blueai_legacy_v1_test; CREATE DATABASE blueai_legacy_v3_test; GRANT ALL ON blueai_legacy_v1_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v3_test.* TO 'migration_test'@'%';"
+      - run: mvn -B -Dtest=MySqlMigrationIntegrationTest,MySqlLegacyMigrationIntegrationTest test
+      - run: mvn -B -Dtest=AuthMySqlConcurrencyIntegrationTest,AuthAdminMutationMySqlIntegrationTest,AiTaskMySqlRecoveryIntegrationTest,AiTaskMySqlAuthorizationIntegrationTest test
+
+  flyway-engine-upgrade:
+    name: Flyway 11.7.2 to 11.20.3 on MySQL 8.4
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: blueai_flyway_upgrade_test
+          MYSQL_USER: upgrade_test
+          MYSQL_PASSWORD: ci-disposable-upgrade-password
+          MYSQL_ROOT_PASSWORD: ci-disposable-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -pci-disposable-root-password"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      MYSQL_FLYWAY_UPGRADE_URL: jdbc:mysql://127.0.0.1:3306/blueai_flyway_upgrade_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      MYSQL_FLYWAY_UPGRADE_USERNAME: upgrade_test
+      MYSQL_FLYWAY_UPGRADE_PASSWORD: ci-disposable-upgrade-password
+    defaults:
+      run:
+        working-directory: BE
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Seed V6 history and data using the previous Flyway engine
+        env:
+          MYSQL_FLYWAY_UPGRADE_PHASE: seed
+        run: mvn -B -Dflyway.version=11.7.2 -Dtest=MySqlFlywayUpgradeIntegrationTest test
+      - name: Upgrade without repairing history or losing data
+        env:
+          MYSQL_FLYWAY_UPGRADE_PHASE: verify
+        run: mvn -B -Dtest=MySqlFlywayUpgradeIntegrationTest test
 
   frontend:
     name: Frontend tests and build
@@ -38,12 +144,16 @@ jobs:
           cache: npm
           cache-dependency-path: FE/package-lock.json
       - run: npm ci
+      - name: Audit frontend runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm test -- --run
       - run: npm run build
 
   rag-ai:
     name: RAG tests and dependency audit
     runs-on: ubuntu-latest
+    env:
+      PYTHON_DOTENV_DISABLED: '1'
     defaults:
       run:
         working-directory: feature-rag-chatbot/rag-chatbot
@@ -74,7 +184,30 @@ jobs:
       APP_WIDGET_TRUSTED_PROXY_CIDRS: 172.30.0.10/32
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Validate production Compose interpolation
         run: docker compose -f BE/compose.yaml -f BE/compose.production.yaml config --quiet
+      - name: Check production ports, health and restart contracts
+        run: node BE/ops/test-production-compose.mjs
       - name: Validate Nginx configuration
-        run: docker run --rm --add-host auth-api:127.0.0.1 -v "$GITHUB_WORKSPACE/FE/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine nginx -t
+        run: docker run --rm --add-host auth-api:127.0.0.1 -v "$GITHUB_WORKSPACE/FE/nginx.conf:/etc/nginx/conf.d/default.conf:ro" -v "$GITHUB_WORKSPACE/FE/security-headers.conf:/etc/nginx/snippets/security-headers.conf:ro" nginx:1.30-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94 nginx -t
+      - name: Validate Alloy log collector
+        run: |
+          node BE/ops/test-alloy-config.mjs
+          docker run --rm -v "$GITHUB_WORKSPACE/BE/ops/alloy/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.20.1@sha256:2aa2099af76c0098d4af7a4d6e48f86cb66dc1a000222ad927a1c67c6542d13f validate /etc/alloy/config.alloy
+          node BE/ops/test-alloy-ingestion.mjs
+      - name: Test live Nginx ingress against a disposable backend
+        run: node BE/ops/test-nginx-ingress.mjs
+      - name: Test disposable restore, failure safety and deployment acceptance
+        shell: pwsh
+        run: |
+          # Expected negative tests must not leak LASTEXITCODE into the runner.
+          # Isolate each script and fail immediately on a real process failure.
+          pwsh -NoProfile -File ./BE/ops/test-backup-restore.ps1 -RunDockerRestore
+          if ($LASTEXITCODE -ne 0) { throw 'Backup/restore regression failed.' }
+          pwsh -NoProfile -File ./BE/ops/test-deploy-rollback.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Deployment/rollback regression failed.' }
+          pwsh -NoProfile -File ./BE/ops/test-worker-private-e2e.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Worker credential regression failed.' }

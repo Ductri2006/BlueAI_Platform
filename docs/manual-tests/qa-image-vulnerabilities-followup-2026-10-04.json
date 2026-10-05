@@ -1,0 +1,439 @@
+{
+  "generatedAt": "2026-10-03T23:37:37.422Z",
+  "scope": "Exact local runtime image IDs; findings are not exploitability determinations",
+  "images": [
+    {
+      "tag": "blueai-preprod-api:followup-20261004",
+      "id": "sha256:7a82d2603a8690a6b800d500becf13a4a08102a66ddbffc5a817d5e54e603e55",
+      "counts": {
+        "high": 0,
+        "critical": 0
+      },
+      "findings": []
+    },
+    {
+      "tag": "blueai-preprod-frontend:followup-20261004",
+      "id": "sha256:8e7952c45a66d760e85bb455a83c610efe854a5e003f40f5f7dfbd8c65b4ff87",
+      "counts": {
+        "high": 0,
+        "critical": 0
+      },
+      "findings": []
+    },
+    {
+      "tag": "blueai-preprod-rag:followup-20261004",
+      "id": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb",
+      "counts": {
+        "high": 45,
+        "critical": 0
+      },
+      "findings": [
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-76642",
+          "package": "bsdutils",
+          "installed": "1:2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78408",
+          "package": "bsdutils",
+          "installed": "1:2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78409",
+          "package": "bsdutils",
+          "installed": "1:2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78410",
+          "package": "bsdutils",
+          "installed": "1:2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-54369",
+          "package": "libacl1",
+          "installed": "2.3.2-2+b1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-76642",
+          "package": "libblkid1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78408",
+          "package": "libblkid1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78409",
+          "package": "libblkid1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78410",
+          "package": "libblkid1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-76642",
+          "package": "liblastlog2-2",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78408",
+          "package": "liblastlog2-2",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78409",
+          "package": "liblastlog2-2",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78410",
+          "package": "liblastlog2-2",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-76642",
+          "package": "libmount1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78408",
+          "package": "libmount1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78409",
+          "package": "libmount1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78410",
+          "package": "libmount1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2025-69720",
+          "package": "libncursesw6",
+          "installed": "6.5+20250216-2",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-103111",
+          "package": "libpcre2-8-0",
+          "installed": "10.46-1~deb13u2",
+          "fixed": "10.46-1~deb13u3"
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-76642",
+          "package": "libsmartcols1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78408",
+          "package": "libsmartcols1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78409",
+          "package": "libsmartcols1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78410",
+          "package": "libsmartcols1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-16742",
+          "package": "libsystemd0",
+          "installed": "257.13-1~deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2025-69720",
+          "package": "libtinfo6",
+          "installed": "6.5+20250216-2",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-16742",
+          "package": "libudev1",
+          "installed": "257.13-1~deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-76642",
+          "package": "libuuid1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78408",
+          "package": "libuuid1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78409",
+          "package": "libuuid1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78410",
+          "package": "libuuid1",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-76642",
+          "package": "login",
+          "installed": "1:4.16.0-2+really2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78408",
+          "package": "login",
+          "installed": "1:4.16.0-2+really2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78409",
+          "package": "login",
+          "installed": "1:4.16.0-2+really2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78410",
+          "package": "login",
+          "installed": "1:4.16.0-2+really2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-76642",
+          "package": "mount",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78408",
+          "package": "mount",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78409",
+          "package": "mount",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78410",
+          "package": "mount",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2025-69720",
+          "package": "ncurses-base",
+          "installed": "6.5+20250216-2",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2025-69720",
+          "package": "ncurses-bin",
+          "installed": "6.5+20250216-2",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-9538",
+          "package": "perl-base",
+          "installed": "5.40.1-6+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-76642",
+          "package": "util-linux",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78408",
+          "package": "util-linux",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78409",
+          "package": "util-linux",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        },
+        {
+          "class": "os-pkgs",
+          "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+          "severity": "HIGH",
+          "id": "CVE-2026-78410",
+          "package": "util-linux",
+          "installed": "2.41.5-0+deb13u1",
+          "fixed": null
+        }
+      ]
+    }
+  ]
+}

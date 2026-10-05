@@ -135,7 +135,7 @@ Only chat, login, `AdminDashboard`, `KnowledgeDashboard`, `RagMiniChat` and `Kno
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **backend** (2487 symbols, 7652 relationships, 204 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **backend** (3281 symbols, 10445 relationships, 270 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

@@ -13,11 +13,6 @@ import { Button } from '../ui/Button';
 
 const IntelligenceOrb = lazy(() => import('../3d/IntelligenceOrb').then((module) => ({ default: module.IntelligenceOrb })));
 
-type IdleWindow = Window & {
-  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-  cancelIdleCallback?: (handle: number) => void;
-};
-
 const StaticBlueAiOrb: React.FC = () => (
   <div className="relative flex h-[135px] w-[135px] items-center justify-center rounded-full bg-gradient-to-br from-cobalt-600/20 via-cyan-400/10 to-transparent shadow-cobalt-glow" aria-hidden="true">
     <div className="absolute inset-3 rounded-full border border-cobalt-400/40 bg-cobalt-500/10" />
@@ -34,30 +29,8 @@ const DeferredIntelligenceOrb: React.FC<{ status: import('../../types').AIStream
     setShouldLoad(true);
   }, []);
 
-  useEffect(() => {
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-
-    const idleWindow = window as IdleWindow;
-    let cancelled = false;
-    const loadWhenIdle = () => {
-      if (!cancelled) setShouldLoad(true);
-    };
-    if (idleWindow.requestIdleCallback) {
-      const idleId = idleWindow.requestIdleCallback(loadWhenIdle, { timeout: 2_000 });
-      return () => {
-        cancelled = true;
-        idleWindow.cancelIdleCallback?.(idleId);
-      };
-    }
-    const timeoutId = window.setTimeout(loadWhenIdle, 1_200);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, []);
-
   return (
-    <div className="flex h-[135px] w-[135px] items-center justify-center" onPointerEnter={load}>
+    <div className="flex h-[135px] w-[135px] items-center justify-center" onPointerEnter={load} onPointerDown={load}>
       {shouldLoad ? (
         <Suspense fallback={<StaticBlueAiOrb />}>
           <IntelligenceOrb size={135} status={status} />
@@ -222,7 +195,7 @@ export const ChatWorkspace: React.FC = () => {
         <div className="max-w-4xl mx-auto min-h-full flex flex-col justify-between">
           {messages.length === 0 ? (
             /* Futuristic 3D Holographic AI Stage */
-            <div className="my-auto py-5 sm:py-6 space-y-6 sm:space-y-7 animate-in fade-in duration-500">
+            <div className="my-auto py-5 sm:py-6 space-y-6 sm:space-y-7">
               <div className="text-center space-y-4">
                 {/* 3D Holographic Quantum Core */}
                 <div className="mx-auto flex h-36 w-36 items-center justify-center">

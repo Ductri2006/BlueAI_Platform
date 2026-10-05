@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-10-03T23:31:04.383Z",
+  "scope": "Isolated QA only; synthetic inputs; no provider chat calls",
+  "tests": [
+    {
+      "id": "KB-07-spoofed-file-through-real-ingress",
+      "result": "PASS"
+    },
+    {
+      "id": "KB-08-2MB-20MB-21MB-real-ingress",
+      "result": "PASS"
+    },
+    {
+      "id": "SEC-01-create-literal-conversation-message-fixture",
+      "result": "PASS"
+    },
+    {
+      "id": "SEC-01-literal-node-and-preview-fixture",
+      "result": "PASS"
+    },
+    {
+      "id": "API-06-live-Redis-outage-fails-closed-and-recovers",
+      "result": "FAIL",
+      "message": "Expected values to be strictly equal:\n\n429 !== 503\n"
+    },
+    {
+      "id": "API-06-live-session-window-quota",
+      "result": "FAIL",
+      "message": "HTTP 503; expected 200\n\n503 !== 200\n"
+    }
+  ],
+  "fixtures": {
+    "payload": "<img src=x onerror=\"window.__qaXss=1\"><script>window.__qaXss=1</script>",
+    "size2Document": "33030bf5-eb3d-4e4a-96e3-f51eb0fff945",
+    "size20Document": "a2bc1109-005e-4822-9ec1-ca22d00db46e",
+    "conversationId": "80f9a268-b95e-4881-9e55-e63e7189fde0",
+    "botId": "2a3e8ea8-b342-4cc5-b526-eea723d69ecd",
+    "botName": "QA security preview mut0zovk",
+    "widgetSessionId": "e26e060f-c2f4-45d9-b67c-6e51e5bbaca4"
+  },
+  "summary": {
+    "pass": 4,
+    "fail": 2
+  }
+}

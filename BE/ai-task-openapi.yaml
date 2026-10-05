@@ -1,0 +1,253 @@
+openapi: 3.1.0
+info:
+  title: BlueAI Workflow AI Task API
+  version: 1.0.0
+  description: Machine API for bounded CLASSIFY, EXTRACT, and RAG_ANSWER workflow nodes.
+servers:
+  - url: /
+paths:
+  /api/v1/admin/integration-clients:
+    post:
+      summary: Provision an integration client (active administrator JWT)
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, capabilities, documentIds]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                capabilities:
+                  type: array
+                  minItems: 1
+                  maxItems: 3
+                  uniqueItems: true
+                  items: { type: string, enum: [CLASSIFY, EXTRACT, RAG_ANSWER] }
+                documentIds:
+                  type: array
+                  maxItems: 100
+                  uniqueItems: true
+                  items: { type: string, format: uuid }
+      responses:
+        '201': { description: Client metadata and one-time credential value }
+        '400': { description: Invalid request or document grant }
+        '401': { description: Human JWT is required }
+        '403': { description: Active administrator is required }
+    get:
+      summary: List integration clients owned by the administrator
+      security:
+        - adminBearer: []
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 0, maximum: 100000, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200': { description: Bounded client page; credentials and hashes are omitted }
+        '401': { description: Human JWT is required }
+        '403': { description: Active administrator is required }
+  /api/v1/admin/integration-clients/{id}:
+    delete:
+      summary: Revoke an owned integration client
+      security:
+        - adminBearer: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Credential revoked }
+        '401': { description: Human JWT is required }
+        '403': { description: Active administrator is required }
+        '404': { description: Client not found for this administrator }
+  /api/v1/ai/tasks:
+    post:
+      summary: Create or replay a workflow AI task
+      security:
+        - integrationBearer: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required: [capability, input, configuration]
+                  properties:
+                    capability: { const: CLASSIFY }
+                    input: { $ref: '#/components/schemas/Input' }
+                    configuration:
+                      type: object
+                      additionalProperties: false
+                      required: [allowedLabels]
+                      properties:
+                        allowedLabels:
+                          type: array
+                          minItems: 1
+                          maxItems: 30
+                          uniqueItems: true
+                          items: { type: string, minLength: 1, maxLength: 80 }
+                    history: { $ref: '#/components/schemas/History' }
+                    metadata: { $ref: '#/components/schemas/Metadata' }
+                - type: object
+                  additionalProperties: false
+                  required: [capability, input, configuration]
+                  properties:
+                    capability: { const: EXTRACT }
+                    input: { $ref: '#/components/schemas/Input' }
+                    configuration:
+                      type: object
+                      additionalProperties: false
+                      required: [fields]
+                      properties:
+                        fields:
+                          type: array
+                          minItems: 1
+                          maxItems: 20
+                          items:
+                            type: object
+                            additionalProperties: false
+                            required: [name, type, required]
+                            properties:
+                              name: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_]*$', maxLength: 40 }
+                              type: { type: string, enum: [STRING, NUMBER, BOOLEAN] }
+                              required: { type: boolean }
+                    history: { $ref: '#/components/schemas/History' }
+                    metadata: { $ref: '#/components/schemas/Metadata' }
+                - type: object
+                  additionalProperties: false
+                  required: [capability, input, configuration]
+                  properties:
+                    capability: { const: RAG_ANSWER }
+                    input: { $ref: '#/components/schemas/Input' }
+                    configuration:
+                      type: object
+                      additionalProperties: false
+                      required: [documentIds]
+                      properties:
+                        documentIds:
+                          type: array
+                          minItems: 1
+                          maxItems: 100
+                          uniqueItems: true
+                          items: { type: string, format: uuid }
+                    history: { $ref: '#/components/schemas/History' }
+                    metadata: { $ref: '#/components/schemas/Metadata' }
+      responses:
+        '200':
+          description: Final task envelope; provider/validation errors are persisted as status FAILED with HTTP 200
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinalResponse' }
+        '202':
+          description: Same logical request is currently processing
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProcessingResponse' }
+        '400': { description: Invalid request/configuration, malformed JSON, or missing idempotency key }
+        '401': { description: Invalid integration credential }
+        '403': { description: Capability or document grant denied }
+        '409': { description: Idempotency key reused with a different request }
+        '410': { description: Evidence access changed after task completion }
+        '413': { description: Request exceeds 64 KiB }
+        '429':
+          description: Rate or concurrency limit
+          headers:
+            Retry-After: { schema: { type: integer, example: 60 } }
+        '503': { description: Task result could not be durably finalized; poll using the same idempotency key }
+  /api/v1/ai/tasks/{id}:
+    get:
+      summary: Get task status/result for the authenticated integration client
+      security:
+        - integrationBearer: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Task result or PROCESSING status
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/FinalResponse'
+                  - $ref: '#/components/schemas/ProcessingResponse'
+        '401': { description: Invalid integration credential or inactive creator }
+        '404': { description: Task not found for this client }
+        '410': { description: Evidence access revoked after task completion }
+components:
+  securitySchemes:
+    integrationBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+    adminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Input:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 8000 }
+    History:
+      type: array
+      maxItems: 8
+      items:
+        type: object
+        additionalProperties: false
+        required: [role, content]
+        properties:
+          role: { type: string, enum: [user, assistant] }
+          content: { type: string, minLength: 1, maxLength: 1000 }
+    Metadata:
+      type: object
+      additionalProperties: false
+      properties:
+        executionId: { type: string, maxLength: 200 }
+        nodeId: { type: string, maxLength: 200 }
+        conversationId: { type: string, maxLength: 200 }
+        channel: { type: string, maxLength: 200 }
+    FinalResponse:
+      type: object
+      required: [taskId, status, capability, result, citations, confidenceStatus, usage, traceId]
+      not:
+        properties:
+          status: { const: PROCESSING }
+      properties:
+        taskId: { type: string, format: uuid }
+        status: { type: string, enum: [COMPLETED, NEEDS_REVIEW, NO_MATCH, FAILED] }
+        capability: { type: string, enum: [CLASSIFY, EXTRACT, RAG_ANSWER] }
+        result: { type: object }
+        citations: { type: array, items: { type: object } }
+        confidenceStatus: { const: UNAVAILABLE }
+        usage: { type: object, example: { status: UNKNOWN } }
+        error: { type: [object, 'null'] }
+        traceId: { type: string, format: uuid }
+    ProcessingResponse:
+      type: object
+      required: [taskId, status]
+      properties:
+        taskId: { type: string, format: uuid }
+        status: { const: PROCESSING }
+        capability: { type: string, enum: [CLASSIFY, EXTRACT, RAG_ANSWER] }
+        createdAt: { type: [string, 'null'], format: date-time }

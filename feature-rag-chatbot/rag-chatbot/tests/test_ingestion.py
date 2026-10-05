@@ -7,9 +7,10 @@ import ingestion
 
 
 class FakeResponse:
-    def __init__(self, body=None, content=b""):
+    def __init__(self, body=None, content=b"", status_code=200):
         self._body = body
         self.content = content
+        self.status_code = status_code
 
     def raise_for_status(self):
         return None
@@ -21,19 +22,28 @@ class FakeResponse:
 class FakeClient:
     def __init__(self):
         self.result = None
+        self.purge_calls = 0
+        self.content_headers = None
+        self.result_headers = None
 
-    async def post(self, *_args, **_kwargs):
+    async def post(self, url, *_args, **_kwargs):
+        if url.endswith("/documents/purge"):
+            self.purge_calls += 1
+            return FakeResponse({"purged": 0})
         return FakeResponse([{
             "id": "doc-1", "ownerId": "owner-1", "contentType": "text/markdown",
             "sourceType": "ENTERPRISE_DOCUMENT",
             "originalFilename": "guide.md", "requestedChunkSize": 800, "requestedChunkOverlap": 100,
+            "attemptId": "attempt-1",
         }])
 
-    async def get(self, *_args, **_kwargs):
+    async def get(self, *_args, **kwargs):
+        self.content_headers = kwargs.get("headers")
         return FakeResponse(content=b"# Real uploaded guide")
 
     async def patch(self, *_args, **kwargs):
         self.result = kwargs["json"]
+        self.result_headers = kwargs.get("headers")
         return FakeResponse()
 
 
@@ -94,7 +104,22 @@ class IngestionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, count)
         self.assertEqual("owner-1", indexed[0][1])
         self.assertEqual("ENTERPRISE_DOCUMENT", indexed[0][2])
-        self.assertEqual({"status": "READY", "producedChunkCount": 2}, client.result)
+        self.assertEqual({"attemptId": "attempt-1", "status": "READY", "producedChunkCount": 2}, client.result)
+        self.assertEqual("attempt-1", client.content_headers["X-Worker-Attempt-Id"])
+        self.assertEqual("attempt-1", client.result_headers["X-Worker-Attempt-Id"])
+        self.assertEqual(1, client.purge_calls)
+
+    async def test_worker_reports_failure_with_the_same_attempt_token(self):
+        client = FakeClient()
+
+        def failing_indexer(*_args):
+            raise ValueError("parser failed")
+
+        await ingestion.run_worker_once(client, "http://java", "worker-key", failing_indexer)
+        self.assertEqual({
+            "attemptId": "attempt-1", "status": "FAILED", "failureReason": "Document format or content is invalid.",
+        }, client.result)
+        self.assertEqual("attempt-1", client.result_headers["X-Worker-Attempt-Id"])
 
     async def test_trigger_wakes_the_loop_before_the_interval_elapses(self):
         ingestion.request_run()

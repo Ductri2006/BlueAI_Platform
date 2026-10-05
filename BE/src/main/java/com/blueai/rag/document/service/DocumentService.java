@@ -6,6 +6,7 @@ import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.UserRepository;
 import com.blueai.rag.document.dto.DocumentUploadResponse;
 import com.blueai.rag.document.dto.DocumentProcessingResultRequest;
+import com.blueai.rag.document.dto.DocumentPageResponse;
 import com.blueai.rag.document.dto.DocumentResponse;
 import com.blueai.rag.document.dto.WorkerDocumentResponse;
 import com.blueai.rag.document.model.DocumentStatus;
@@ -15,6 +16,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,19 +56,25 @@ public class DocumentService {
     private final Path storageRoot;
     private final long maxSizeBytes;
     private final Duration processingTimeout;
+    private final int maxProcessingAttempts;
+    private final Duration retryBaseDelay;
 
     public DocumentService(
             UserRepository userRepository,
             RagDocumentRepository documentRepository,
             @Value("${app.documents.storage-dir}") String storageDirectory,
             @Value("${app.documents.max-size-bytes}") long maxSizeBytes,
-            @Value("${app.documents.processing-timeout:10m}") Duration processingTimeout
+            @Value("${app.documents.processing-timeout:10m}") Duration processingTimeout,
+            @Value("${app.documents.processing-max-attempts:3}") int maxProcessingAttempts,
+            @Value("${app.documents.processing-retry-base-delay:30s}") Duration retryBaseDelay
     ) {
         this.userRepository = userRepository;
         this.documentRepository = documentRepository;
         this.storageRoot = Path.of(storageDirectory).toAbsolutePath().normalize();
         this.maxSizeBytes = maxSizeBytes;
         this.processingTimeout = processingTimeout;
+        this.maxProcessingAttempts = Math.max(1, maxProcessingAttempts);
+        this.retryBaseDelay = retryBaseDelay.isNegative() ? Duration.ZERO : retryBaseDelay;
     }
 
     @Transactional
@@ -109,6 +118,33 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
+    public DocumentPageResponse searchDocuments(
+            String ownerId,
+            String search,
+            DocumentStatus status,
+            int page,
+            int size
+    ) {
+        validatePage(page, size);
+        String normalizedSearch = search == null ? "" : search.trim();
+        Page<RagDocument> result = documentRepository.searchActive(
+                ownerId,
+                status,
+                escapeLike(normalizedSearch),
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by("id")))
+        );
+        return new DocumentPageResponse(
+                result.getContent().stream().map(DocumentResponse::from).toList(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements(),
+                result.getTotalPages(),
+                result.hasNext(),
+                result.hasPrevious()
+        );
+    }
+
+    @Transactional(readOnly = true)
     public DocumentResponse getDocument(String ownerId, String documentId) {
         RagDocument document = documentRepository.findByIdAndOwner_Id(documentId, ownerId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document was not found."));
@@ -124,6 +160,7 @@ public class DocumentService {
         requeueStaleProcessingDocuments();
         List<RagDocument> documents = documentRepository.findForClaim(
                 DocumentStatus.PENDING_CHUNKING,
+                Instant.now(),
                 PageRequest.of(0, limit)
         );
         documents.forEach(RagDocument::markProcessing);
@@ -143,15 +180,24 @@ public class DocumentService {
         for (RagDocument document : stale) {
             LOG.warn("Document {} has been PROCESSING since {}; requeueing it for chunking.",
                     document.getId(), document.getProcessingStartedAt());
-            document.markPendingAgain("Quá thời gian xử lý, đã đưa lại vào hàng đợi.");
+            document.markPendingAgain(
+                    "Quá thời gian xử lý, đã đưa lại vào hàng đợi.",
+                    maxProcessingAttempts,
+                    retryDelayFor(document.getAttemptCount())
+            );
         }
     }
 
     @Transactional(readOnly = true)
-    public StoredDocumentFile getClaimedDocumentFile(String documentId) {
-        RagDocument document = documentRepository.findById(documentId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document was not found."));
-        if (document.getStatus() != DocumentStatus.PROCESSING) {
+    public StoredDocumentFile getClaimedDocumentFile(String documentId, String attemptId) {
+        RagDocument document = documentRepository.findClaimedByIdAndAttempt(
+                        documentId, DocumentStatus.PROCESSING, attemptId)
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.CONFLICT,
+                        "STALE_PROCESSING_ATTEMPT",
+                        "The worker claim is no longer current."
+                ));
+        if (document.isDeleted()) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
                     "DOCUMENT_NOT_PROCESSING",
@@ -177,15 +223,13 @@ public class DocumentService {
 
     @Transactional
     public void recordProcessingResult(String documentId, DocumentProcessingResultRequest request) {
-        RagDocument document = documentRepository.findById(documentId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document was not found."));
-        if (document.getStatus() != DocumentStatus.PROCESSING) {
-            throw new ApiException(
-                    HttpStatus.CONFLICT,
-                    "DOCUMENT_NOT_PROCESSING",
-                    "Only a claimed document can receive a processing result."
-            );
-        }
+        RagDocument document = documentRepository.findClaimedByIdAndAttempt(
+                        documentId, DocumentStatus.PROCESSING, request.attemptId())
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.CONFLICT,
+                        "STALE_PROCESSING_ATTEMPT",
+                        "The worker claim is no longer current."
+                ));
 
         if (request.status() == DocumentStatus.READY) {
             if (request.producedChunkCount() == null) {
@@ -207,7 +251,11 @@ public class DocumentService {
                         "failureReason is required when status is FAILED."
                 );
             }
-            document.markFailed(request.failureReason().trim());
+            document.markFailed(
+                    request.failureReason().trim(),
+                    maxProcessingAttempts,
+                    retryDelayFor(document.getAttemptCount())
+            );
             return;
         }
 
@@ -216,6 +264,65 @@ public class DocumentService {
                 "INVALID_PROCESSING_STATUS",
                 "Worker may report only READY or FAILED."
         );
+    }
+
+    @Transactional
+    public void softDelete(String ownerId, String documentId) {
+        RagDocument document = documentRepository.findByIdAndOwnerIncludingDeleted(documentId, ownerId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document was not found."));
+        document.softDelete();
+    }
+
+    @Transactional
+    public List<String> findExpiredDeletedDocumentIds(Instant cutoff, int limit) {
+        if (limit < 1 || limit > 100) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PURGE_LIMIT", "limit must be between 1 and 100.");
+        }
+        List<RagDocument> expired = documentRepository.findDeletedBefore(cutoff, PageRequest.of(0, limit));
+        Instant attemptedAt = Instant.now();
+        expired.forEach(document -> document.markPurgeAttempted(attemptedAt));
+        return expired.stream().map(RagDocument::getId).toList();
+    }
+
+    @Transactional
+    public void purgeDeletedDocument(String documentId, Instant cutoff) {
+        RagDocument document = documentRepository.findByIdIncludingDeleted(documentId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document was not found."));
+        if (document.getDeletedAt() == null || document.getDeletedAt().isAfter(cutoff)) {
+            return;
+        }
+        if (!deleteStoredFile(resolveStoragePath(document.getStorageKey()))) {
+            throw new ApiException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "DOCUMENT_STORAGE_PURGE_FAILED",
+                    "Document storage could not be purged; the tombstone will be retried."
+            );
+        }
+        // File deletion is intentionally one-way before the DB finalize. If the
+        // transaction rolls back, the tombstone remains and a retry treats the
+        // already-missing file as success; sensitive bytes are never restored.
+        documentRepository.delete(document);
+    }
+
+    private Duration retryDelayFor(int attemptCount) {
+        long multiplier = 1L << Math.min(Math.max(0, attemptCount - 1), 10);
+        try {
+            return retryBaseDelay.multipliedBy(multiplier);
+        } catch (ArithmeticException exception) {
+            return retryBaseDelay;
+        }
+    }
+
+    private void validatePage(int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_PAGE", "page must be >= 0 and size must be between 1 and 100.");
+        }
+    }
+
+    private String escapeLike(String value) {
+        return value.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     private UploadDetails validateFile(MultipartFile file, Integer requestedChunkSize, Integer requestedChunkOverlap) {
@@ -257,6 +364,11 @@ public class DocumentService {
     }
 
     private String extractFilename(String rawFilename) {
+        String raw = rawFilename == null ? "" : rawFilename.replace('\\', '/');
+        if (raw.chars().anyMatch(Character::isISOControl)
+                || java.util.Arrays.stream(raw.split("/")).anyMatch(segment -> segment.equals(".."))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_FILENAME", "Document filename is invalid.");
+        }
         String cleaned = StringUtils.cleanPath(rawFilename == null ? "" : rawFilename).replace('\\', '/');
         String filename = cleaned.substring(cleaned.lastIndexOf('/') + 1);
         if (!StringUtils.hasText(filename) || cleaned.contains("..") || filename.length() > 255) {
@@ -281,20 +393,38 @@ public class DocumentService {
     private void storeFile(MultipartFile file, Path destination) {
         try {
             Files.createDirectories(destination.getParent());
-            try (InputStream input = file.getInputStream()) {
-                Files.copy(input, destination);
+            long written = 0;
+            try (InputStream input = file.getInputStream(); var output = Files.newOutputStream(
+                    destination, java.nio.file.StandardOpenOption.CREATE_NEW, java.nio.file.StandardOpenOption.WRITE)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    written += read;
+                    if (written > maxSizeBytes) {
+                        throw new ApiException(HttpStatus.PAYLOAD_TOO_LARGE, "FILE_TOO_LARGE", "Document exceeds the upload limit.");
+                    }
+                    output.write(buffer, 0, read);
+                }
             }
+            if (written == 0 || written != file.getSize()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_FILE_CONTENT", "Document length is invalid.");
+            }
+            DocumentContentValidator.validate(destination, extensionOf(destination.getFileName().toString()));
+        } catch (ApiException exception) {
+            deleteStoredFile(destination);
+            throw exception;
         } catch (IOException exception) {
             deleteStoredFile(destination);
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "DOCUMENT_STORAGE_FAILED", "Unable to store document.");
         }
     }
 
-    private void deleteStoredFile(Path destination) {
+    private boolean deleteStoredFile(Path destination) {
         try {
             Files.deleteIfExists(destination);
+            return true;
         } catch (IOException ignored) {
-            // A failed cleanup must not hide the original persistence error.
+            return false;
         }
     }
 

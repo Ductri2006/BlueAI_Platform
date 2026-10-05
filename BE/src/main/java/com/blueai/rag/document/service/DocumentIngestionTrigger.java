@@ -25,6 +25,7 @@ public class DocumentIngestionTrigger {
 
     private static final Logger LOG = LoggerFactory.getLogger(DocumentIngestionTrigger.class);
     private static final String TRIGGER_PATH = "/v1/internal/ingest/run";
+    private static final String PURGE_PATH = "/v1/internal/documents/";
     private static final String WORKER_API_KEY_HEADER = "X-Worker-Api-Key";
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(3);
@@ -68,6 +69,34 @@ public class DocumentIngestionTrigger {
                             + "PENDING_CHUNKING until the worker polls; check that the worker's "
                             + "JAVA_API_BASE_URL and JAVA_WORKER_API_KEY match this service.",
                     properties.getRetrievalBaseUrl(), TRIGGER_PATH, exception.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Removes the document's chunks from the Python FAISS/docstore. A false
+     * result is deliberately non-authoritative: the Java tombstone remains and
+     * the retention purge can retry this operation safely.
+     */
+    public boolean requestDocumentPurge(String documentId) {
+        if (!properties.isRetrieverConfigured()) {
+            return false;
+        }
+        try {
+            restClientFactory.create()
+                    .baseUrl(properties.getRetrievalBaseUrl())
+                    .requestFactory(timeoutRequestFactory())
+                    .defaultHeader(WORKER_API_KEY_HEADER, workerApiKey)
+                    .build()
+                    .post()
+                    .uri(PURGE_PATH + documentId + "/purge")
+                    .retrieve()
+                    .toBodilessEntity();
+            return true;
+        } catch (RestClientException exception) {
+            LOG.warn("Could not purge document {} from the RAG vector store: {}. The tombstone "
+                            + "remains and retention purge must retry it.",
+                    documentId, exception.getMessage());
             return false;
         }
     }

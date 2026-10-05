@@ -2,6 +2,8 @@ package com.blueai.auth.config;
 
 import com.blueai.auth.exception.RestAccessDeniedHandler;
 import com.blueai.auth.exception.RestAuthenticationEntryPoint;
+import com.blueai.auth.model.User;
+import com.blueai.auth.repository.UserRepository;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.context.annotation.Bean;
@@ -12,7 +14,9 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtClaimNames;
@@ -53,14 +57,20 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/logout",
+                                "/api/v1/auth/browser/login",
+                                "/api/v1/auth/browser/refresh",
+                                "/api/v1/auth/browser/logout",
                                 "/api/v1/internal/documents/**",
                                 "/api/v1/widget/**",
                                 "/api/v1/runtime/**",
+                                "/actuator/prometheus",
                                 "/actuator/health",
                                 "/actuator/health/**"
                         ).permitAll()
-                        // Health is intentionally public for orchestration.
-                        // All other actuator data is operationally sensitive.
+                        // Health and the internal-network Prometheus scrape are public at
+                        // the app security boundary. The deployment network must still
+                        // restrict exposure of the app port; all other actuator data is
+                        // operationally sensitive.
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/**", "/api/v1/documents/**", "/api/v1/system/**", "/api/v1/studio/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
@@ -102,7 +112,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey secretKey, JwtProperties properties) {
+    JwtDecoder jwtDecoder(SecretKey secretKey, JwtProperties properties, UserRepository userRepository) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
@@ -116,10 +126,25 @@ public class SecurityConfig {
                 "type",
                 "access"::equals
         );
+        OAuth2TokenValidator<Jwt> accountValidator = jwt -> {
+            User user = userRepository.findById(jwt.getSubject()).orElse(null);
+            Number tokenVersion = jwt.getClaim("authVersion");
+            if (user == null || user.getStatus() != com.blueai.auth.model.UserStatus.ACTIVE
+                    || user.isDeleted() || tokenVersion == null
+                    || tokenVersion.longValue() != user.getAuthVersion()) {
+                return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                        "invalid_token",
+                        "The account is disabled or the access token has been revoked.",
+                        null
+                ));
+            }
+            return OAuth2TokenValidatorResult.success();
+        };
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 issuerValidator,
                 audienceValidator,
-                tokenTypeValidator
+                tokenTypeValidator,
+                accountValidator
         ));
         return decoder;
     }
@@ -129,7 +154,7 @@ public class SecurityConfig {
         CorsConfiguration applicationConfiguration = new CorsConfiguration();
         applicationConfiguration.setAllowedOrigins(properties.getAllowedOrigins());
         applicationConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        applicationConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
+        applicationConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID", "X-BlueAI-Browser"));
         applicationConfiguration.setExposedHeaders(List.of("X-Request-ID"));
         applicationConfiguration.setAllowCredentials(true);
         applicationConfiguration.setMaxAge(3600L);

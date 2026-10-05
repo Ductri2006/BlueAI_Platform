@@ -3,7 +3,7 @@ import { ChatMessage } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { GroundedStatusBadge } from './GroundedStatusBadge';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
-import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles, Info, Layers } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles, Info, Layers, GitFork } from 'lucide-react';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -72,7 +72,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
           <RichMarkdownRenderer content={message.content} citations={message.citations} />
         </div>
 
-        {/* Out-of-scope notice: the answer is honest, not broken */}
+        {message.confidence === 'dialog' && (
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-cobalt-50/50 dark:bg-cobalt-950/20 border border-cobalt-200/60 dark:border-cobalt-900/60 text-[12.5px] text-slate-600 dark:text-slate-300">
+            <GitFork className="w-3.5 h-3.5 mt-0.5 shrink-0 text-cobalt-500" />
+            <span>Nội dung theo kịch bản do quản trị viên cấu hình, không phải trích dẫn tài liệu KB.</span>
+          </div>
+        )}
+
+        {/* Out-of-scope notice applies to Core, not configured Dialog replies. */}
         {message.confidence === 'ungrounded' && (
           <div className="flex items-start gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 text-[12.5px] text-slate-600 dark:text-slate-300">
             <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400 dark:text-slate-500" />
@@ -109,7 +116,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 <Layers className="h-3 w-3" />
-                Context đã dùng:
+                {message.confidence === 'context_confirmation' ? 'Context đề xuất (chưa áp dụng):' : 'Context đã dùng:'}
               </span>
               {message.contextSources.map((source, index) => (
                 <span

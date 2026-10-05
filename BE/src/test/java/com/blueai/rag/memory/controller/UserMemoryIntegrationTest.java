@@ -1,6 +1,6 @@
 package com.blueai.rag.memory.controller;
 
-import com.blueai.auth.BlueAiAuthApplication;
+import com.blueai.BlueAiAuthApplication;
 import com.blueai.auth.repository.RefreshTokenRepository;
 import com.blueai.auth.repository.UserRepository;
 import com.blueai.rag.conversation.repository.ConversationMessageRepository;

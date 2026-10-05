@@ -28,6 +28,26 @@ class ContextRelevanceRankerTest {
     }
 
     @Test
+    void explicitCustomerNameSurvivesVerboseMultilingualRecallQuestion() {
+        String question = "Bạn còn nhớ khách QATarvos có bao nhiêu nhân viên sales, ngân sách tháng bao nhiêu "
+                + "và mã cơ hội gì không? Chỉ nhắc lại dữ kiện trong lịch sử liên quan của tôi.";
+        assertThat(ranker.score(question, "QATarvos has 37 sales, budget 2.9 million VND and opportunity TV-4712."))
+                .isGreaterThanOrEqualTo(0.35);
+        assertThat(ranker.score(question, "Plant rosemary and lavender in spring."))
+                .isZero();
+        assertThat(ranker.score(question, "QATarvosOther has a private unrelated opportunity."))
+                .isLessThan(0.2);
+    }
+
+    @Test
+    void genericCustomerReferenceDoesNotGrantAnEntityBonus() {
+        assertThat(ranker.score("Khách cần bao nhiêu nhân viên sales và ngân sách tháng?", "Can is an unrelated English verb."))
+                .isLessThan(0.2);
+        assertThat(ranker.score("Customer needs an unusual specification for tomorrow", "Needs is not a customer name"))
+                .isEqualTo(2.0 / 7.0); // Ordinary overlap only, with no named-subject bonus.
+    }
+
+    @Test
     void detectsVietnameseFollowUpsWithoutTreatingAStandaloneQuestionAsOne() {
         assertThat(ranker.isFollowUpQuestion("Vậy gói đó có phù hợp không?")).isTrue();
         assertThat(ranker.isFollowUpQuestion("Bạn giải thích lại bước đó giúp mình.")).isTrue();

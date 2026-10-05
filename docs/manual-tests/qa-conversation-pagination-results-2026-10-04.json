@@ -1,0 +1,11 @@
+{
+  "scope": "Owned QA conversations only; API paging, not a claim of a paginated UI",
+  "marker": "QA-PAGING-20261004-musy69v9",
+  "result": "PASS",
+  "pages": 3,
+  "items": 6,
+  "ownerIsolation": "USER B sees zero rows",
+  "invalidPageLimits": "HTTP 400",
+  "cleanup": "Only six exact newly created QA conversations soft-deleted",
+  "finishedAt": "2026-10-03T22:12:13.029Z"
+}

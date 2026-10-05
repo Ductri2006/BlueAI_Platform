@@ -19,6 +19,7 @@ import com.blueai.studio.dto.BotStudioDtos.PublishResponse;
 import com.blueai.studio.dto.BotStudioDtos.RuntimeResponse;
 import com.blueai.studio.dto.BotStudioDtos.SaveConfigurationRequest;
 import com.blueai.studio.model.Bot;
+import com.blueai.studio.model.BotCreationTemplate;
 import com.blueai.studio.model.BotDialogNode;
 import com.blueai.studio.model.BotEntityDefinition;
 import com.blueai.studio.model.BotEntityValue;
@@ -102,7 +103,13 @@ public class BotStudioService {
                 locale,
                 timezone
         ));
-        if (!Boolean.FALSE.equals(request.includeStarterTemplate())) {
+        if (request.template() == BotCreationTemplate.SALES_DEMO) {
+            var template = SalesDialogDemoTemplate.load(objectMapper);
+            validate(template.intents(), template.entities(), template.dialogNodes());
+            bot.updateCustomization(false, null);
+            persistConfiguration(bot, template.intents(), template.entities(), template.dialogNodes());
+        } else if (request.template() == BotCreationTemplate.STARTER
+                || !Boolean.FALSE.equals(request.includeStarterTemplate())) {
             persistConfiguration(bot, starterIntents(), starterEntities(), starterNodes());
         }
         return configuration(bot);
@@ -156,31 +163,15 @@ public class BotStudioService {
     public RuntimeResponse preview(String ownerId, String botId, PreviewRequest request) {
         Bot bot = requireOwnedBot(ownerId, botId);
         BotSnapshot snapshot = snapshot(bot);
+        if ((request.conversationId() != null && !request.conversationId().isBlank()) || !request.history().isEmpty()) {
+            return ragChatService.previewWithSnapshot(ownerId, snapshot, request);
+        }
         RuntimeResponse deterministic = runtimeService.evaluate(snapshot, request.context(), request.message().trim());
         if (deterministic.fallback()
                 && deterministic.context().pendingEntity() == null
                 && !deterministic.dialogHandled()
                 && bot.isBlueAiCoreEnabled()) {
-            try {
-                String answer = ragChatService.answerForCustomAssistant(
-                        ownerId,
-                        bot.getName(),
-                        bot.getCustomInstructions(),
-                        request.message().trim()
-                );
-                if (!isBlank(answer)) {
-                    return new RuntimeResponse(
-                            answer,
-                            deterministic.matchedIntent(),
-                            deterministic.recognizedEntities(),
-                            "BlueAI Core",
-                            deterministic.context(),
-                            false
-                    );
-                }
-            } catch (ApiException ignored) {
-                // Preview remains usable with deterministic fallback if shared RAG/LLM is unavailable.
-            }
+            return ragChatService.previewWithSnapshot(ownerId, snapshot, request);
         }
         return deterministic;
     }
@@ -284,7 +275,8 @@ public class BotStudioService {
                         node.getNextStep() == null ? DialogNextStep.WAIT_FOR_REPLY : node.getNextStep(),
                         node.getJumpToNode(),
                         node.getIrrelevantResponseText(),
-                        node.getPriority()
+                        node.getPriority(),
+                        node.getContextReusePolicy()
                 ))
                 .toList();
         return new BotConfigurationResponse(summary(bot), intents, entities, nodes, customization(bot));
@@ -369,23 +361,34 @@ public class BotStudioService {
             }
         }
         for (DialogNodeInput input : nodes) {
-            dialogNodeRepository.save(new BotDialogNode(
+            String matchEntity = canonicalReference(entities.stream().map(EntityInput::name).toList(), input.matchEntityName());
+            List<String> matchValues = entities.stream().filter(entity -> entity.name().trim().equals(matchEntity))
+                    .flatMap(entity -> entity.values().stream()).map(EntityValueInput::value).toList();
+            BotDialogNode node = new BotDialogNode(
                     bot,
                     input.name().trim(),
                     input.type(),
-                    trimToNull(input.parentNode()),
-                    trimToNull(input.matchIntent()),
-                    trimToNull(input.matchEntityName()),
-                    trimToNull(input.matchEntityValue()),
-                    trimToNull(input.requiredEntityName()),
+                    canonicalReference(nodes.stream().map(DialogNodeInput::name).toList(), input.parentNode()),
+                    canonicalReference(intents.stream().map(IntentInput::name).toList(), input.matchIntent()),
+                    matchEntity,
+                    canonicalReference(matchValues, input.matchEntityValue()),
+                    canonicalReference(entities.stream().map(EntityInput::name).toList(), input.requiredEntityName()),
                     blankToDefault(input.responseText(), ""),
                     trimToNull(input.missingEntityPrompt()),
                     input.nextStep() == null ? DialogNextStep.WAIT_FOR_REPLY : input.nextStep(),
-                    trimToNull(input.jumpToNode()),
+                    canonicalReference(nodes.stream().map(DialogNodeInput::name).toList(), input.jumpToNode()),
                     trimToNull(input.irrelevantResponseText()),
                     input.priority()
-            ));
+            );
+            node.setContextReusePolicy(input.contextReusePolicy());
+            dialogNodeRepository.save(node);
         }
+    }
+
+    private String canonicalReference(List<String> names, String supplied) {
+        if (isBlank(supplied)) return null;
+        return names.stream().filter(name -> key(name).equals(key(supplied)))
+                .map(String::trim).findFirst().orElse(supplied.trim());
     }
 
     private void validate(List<IntentInput> intents, List<EntityInput> entities, List<DialogNodeInput> nodes) {
@@ -434,6 +437,7 @@ public class BotStudioService {
             DialogNextStep nextStep = node.nextStep() == null ? DialogNextStep.WAIT_FOR_REPLY : node.nextStep();
             if (node.type() != DialogNodeType.FOLDER
                     && nextStep != DialogNextStep.SKIP_USER_INPUT
+                    && nextStep != DialogNextStep.JUMP_TO
                     && isBlank(node.responseText())) {
                 invalid("Node ‘" + node.name() + "’ chưa có nội dung phản hồi.");
             }
@@ -472,6 +476,7 @@ public class BotStudioService {
             }
         }
         validateParentCycles(nodes);
+        new DialogConfigurationValidator().validate(nodes, entities);
     }
 
     private void validateParentCycles(List<DialogNodeInput> nodes) {

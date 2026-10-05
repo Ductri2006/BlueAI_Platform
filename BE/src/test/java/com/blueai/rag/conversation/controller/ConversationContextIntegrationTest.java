@@ -1,6 +1,6 @@
 package com.blueai.rag.conversation.controller;
 
-import com.blueai.auth.BlueAiAuthApplication;
+import com.blueai.BlueAiAuthApplication;
 import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.RefreshTokenRepository;
 import com.blueai.auth.repository.UserRepository;
@@ -251,22 +251,22 @@ class ConversationContextIntegrationTest {
 
         mockMvc.perform(get("/api/v1/conversations/{id}/context", target)
                         .header("Authorization", "Bearer " + token))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("USER_DISABLED"));
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
         mockMvc.perform(put("/api/v1/conversations/{id}/context", target)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"mode\":\"RELEVANT_HISTORY\"}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
         mockMvc.perform(post("/api/v1/conversations/{id}/context-links", target)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sourceConversationId\":\"%s\"}".formatted(source)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
         mockMvc.perform(post("/api/v1/conversations/{id}/context-links/{link}/refresh", target, linkId)
                         .header("Authorization", "Bearer " + token))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
         mockMvc.perform(delete("/api/v1/conversations/{id}/context-links/{link}", target, linkId)
                         .header("Authorization", "Bearer " + token))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("AUTHENTICATION_REQUIRED"));
         assertThat(linkRepository.count()).isEqualTo(1);
     }
 

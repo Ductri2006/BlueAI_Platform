@@ -15,6 +15,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Entity
@@ -23,6 +24,8 @@ import java.util.UUID;
         indexes = @Index(name = "idx_rag_conversation_owner_updated", columnList = "owner_id,updated_at")
 )
 public class Conversation {
+
+    private static final long DATABASE_TIMESTAMP_STEP_NANOS = 1_000L;
 
     @Id
     @Column(length = 36, nullable = false, updatable = false, columnDefinition = "char(36)")
@@ -40,6 +43,9 @@ public class Conversation {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     /** Serialized Dialog PreviewContext for the active dashboard configuration. */
     @Column(name = "dialog_state_json", columnDefinition = "longtext")
@@ -85,12 +91,39 @@ public class Conversation {
         updatedAt = Instant.now();
     }
 
+    /**
+     * Message rows are ordered by createdAt. MySQL/H2 persist this column at
+     * microsecond precision, so a pair of messages created in one clock tick
+     * must be advanced explicitly instead of relying on random UUID ordering.
+     */
+    Instant nextMessageTimestamp(Instant candidate) {
+        Instant normalized = candidate.truncatedTo(ChronoUnit.MICROS);
+        if (updatedAt != null) {
+            Instant previous = updatedAt.truncatedTo(ChronoUnit.MICROS);
+            if (!normalized.isAfter(previous)) {
+                normalized = previous.plusNanos(DATABASE_TIMESTAMP_STEP_NANOS);
+            }
+        }
+        updatedAt = normalized;
+        return normalized;
+    }
+
     public void updateDialogState(String dialogStateJson) {
         this.dialogStateJson = dialogStateJson;
     }
 
     public void updateContextMode(ConversationContextMode contextMode) {
         this.contextMode = contextMode;
+    }
+
+    public void softDelete() {
+        if (deletedAt == null) {
+            deletedAt = Instant.now();
+        }
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
     }
 
     public String getId() {
@@ -107,6 +140,10 @@ public class Conversation {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
     }
 
     public String getDialogStateJson() {
