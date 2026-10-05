@@ -556,6 +556,15 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="BlueAI RAG Service", version="1.0.0", lifespan=lifespan)
+DEVELOPMENT_WORKER_API_KEY = "local-worker-api-key-change-before-production"
+
+
+def _require_worker_api_key(provided_api_key: str | None) -> None:
+    expected_key = os.getenv("JAVA_WORKER_API_KEY", "")
+    if not expected_key or hmac.compare_digest(expected_key, DEVELOPMENT_WORKER_API_KEY):
+        raise HTTPException(status_code=503, detail="RAG service authentication is not configured.")
+    if not hmac.compare_digest(provided_api_key or "", expected_key):
+        raise HTTPException(status_code=401, detail="Worker API key is invalid.")
 
 
 @app.get("/health")
@@ -586,8 +595,7 @@ def trigger_ingest(x_worker_api_key: str | None = Header(default=None)) -> dict[
     expected_key = os.getenv("JAVA_WORKER_API_KEY", "")
     if not expected_key or not os.getenv("JAVA_API_BASE_URL"):
         raise HTTPException(status_code=503, detail="Document worker is not configured.")
-    if not hmac.compare_digest(x_worker_api_key or "", expected_key):
-        raise HTTPException(status_code=401, detail="Worker API key is invalid.")
+    _require_worker_api_key(x_worker_api_key)
     request_run()
     return {"status": "queued"}
 
@@ -598,8 +606,7 @@ def purge_document(document_id: str, x_worker_api_key: str | None = Header(defau
     expected_key = os.getenv("JAVA_WORKER_API_KEY", "")
     if not expected_key:
         raise HTTPException(status_code=503, detail="Document worker is not configured.")
-    if not hmac.compare_digest(x_worker_api_key or "", expected_key):
-        raise HTTPException(status_code=401, detail="Worker API key is invalid.")
+    _require_worker_api_key(x_worker_api_key)
     try:
         removed_chunks = runtime.purge_document(document_id)
     except Exception as exception:
@@ -643,7 +650,11 @@ def operational_readiness() -> dict[str, str]:
 
 
 @app.post("/v1/retrieval/search", response_model=RetrievalResponse)
-def retrieval_search(request: RetrievalRequest) -> RetrievalResponse:
+def retrieval_search(
+    request: RetrievalRequest,
+    x_worker_api_key: str | None = Header(default=None),
+) -> RetrievalResponse:
+    _require_worker_api_key(x_worker_api_key)
     try:
         if request.allowedDocumentIds is None:
             matches = runtime.search(request.userId, request.query.strip(), request.limit)
@@ -655,7 +666,11 @@ def retrieval_search(request: RetrievalRequest) -> RetrievalResponse:
 
 
 @app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
-def chat_completions(request: ChatCompletionRequest) -> ChatCompletionResponse:
+def chat_completions(
+    request: ChatCompletionRequest,
+    x_worker_api_key: str | None = Header(default=None),
+) -> ChatCompletionResponse:
+    _require_worker_api_key(x_worker_api_key)
     try:
         return runtime.complete(request)
     except Exception as exception:

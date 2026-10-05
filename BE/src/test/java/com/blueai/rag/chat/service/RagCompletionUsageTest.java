@@ -41,7 +41,7 @@ class RagCompletionUsageTest {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         when(factory.create()).thenAnswer(invocation -> builder.clone());
-        client = new RagCompletionClient(properties, factory, usageService);
+        client = new RagCompletionClient(properties, factory, usageService, "test-worker-key");
     }
 
     @AfterEach
@@ -180,6 +180,7 @@ class RagCompletionUsageTest {
         server.expect(requestTo("http://gemini.test/v1/chat/completions"))
                 .andExpect(method(POST))
                 .andExpect(header("Authorization", "Bearer test-key"))
+                .andExpect(header("X-Worker-Api-Key", "test-worker-key"))
                 .andExpect(jsonPath("$.model").value("configured-model"))
                 .andExpect(jsonPath("$.messages[0].role").value("system"))
                 .andExpect(jsonPath("$.messages[1].content").value("My prompt"))

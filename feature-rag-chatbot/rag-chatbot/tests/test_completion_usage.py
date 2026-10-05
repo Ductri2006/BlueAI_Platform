@@ -12,6 +12,7 @@ class CompletionUsageTest(unittest.TestCase):
         self.enterContext(patch.dict("os.environ", {
             "GEMINI_CHAT_MODEL": "test-primary",
             "GEMINI_CHAT_FALLBACK_MODELS": "test-backup",
+            "JAVA_WORKER_API_KEY": "test-only-private-worker-key",
         }))
         self.llm = Mock()
         self.llm.invoke.return_value = SimpleNamespace(
@@ -23,7 +24,9 @@ class CompletionUsageTest(unittest.TestCase):
         self.client = self.enterContext(TestClient(api.app))
 
     def ask(self, **fields):
-        return self.client.post("/v1/chat/completions", json={
+        return self.client.post("/v1/chat/completions", headers={
+            "X-Worker-Api-Key": "test-only-private-worker-key",
+        }, json={
             "messages": [{"role": "user", "content": "Kiểm tra token"}], **fields,
         })
 

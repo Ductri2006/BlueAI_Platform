@@ -207,7 +207,7 @@ Stack local có **5 service**. MySQL, RAG và Redis cần healthy trước khi A
 | --- | --- | --- |
 | `frontend` | [localhost:3000](http://localhost:3000) | Giao diện; Nginx proxy `/api` |
 | `auth-api` | [localhost:8080](http://localhost:8080/actuator/health) | Link health API, không phải trang UI |
-| `rag-ai` | [localhost:8000](http://localhost:8000/health) | FastAPI; chẩn đoán local |
+| `rag-ai` | Chỉ trong mạng Compose (`rag-ai:8000`) | FastAPI; không publish cổng ra host |
 | `mysql` | `localhost:33069` | Database `blueai_auth`, user `blueai` |
 | `redis` | Chỉ trong mạng Compose | Không publish cổng ra host |
 
@@ -217,9 +217,9 @@ Override cổng trên máy cá nhân hoặc stack QA có thể khác bảng này
 
 ```powershell
 curl.exe http://localhost:8080/actuator/health
-curl.exe http://localhost:8000/health
-curl.exe http://localhost:8000/ready
-curl.exe http://localhost:8000/readiness
+docker compose exec -T rag-ai python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health').read().decode())"
+docker compose exec -T rag-ai python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/ready').read().decode())"
+docker compose exec -T rag-ai python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/readiness').read().decode())"
 ```
 
 - API health cần báo `UP`.
