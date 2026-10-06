@@ -1,0 +1,44 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 10s
+        # Filter at the Docker API itself so other host projects never become
+        # Promtail targets; relabeling below remains defense in depth.
+        filters:
+          - name: label
+            values: ['com.docker.compose.project=blueai-auth']
+    relabel_configs:
+      # This agent mounts the host Docker socket, so constrain discovery before
+      # assigning labels or shipping any log stream to this project's Loki.
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        regex: '^blueai-auth$'
+        action: keep
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: container
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: compose_service
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: compose_project
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: stream
+    pipeline_stages:
+      - docker: {}
+      - json:
+          expressions:
+            level: log.level
+            logger: log.logger
+      - labels:
+          level:
+          logger:

@@ -1,0 +1,464 @@
+{
+  "commit": "fbc8179f4aefec489f971fe304d01e97077b7bb8",
+  "scope": "90-case acceptance ledger, not automatic tests",
+  "decision": "NO-GO",
+  "counts": {
+    "PASS": 36,
+    "PARTIAL": 36,
+    "NOT RUN": 10,
+    "FAIL": 5,
+    "BLOCKED": 3
+  },
+  "cases": [
+    {
+      "id": "REL-01",
+      "result": "PASS",
+      "actual": "3 QA images đúng HEAD/commit labels; main cũ không nằm trong kết luận này"
+    },
+    {
+      "id": "REL-02",
+      "result": "PARTIAL",
+      "actual": "3 Docker builds đạt; secret artifact scan riêng chưa chạy"
+    },
+    {
+      "id": "REL-03",
+      "result": "PASS",
+      "actual": "Fresh QA tới V9, Hibernate validate, 5 services healthy"
+    },
+    {
+      "id": "REL-04",
+      "result": "PASS",
+      "actual": "N: 3 health gates 200; không chứng minh ingestion READY"
+    },
+    {
+      "id": "REL-05",
+      "result": "PASS",
+      "actual": "O: production Compose validation với secret giả"
+    },
+    {
+      "id": "REL-06",
+      "result": "PARTIAL",
+      "actual": "Backend negative configuration tests đạt; chưa startup prod staging thật"
+    },
+    {
+      "id": "REL-07",
+      "result": "NOT RUN",
+      "actual": "Chưa registry release approval/digest/schema fingerprint máy đích"
+    },
+    {
+      "id": "REL-08",
+      "result": "NOT RUN",
+      "actual": "Chưa đo VPS/disk/headroom"
+    },
+    {
+      "id": "AUTH-01",
+      "result": "PASS",
+      "actual": "A: protected 401; U logout về login"
+    },
+    {
+      "id": "AUTH-02",
+      "result": "PARTIAL",
+      "actual": "U trống/sai mật khẩu; email malformed chưa ghi nhận"
+    },
+    {
+      "id": "AUTH-03",
+      "result": "PARTIAL",
+      "actual": "U admin identity/nav/documents/Custom; chưa mọi admin workspace"
+    },
+    {
+      "id": "AUTH-04",
+      "result": "PASS",
+      "actual": "U chỉ chat; A admin/Studio/docs/system 403"
+    },
+    {
+      "id": "AUTH-05",
+      "result": "PARTIAL",
+      "actual": "A JWT rác/revoked bị chặn; expiry tự nhiên và frontend expired flow chưa chạy"
+    },
+    {
+      "id": "AUTH-06",
+      "result": "PASS",
+      "actual": "A refresh rotation/replay từ chối"
+    },
+    {
+      "id": "AUTH-07",
+      "result": "PARTIAL",
+      "actual": "A revoke refresh; U logout/reload; chưa back variant"
+    },
+    {
+      "id": "AUTH-08",
+      "result": "PARTIAL",
+      "actual": "A tạo user/response trim; toàn paging/filter UI chưa chạy"
+    },
+    {
+      "id": "AUTH-09",
+      "result": "PASS",
+      "actual": "A reset fixture, old login/JWT/refresh vô hiệu, new login đạt"
+    },
+    {
+      "id": "AUTH-10",
+      "result": "PARTIAL",
+      "actual": "A disable/soft-delete và auth bị chặn; includeDeleted/filter variants chưa đủ"
+    },
+    {
+      "id": "AUTH-11",
+      "result": "PASS",
+      "actual": "O real ingress 429 JSON/Retry-After, OPTIONS/no-backend guard"
+    },
+    {
+      "id": "AUTH-12",
+      "result": "PASS",
+      "actual": "A retired public registration/password routes bị chặn"
+    },
+    {
+      "id": "CTX-01",
+      "result": "PARTIAL",
+      "actual": "A persistence/search; U reload/history; paging dài chưa chạy"
+    },
+    {
+      "id": "CTX-02",
+      "result": "PASS",
+      "actual": "A cross-user get/messages/context/delete/memory bị chặn"
+    },
+    {
+      "id": "CTX-03",
+      "result": "PASS",
+      "actual": "U real-provider recall trong A đúng 40 / 3 triệu"
+    },
+    {
+      "id": "CTX-04",
+      "result": "PASS",
+      "actual": "U B CURRENT không tự lấy A"
+    },
+    {
+      "id": "CTX-05",
+      "result": "PASS",
+      "actual": "U link A → B, snapshot/trace/dữ kiện đúng"
+    },
+    {
+      "id": "CTX-06",
+      "result": "PASS",
+      "actual": "U trước/sau refresh: 40/3 → 50/5 đúng, không snapshot drift"
+    },
+    {
+      "id": "CTX-07",
+      "result": "PARTIAL",
+      "actual": "U unlink list; chưa source delete/prompt exclusion; history B không tự bị xóa"
+    },
+    {
+      "id": "CTX-08",
+      "result": "NOT RUN",
+      "actual": "Chưa automatic mode thực tế với positive/negative histories"
+    },
+    {
+      "id": "CTX-09",
+      "result": "PARTIAL",
+      "actual": "A/U memory scope/privacy/save; status variant chưa đủ"
+    },
+    {
+      "id": "CTX-10",
+      "result": "PARTIAL",
+      "actual": "A/U removal/list đạt; chưa hỏi phiên mới để xác minh prompt omission"
+    },
+    {
+      "id": "CTX-11",
+      "result": "PARTIAL",
+      "actual": "A self/cross-user/bad mode; duplicate-link variant chưa đủ"
+    },
+    {
+      "id": "CTX-12",
+      "result": "NOT RUN",
+      "actual": "Chưa actual long-history/budget acceptance"
+    },
+    {
+      "id": "KB-01",
+      "result": "FAIL",
+      "actual": "U FAILED do permission staging parent, không READY"
+    },
+    {
+      "id": "KB-02",
+      "result": "PARTIAL",
+      "actual": "U dashboard/reload ghi đúng FAILED/0; status-search variants chưa đủ"
+    },
+    {
+      "id": "KB-03",
+      "result": "BLOCKED",
+      "actual": "Cần KB-01 READY trước khi hỏi giá có citation"
+    },
+    {
+      "id": "KB-04",
+      "result": "BLOCKED",
+      "actual": "Chưa có READY document/chunk để mở source thật"
+    },
+    {
+      "id": "KB-05",
+      "result": "PARTIAL",
+      "actual": "U empty-KB không bịa holiday policy; populated-KB chưa chạy"
+    },
+    {
+      "id": "KB-06",
+      "result": "PASS",
+      "actual": "A USER docs upload/read bị 403"
+    },
+    {
+      "id": "KB-07",
+      "result": "PARTIAL",
+      "actual": "N empty/exe/traversal 400; spoofed extension/parser payload chưa đủ"
+    },
+    {
+      "id": "KB-08",
+      "result": "PARTIAL",
+      "actual": "O ingress 2/20/21 MB với fake backend; chưa full Java/RAG"
+    },
+    {
+      "id": "KB-09",
+      "result": "PASS",
+      "actual": "N invalid chunk size/overlap 400"
+    },
+    {
+      "id": "KB-10",
+      "result": "PARTIAL",
+      "actual": "A wrong/correct key boundaries; O stale-attempt contract; chưa full live stale attempt"
+    },
+    {
+      "id": "KB-11",
+      "result": "PARTIAL",
+      "actual": "U failed state/log sau worker lỗi; transient parser/provider recovery chưa đủ"
+    },
+    {
+      "id": "KB-12",
+      "result": "BLOCKED",
+      "actual": "Không có READY source để thử tombstone/citation removal đầy đủ"
+    },
+    {
+      "id": "DLG-01",
+      "result": "PARTIAL",
+      "actual": "A/U Sales demo 3/4/13/Core off/reload; Starter mới chưa tạo"
+    },
+    {
+      "id": "DLG-02",
+      "result": "PASS",
+      "actual": "A greeting; U welcome nêu demo scope"
+    },
+    {
+      "id": "DLG-03",
+      "result": "PASS",
+      "actual": "A missing slot + 3 branches/Sài Gòn synonym"
+    },
+    {
+      "id": "DLG-04",
+      "result": "PASS",
+      "actual": "A 3-slot multi-turn và interpolated summary"
+    },
+    {
+      "id": "DLG-05",
+      "result": "PASS",
+      "actual": "A/U đủ slot một lượt, không hỏi dư"
+    },
+    {
+      "id": "DLG-06",
+      "result": "PASS",
+      "actual": "A/U 20→30 giữ sản phẩm/chi nhánh, DIALOG"
+    },
+    {
+      "id": "DLG-07",
+      "result": "PASS",
+      "actual": "A confirm/reject khác nhau; U confirm no real transaction"
+    },
+    {
+      "id": "DLG-08",
+      "result": "PASS",
+      "actual": "A early agreement vẫn phải confirm sau summary"
+    },
+    {
+      "id": "DLG-09",
+      "result": "PARTIAL",
+      "actual": "A 35/cancel reset; unknown-product variant chưa đủ"
+    },
+    {
+      "id": "DLG-10",
+      "result": "PASS",
+      "actual": "A configured fallback, không AI/KB"
+    },
+    {
+      "id": "DLG-11",
+      "result": "PASS",
+      "actual": "U changed draft → workspace → Cancel giữ draft"
+    },
+    {
+      "id": "DLG-12",
+      "result": "PARTIAL",
+      "actual": "U hoàn nguyên gốc rồi Discard/reopen; arbitrary changed-draft chưa đủ"
+    },
+    {
+      "id": "DLG-13",
+      "result": "PASS",
+      "actual": "A stale revision 409/không overwrite"
+    },
+    {
+      "id": "DLG-14",
+      "result": "PARTIAL",
+      "actual": "A unknown required entity atomic rejection; toàn cycle/parent variants chưa đủ"
+    },
+    {
+      "id": "DLG-15",
+      "result": "PASS",
+      "actual": "A other admin read/save/publish 404"
+    },
+    {
+      "id": "DLG-16",
+      "result": "PASS",
+      "actual": "A old widget session vẫn release cũ sau republish"
+    },
+    {
+      "id": "API-01",
+      "result": "PARTIAL",
+      "actual": "A published session/welcome/release; unpublished/bad publicKey chưa đủ"
+    },
+    {
+      "id": "API-02",
+      "result": "PARTIAL",
+      "actual": "A missing/invalid/cross-session token; expired variant chưa chạy"
+    },
+    {
+      "id": "API-03",
+      "result": "PASS",
+      "actual": "A replay exact response với cùng requestId/body"
+    },
+    {
+      "id": "API-04",
+      "result": "PASS",
+      "actual": "A đổi body cùng key conflict"
+    },
+    {
+      "id": "API-05",
+      "result": "PASS",
+      "actual": "A repeated content/new key 429/Retry-After"
+    },
+    {
+      "id": "API-06",
+      "result": "PARTIAL",
+      "actual": "N shared-IP across 3 sessions/XFF spoof chặn request 31; session/quota multi-IP chưa đủ"
+    },
+    {
+      "id": "API-07",
+      "result": "PASS",
+      "actual": "A allowlist/preflight unknown origin 403/no credential wildcard"
+    },
+    {
+      "id": "API-08",
+      "result": "PASS",
+      "actual": "A public response không lộ internal context/trace/intent"
+    },
+    {
+      "id": "API-09",
+      "result": "PARTIAL",
+      "actual": "N restricted capability/unknown fields/revocation; documentIds cross-scope chưa đủ"
+    },
+    {
+      "id": "API-10",
+      "result": "PASS",
+      "actual": "M task auth/concurrency/recovery; provider giả không bị duplicate replay"
+    },
+    {
+      "id": "SEC-01",
+      "result": "PARTIAL",
+      "actual": "U escaped title/no handler/no alert; message/node variants chưa chạy"
+    },
+    {
+      "id": "SEC-02",
+      "result": "PARTIAL",
+      "actual": "A malformed/oversized title; N owner/role/status không thay quyền; chưa mọi input schema"
+    },
+    {
+      "id": "SEC-03",
+      "result": "PARTIAL",
+      "actual": "A SQL-shaped search không owner bypass; chưa toàn endpoint/title variants"
+    },
+    {
+      "id": "SEC-04",
+      "result": "PARTIAL",
+      "actual": "S HEAD/history redacted scan; fixture/real review và revocation/artifact scan chưa đủ"
+    },
+    {
+      "id": "SEC-05",
+      "result": "FAIL",
+      "actual": "S image/advisories còn chưa triage/patch; runtime npm/pip đạt không đủ"
+    },
+    {
+      "id": "SEC-06",
+      "result": "FAIL",
+      "actual": "N thiếu 4 headers; source token localStorage"
+    },
+    {
+      "id": "OPS-01",
+      "result": "PARTIAL",
+      "actual": "M fresh/V5→V9, old V6→V9 đạt; V1/V3 cụ thể chưa chạy"
+    },
+    {
+      "id": "OPS-02",
+      "result": "FAIL",
+      "actual": "Probe Compose URL giữ session +07 khi global +07"
+    },
+    {
+      "id": "OPS-03",
+      "result": "PARTIAL",
+      "actual": "U restart giữ history/config/FAILED doc; READY FAISS persistence bị chặn"
+    },
+    {
+      "id": "OPS-04",
+      "result": "PASS",
+      "actual": "M real process kill/expire/replay/fresh task đạt"
+    },
+    {
+      "id": "OPS-05",
+      "result": "PARTIAL",
+      "actual": "O real SQL/documents + dummy index bytes; chưa FAISS thật/off-host"
+    },
+    {
+      "id": "OPS-06",
+      "result": "PARTIAL",
+      "actual": "O 18 offline deploy/rollback cases; chưa actual production promotion"
+    },
+    {
+      "id": "OPS-07",
+      "result": "PARTIAL",
+      "actual": "O real alert tới stub/private block/rules; chưa production scrape/webhook team"
+    },
+    {
+      "id": "OPS-08",
+      "result": "FAIL",
+      "actual": "Promtail EOL; log redaction/retention live chưa đủ"
+    },
+    {
+      "id": "OPS-09",
+      "result": "NOT RUN",
+      "actual": "Chưa domain/TLS/firewall/HTTPS staging"
+    },
+    {
+      "id": "OPS-10",
+      "result": "NOT RUN",
+      "actual": "Chưa 2 IP thật sau trusted proxy/CDN"
+    },
+    {
+      "id": "OPS-11",
+      "result": "NOT RUN",
+      "actual": "Chưa load/soak/capacity VPS"
+    },
+    {
+      "id": "OPS-12",
+      "result": "NOT RUN",
+      "actual": "Chưa encrypted off-host backup/RPO/RTO/on-call drill"
+    },
+    {
+      "id": "OPS-13",
+      "result": "NOT RUN",
+      "actual": "Chưa billing cap/provider prod 429/timeout/5xx acceptance"
+    },
+    {
+      "id": "OPS-14",
+      "result": "NOT RUN",
+      "actual": "Chưa team approval/promotion/writer drain/rollback V9 compatibility"
+    }
+  ]
+}

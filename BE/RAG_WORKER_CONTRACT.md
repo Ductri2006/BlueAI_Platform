@@ -9,6 +9,7 @@ Set `APP_RAG_RETRIEVAL_BASE_URL` to the Python service origin. Java calls:
 ```http
 POST {APP_RAG_RETRIEVAL_BASE_URL}/v1/retrieval/search
 Content-Type: application/json
+X-Worker-Api-Key: <APP_WORKER_API_KEY>
 ```
 
 Request body:
@@ -47,13 +48,16 @@ the flag defaults to false and responses preserve trust metadata for the fronten
 
 ## Java calls the LLM
 
-The LLM must expose the OpenAI-compatible `chat/completions` request and response shape. Configure:
+The LLM must expose the OpenAI-compatible `chat/completions` request and response shape. Both
+retrieval and completion calls also require `X-Worker-Api-Key`, using the same random
+`APP_WORKER_API_KEY` configured for the document worker. Configure:
 
 ```powershell
 $env:APP_RAG_RETRIEVAL_BASE_URL = "http://localhost:8000"
 $env:APP_LLM_BASE_URL = "http://localhost:8000"
 $env:APP_LLM_API_KEY = "internal-rag-service"
 $env:APP_LLM_MODEL = "gemini-3.5-flash-lite"
+$env:APP_WORKER_API_KEY = "<same random secret configured as JAVA_WORKER_API_KEY>"
 ```
 
 Optional path overrides:

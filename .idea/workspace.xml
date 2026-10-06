@@ -57,7 +57,7 @@
   <component name="RunManager">
     <configuration name="BlueAiAuthApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
       <module name="blueai-auth-api" />
-      <option name="SPRING_BOOT_MAIN_CLASS" value="com.blueai.auth.BlueAiAuthApplication" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="com.blueai.BlueAiAuthApplication" />
       <method v="2">
         <option name="Make" enabled="true" />
       </method>

@@ -33,6 +33,7 @@
 
   html {
     color-scheme: light;
+    background: var(--bg-canvas);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -45,6 +46,8 @@
   body {
     min-width: 320px;
     min-height: 100dvh;
+    background: var(--bg-canvas);
+    color: var(--text-primary);
   }
 
   button,

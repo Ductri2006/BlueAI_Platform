@@ -45,9 +45,11 @@ public class SystemMetricsService {
         this.messageRepository = messageRepository;
         this.documentRepository = documentRepository;
         this.ragProperties = ragProperties;
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(CONNECT_TIMEOUT)
-                .build();
+        // Build the JDK client only when the readiness probe is actually used.
+        // Some restricted Windows environments cannot create the selector's
+        // loopback pipe; metrics should report UNREACHABLE instead of preventing
+        // the whole Spring application from starting.
+        this.httpClient = null;
     }
 
     SystemMetricsService(
@@ -96,7 +98,10 @@ public class SystemMetricsService {
                     .timeout(REQUEST_TIMEOUT)
                     .GET()
                     .build();
-            HttpResponse<Void> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+            HttpClient client = httpClient != null
+                    ? httpClient
+                    : HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+            HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
             boolean ready = response.statusCode() >= 200 && response.statusCode() < 300;
             return new AiRuntimeReadiness(ready, ready ? "READY" : "NOT_READY");
         } catch (InterruptedException exception) {

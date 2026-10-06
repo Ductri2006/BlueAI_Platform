@@ -1,0 +1,6 @@
+# Bulky raw scanner output is reproducible and retained locally, not published.
+# Summaries, sanitized findings, fixture results and screenshots stay versioned.
+trivy-*.json
+npm-audit-*.json
+pip-audit-*.json
+gitleaks-*-redacted.json

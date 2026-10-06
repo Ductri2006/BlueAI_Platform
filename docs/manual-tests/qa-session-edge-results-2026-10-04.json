@@ -1,0 +1,20 @@
+{
+  "scope": "Owned QA only, no provider calls",
+  "tests": [
+    {
+      "id": "AUTH-05-expiry-positive-control",
+      "result": "PASS"
+    },
+    {
+      "id": "API-02-expired-widget",
+      "result": "PASS"
+    },
+    {
+      "id": "API-09-document-allowlist",
+      "result": "PASS"
+    }
+  ],
+  "validSignatureControl": "HTTP 200",
+  "expiredSignatureControl": "HTTP 401",
+  "finishedAt": "2026-10-03T21:47:15.418Z"
+}

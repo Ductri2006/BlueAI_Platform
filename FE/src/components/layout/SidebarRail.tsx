@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../auth/AuthContext';
 import { UserRole } from '../../types';
 import {
-  MessageSquare, BookOpen, ShieldCheck,
+  MessageSquare, BookOpen, ShieldCheck, Bot, Gauge,
   Plus, ChevronLeft,
   ChevronRight, Pin, Clock, Trash2, Check, X
 } from 'lucide-react';
@@ -27,6 +27,8 @@ export const SidebarRail: React.FC = () => {
   const allRoleNavItems: { role: UserRole; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { role: 'employee', label: 'Hỏi BlueAI', icon: MessageSquare },
     { role: 'knowledge_owner', label: 'Tài liệu & Tri thức RAG', icon: BookOpen },
+    { role: 'studio', label: 'BlueAI Custom', icon: Bot },
+    { role: 'gemini_usage', label: 'Token Gemini', icon: Gauge },
     { role: 'admin', label: 'Quản trị Hệ thống', icon: ShieldCheck },
   ];
   const roleNavItems = allRoleNavItems.filter(item => item.role === 'employee' || user?.role === 'ADMIN');

@@ -11,7 +11,8 @@ public record WorkerDocumentResponse(
         String contentType,
         long sizeBytes,
         int requestedChunkSize,
-        int requestedChunkOverlap
+        int requestedChunkOverlap,
+        String attemptId
 ) {
     public static WorkerDocumentResponse from(RagDocument document) {
         return new WorkerDocumentResponse(
@@ -23,7 +24,8 @@ public record WorkerDocumentResponse(
                 document.getContentType(),
                 document.getSizeBytes(),
                 document.getRequestedChunkSize(),
-                document.getRequestedChunkOverlap()
+                document.getRequestedChunkOverlap(),
+                document.getProcessingAttemptId()
         );
     }
 }

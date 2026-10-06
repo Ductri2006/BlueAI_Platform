@@ -1,6 +1,7 @@
 package com.blueai.rag.conversation.model;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -40,6 +41,10 @@ public class ConversationMessage {
     @Column(nullable = false, updatable = false, columnDefinition = "LONGTEXT")
     private String content;
 
+    @Convert(converter = MessageEvidenceConverter.class)
+    @Column(name = "evidence_json", updatable = false, columnDefinition = "LONGTEXT")
+    private MessageEvidence evidence;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -47,10 +52,19 @@ public class ConversationMessage {
     }
 
     public ConversationMessage(Conversation conversation, MessageRole role, String content) {
+        this(conversation, role, content, null);
+    }
+
+    public ConversationMessage(Conversation conversation, MessageRole role, String content, MessageEvidence evidence) {
         this.id = UUID.randomUUID().toString();
         this.conversation = conversation;
         this.role = role;
         this.content = content;
+        this.evidence = role == MessageRole.ASSISTANT ? evidence : null;
+    }
+
+    public MessageEvidence getEvidence() {
+        return evidence;
     }
 
     @PrePersist
@@ -58,11 +72,17 @@ public class ConversationMessage {
         if (id == null) {
             id = UUID.randomUUID().toString();
         }
-        createdAt = Instant.now();
+        createdAt = conversation == null
+                ? Instant.now()
+                : conversation.nextMessageTimestamp(Instant.now());
     }
 
     public String getId() {
         return id;
+    }
+
+    public Conversation getConversation() {
+        return conversation;
     }
 
     public MessageRole getRole() {

@@ -7,15 +7,14 @@ services:
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       GEMINI_CHAT_MODEL: ${GEMINI_CHAT_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_CHAT_FALLBACK_MODELS: ${GEMINI_CHAT_FALLBACK_MODELS:-gemini-3.6-flash}
       GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-models/gemini-embedding-001}
       JAVA_API_BASE_URL: http://auth-api:8080
-      JAVA_WORKER_API_KEY: ${APP_WORKER_API_KEY:-local-worker-api-key-change-before-production}
+      JAVA_WORKER_API_KEY: ${APP_WORKER_API_KEY:?Set APP_WORKER_API_KEY to a unique random secret}
       RAG_INDEX_DIR: /app/.rag-index
       RAG_MIN_RELEVANCE: ${RAG_MIN_RELEVANCE:-0}
       RAG_MAX_CHUNKS_PER_DOCUMENT: ${RAG_MAX_CHUNKS_PER_DOCUMENT:-3}
       RAG_CANDIDATE_MULTIPLIER: ${RAG_CANDIDATE_MULTIPLIER:-8}
-    ports:
-      - "8000:8000"
     volumes:
       - blueai-rag-index:/app/.rag-index
     healthcheck:
@@ -41,12 +40,25 @@ services:
       interval: 3s
       timeout: 5s
       retries: 30
+    restart: unless-stopped
+
+  # Redis holds only short-lived widget context, idempotency coordination and
+  # shared rate-limit counters. It is intentionally not published to the host.
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
 
   auth-api:
     build:
       context: .
     environment:
-      DB_URL: jdbc:mysql://mysql:3306/blueai_auth?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_URL: jdbc:mysql://mysql:3306/blueai_auth?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
       DB_USERNAME: blueai
       DB_PASSWORD: ${DB_PASSWORD:-blueai-local}
       APP_JWT_SECRET: ${APP_JWT_SECRET:-ZGV2LW9ubHktYmx1ZWFpLWp3dC1zZWNyZXQtbXVzdC1iZS1yZXBsYWNlZCE=}
@@ -57,23 +69,54 @@ services:
       APP_BOOTSTRAP_ADMIN_PASSWORD: ${APP_BOOTSTRAP_ADMIN_PASSWORD:-BlueAiAdmin123!}
       APP_BOOTSTRAP_ADMIN_FULL_NAME: ${APP_BOOTSTRAP_ADMIN_FULL_NAME:-BlueAI Administrator}
       APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
-      APP_WORKER_API_KEY: ${APP_WORKER_API_KEY:-local-worker-api-key-change-before-production}
+      APP_WIDGET_ALLOWED_ORIGINS: "${APP_WIDGET_ALLOWED_ORIGINS:-*}"
+      APP_WIDGET_CLEANUP_INTERVAL: ${APP_WIDGET_CLEANUP_INTERVAL:-15m}
+      APP_WIDGET_REDIS_ENABLED: "true"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "6379"
+      APP_WIDGET_REDIS_KEY_PREFIX: ${APP_WIDGET_REDIS_KEY_PREFIX:-blueai:widget:}
+      APP_WIDGET_CLIENT_KEY_SALT: ${APP_WIDGET_CLIENT_KEY_SALT:-local-widget-client-key-salt-change-before-production}
+      APP_WIDGET_TRUST_FORWARDED_HEADERS: "${APP_WIDGET_TRUST_FORWARDED_HEADERS:-false}"
+      APP_WIDGET_TRUSTED_PROXY_CIDRS: "${APP_WIDGET_TRUSTED_PROXY_CIDRS:-}"
+      APP_WIDGET_SESSION_TTL: ${APP_WIDGET_SESSION_TTL:-30m}
+      APP_WIDGET_RATE_LIMIT_WINDOW: ${APP_WIDGET_RATE_LIMIT_WINDOW:-1m}
+      APP_WIDGET_MAX_SESSION_CREATIONS: ${APP_WIDGET_MAX_SESSION_CREATIONS:-10}
+      APP_WIDGET_MAX_MESSAGES_PER_CLIENT: ${APP_WIDGET_MAX_MESSAGES_PER_CLIENT:-30}
+      APP_WIDGET_MAX_MESSAGES_PER_SESSION: ${APP_WIDGET_MAX_MESSAGES_PER_SESSION:-12}
+      APP_WIDGET_MAX_MESSAGES_PER_SESSION_TOTAL: ${APP_WIDGET_MAX_MESSAGES_PER_SESSION_TOTAL:-120}
+      APP_WIDGET_DUPLICATE_REPLAY_LIMIT: ${APP_WIDGET_DUPLICATE_REPLAY_LIMIT:-2}
+      APP_WIDGET_DUPLICATE_WINDOW: ${APP_WIDGET_DUPLICATE_WINDOW:-2m}
+      APP_WIDGET_REQUEST_LOCK_TTL: ${APP_WIDGET_REQUEST_LOCK_TTL:-60s}
+      APP_WORKER_API_KEY: ${APP_WORKER_API_KEY:?Set APP_WORKER_API_KEY to a unique random secret}
       APP_DOCUMENT_STORAGE_DIR: /app/storage/documents
       APP_RAG_RETRIEVAL_BASE_URL: ${APP_RAG_RETRIEVAL_BASE_URL:-http://rag-ai:8000}
       APP_RAG_RETRIEVAL_SEARCH_PATH: ${APP_RAG_RETRIEVAL_SEARCH_PATH:-/v1/retrieval/search}
-      APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE: "${APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE:-false}"
+      # Keep unreviewed SYNTHETIC_DEMO records out of the main application.
+      # Tests enable them explicitly through the Spring test profile.
+      APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE: "false"
       APP_LLM_BASE_URL: ${APP_LLM_BASE_URL:-http://rag-ai:8000}
       APP_LLM_CHAT_PATH: ${APP_LLM_CHAT_PATH:-/v1/chat/completions}
       APP_LLM_API_KEY: ${APP_LLM_API_KEY:-internal-rag-service}
       APP_LLM_MODEL: ${APP_LLM_MODEL:-gemini-3.5-flash-lite}
+      APP_LLM_MAX_ATTEMPTS: ${APP_LLM_MAX_ATTEMPTS:-3}
+      APP_LLM_RETRY_INITIAL_DELAY: ${APP_LLM_RETRY_INITIAL_DELAY:-250ms}
+      APP_LLM_RETRY_MAX_DELAY: ${APP_LLM_RETRY_MAX_DELAY:-2s}
     ports:
       - "8080:8080"
     volumes:
       - blueai-auth-documents:/app/storage
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "3", "-O", "/dev/null", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     depends_on:
       mysql:
         condition: service_healthy
       rag-ai:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -82,8 +125,15 @@ services:
       context: ../FE
     ports:
       - "3000:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "3", "-O", "/dev/null", "http://127.0.0.1/index.html"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
-      - auth-api
+      auth-api:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

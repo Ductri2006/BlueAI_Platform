@@ -1,0 +1,272 @@
+{
+  "commit": "fbc8179f4aefec489f971fe304d01e97077b7bb8",
+  "base": "http://127.0.0.1:23081",
+  "startedAt": "2026-10-03T02:19:37.234Z",
+  "tests": [
+    {
+      "id": "AUTH-01",
+      "name": "Unauthenticated protected API returns JSON 401",
+      "result": "PASS",
+      "ms": 3
+    },
+    {
+      "id": "AUTH-04",
+      "name": "USER cannot call admin, documents, Studio or system APIs",
+      "result": "PASS",
+      "ms": 22
+    },
+    {
+      "id": "AUTH-05",
+      "name": "Invalid JWT is rejected",
+      "result": "PASS",
+      "ms": 3
+    },
+    {
+      "id": "AUTH-06",
+      "name": "Refresh rotates token and rejects old token replay",
+      "result": "PASS",
+      "ms": 26
+    },
+    {
+      "id": "AUTH-07",
+      "name": "Logout revokes disposable refresh token",
+      "result": "PASS",
+      "ms": 95
+    },
+    {
+      "id": "AUTH-08",
+      "name": "Admin creates users; responses do not expose credentials",
+      "result": "PASS",
+      "ms": 7
+    },
+    {
+      "id": "AUTH-12",
+      "name": "Public registration and retired password routes are unavailable",
+      "result": "PASS",
+      "ms": 11
+    },
+    {
+      "id": "CTX-01",
+      "name": "Own conversation persists and is searchable",
+      "result": "PASS",
+      "ms": 14
+    },
+    {
+      "id": "CTX-02",
+      "name": "Cross-user direct conversation/context/delete do not expose records",
+      "result": "PASS",
+      "ms": 37
+    },
+    {
+      "id": "CTX-09",
+      "name": "Memory scope/content persist and remain private",
+      "result": "PASS",
+      "ms": 35
+    },
+    {
+      "id": "CTX-10",
+      "name": "Deleting a memory removes it from subsequent API list",
+      "result": "PASS",
+      "ms": 18
+    },
+    {
+      "id": "CTX-11",
+      "name": "Self-link, cross-user link and unknown mode are rejected",
+      "result": "PASS",
+      "ms": 39
+    },
+    {
+      "id": "KB-06",
+      "name": "USER cannot upload/read document resources",
+      "result": "PASS",
+      "ms": 5
+    },
+    {
+      "id": "KB-10",
+      "name": "Private worker wrong key 401 and correct key invalid claim limit 400",
+      "result": "PASS",
+      "ms": 8
+    },
+    {
+      "id": "SEC-02",
+      "name": "Malformed JSON and oversized title rejected; blank title has safe default",
+      "result": "PASS",
+      "ms": 24
+    },
+    {
+      "id": "SEC-03",
+      "name": "SQL-shaped search input cannot bypass owner scope",
+      "result": "PASS",
+      "ms": 8
+    },
+    {
+      "id": "DLG-01",
+      "name": "Sales demo has 3 intents/4 entities/13 nodes and Core off",
+      "result": "PASS",
+      "ms": 0
+    },
+    {
+      "id": "DLG-02",
+      "name": "Greeting states demo scope",
+      "result": "PASS",
+      "ms": 19
+    },
+    {
+      "id": "DLG-03",
+      "name": "Missing branch and canonical/synonym branches work",
+      "result": "PASS",
+      "ms": 74
+    },
+    {
+      "id": "DLG-04",
+      "name": "Three slots collected across turns with interpolated prompts",
+      "result": "PASS",
+      "ms": 72
+    },
+    {
+      "id": "DLG-05",
+      "name": "Complete one-turn request skips redundant slot questions",
+      "result": "PASS",
+      "ms": 19
+    },
+    {
+      "id": "DLG-06",
+      "name": "Changed quantity retains other confirmed slots",
+      "result": "PASS",
+      "ms": 37
+    },
+    {
+      "id": "DLG-07",
+      "name": "Confirmation and rejection differ; neither creates real orders",
+      "result": "PASS",
+      "ms": 56
+    },
+    {
+      "id": "DLG-08",
+      "name": "Early agreement still requires explicit confirmation after summary",
+      "result": "PASS",
+      "ms": 21
+    },
+    {
+      "id": "DLG-09",
+      "name": "Unknown quantity is not accepted and cancel clears slots",
+      "result": "PASS",
+      "ms": 65
+    },
+    {
+      "id": "DLG-10",
+      "name": "Unknown intent uses configured fallback without AI/KB",
+      "result": "PASS",
+      "ms": 23
+    },
+    {
+      "id": "DLG-13",
+      "name": "Stale draft save returns 409 instead of overwriting",
+      "result": "PASS",
+      "ms": 96
+    },
+    {
+      "id": "DLG-14",
+      "name": "Unknown required entity rejects entire configuration",
+      "result": "PASS",
+      "ms": 27
+    },
+    {
+      "id": "DLG-15",
+      "name": "Second admin cannot read/save/publish another admin bot",
+      "result": "PASS",
+      "ms": 25
+    },
+    {
+      "id": "API-01",
+      "name": "Published demo exposes safe welcome and release identity",
+      "result": "PASS",
+      "ms": 7
+    },
+    {
+      "id": "API-02",
+      "name": "Missing/invalid/wrong-session widget tokens rejected",
+      "result": "PASS",
+      "ms": 41
+    },
+    {
+      "id": "API-03",
+      "name": "Identical idempotency key/body replays exact response",
+      "result": "PASS",
+      "ms": 28
+    },
+    {
+      "id": "API-04",
+      "name": "Same idempotency key with changed body conflicts",
+      "result": "PASS",
+      "ms": 7
+    },
+    {
+      "id": "API-05",
+      "name": "Repeated content under new keys eventually returns 429 + Retry-After",
+      "result": "PASS",
+      "ms": 39
+    },
+    {
+      "id": "API-07",
+      "name": "Allowed/disallowed widget origins follow CORS policy",
+      "result": "PASS",
+      "ms": 7
+    },
+    {
+      "id": "API-08",
+      "name": "Public widget omits internal intent/context/trace/source fields",
+      "result": "PASS",
+      "ms": 0
+    },
+    {
+      "id": "DLG-16",
+      "name": "Old widget session retains immutable release after republish",
+      "result": "PASS",
+      "ms": 141
+    },
+    {
+      "id": "AUTH-09",
+      "name": "Admin reset revokes old credentials/access/refresh",
+      "result": "PASS",
+      "ms": 371
+    },
+    {
+      "id": "AUTH-10",
+      "name": "Disabled then soft-deleted fixture user cannot authenticate",
+      "result": "PASS",
+      "ms": 244
+    }
+  ],
+  "fixtures": {
+    "user-a": {
+      "id": "558e8454-446b-4313-9907-a5d069b81db9",
+      "email": "qa-user-a-murrkl8y@example.test"
+    },
+    "user-b": {
+      "id": "77623538-08d6-48f1-986b-de5ccb4dab3e",
+      "email": "qa-user-b-murrkl8y@example.test"
+    },
+    "admin-b": {
+      "id": "658bc6f2-d755-407f-8147-9e0ab2a767cc",
+      "email": "qa-admin-b-murrkl8y@example.test"
+    },
+    "conversation": "26d525a7-133f-473c-ab9f-ab534a2034a6",
+    "refreshRotation": "verified",
+    "bot": "86f6cdca-14bc-4891-9488-fa38fd56eb7e",
+    "widgetSession": "2ef56089-e2b7-4c04-ae77-b7644ee2fb71",
+    "reset-user": {
+      "id": "b9662fc5-18b4-4954-ac61-8a1f30b9b4d3",
+      "email": "qa-reset-user-murrkl8y@example.test"
+    },
+    "disabled-user": {
+      "id": "61f61171-19d2-45f4-9e0a-d5dcfb1610f2",
+      "email": "qa-disabled-user-murrkl8y@example.test"
+    }
+  },
+  "finishedAt": "2026-10-03T02:19:39.737Z",
+  "summary": {
+    "pass": 39,
+    "fail": 0
+  }
+}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { ConfidenceLevel } from '../../types';
-import { CheckCircle2, GitFork, Lightbulb, AlertOctagon, HelpCircle } from 'lucide-react';
+import { CheckCircle2, GitFork, Lightbulb, AlertOctagon, HelpCircle, Layers } from 'lucide-react';
 
 interface GroundedStatusBadgeProps {
   confidence?: ConfidenceLevel;
@@ -14,10 +14,25 @@ export const GroundedStatusBadge: React.FC<GroundedStatusBadgeProps> = ({
   className = ''
 }) => {
   const configs = {
+    dialog: {
+      icon: GitFork,
+      label: 'Theo kịch bản Dialog',
+      classes: 'bg-cobalt-50 text-cobalt-700 border-cobalt-200/80 dark:bg-cobalt-950/40 dark:text-cobalt-300 dark:border-cobalt-800/60',
+    },
+    context_confirmation: {
+      icon: HelpCircle,
+      label: 'Context cần xác nhận',
+      classes: 'bg-amber-50 text-amber-800 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60',
+    },
     confirmed: {
       icon: CheckCircle2,
-      label: `Đã xác nhận từ ${sourcesCount} nguồn chính thức`,
+      label: `Có ${sourcesCount} tài liệu tham chiếu`,
       classes: 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60',
+    },
+    context: {
+      icon: Layers,
+      label: `Có ${sourcesCount} nguồn context tham khảo`,
+      classes: 'bg-violet-50 text-violet-700 border-violet-200/80 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800/60',
     },
     inferred: {
       icon: GitFork,

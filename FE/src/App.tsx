@@ -1,23 +1,37 @@
 import React from 'react';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './components/auth/LoginPage';
-import { AppShell } from './components/layout/AppShell';
+import { loadChatWorkspace } from './components/layout/workspaceLoaders';
+import { blueAiApi } from './api/blueAiApi';
+
+const loadAppShell = () => import('./components/layout/AppShell');
+const AppShell = React.lazy(() => loadAppShell().then(module => ({ default: module.AppShell })));
+
+const SessionFallback = () => (
+  <div className="flex min-h-[100dvh] items-center justify-center bg-canvas-light text-slate-900 dark:bg-canvas-dark dark:text-slate-100">
+    <div className="flex items-center gap-3 text-sm font-semibold text-slate-600 dark:text-slate-300" role="status">
+      <span className="h-5 w-5 animate-spin rounded-full border-2 border-cobalt-500 border-t-transparent dark:border-sky-400 dark:border-t-transparent" />
+      Đang kiểm tra phiên đăng nhập...
+    </div>
+  </div>
+);
 
 function AuthenticatedApp() {
   const { status } = useAuth();
 
+  React.useEffect(() => {
+    if (status === 'checking' && blueAiApi.hasSession()) {
+      void Promise.all([loadAppShell(), loadChatWorkspace()]);
+    }
+  }, [status]);
+
   if (status === 'checking') {
-    return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-[#071225] text-slate-100">
-        <div className="flex items-center gap-3 text-sm font-semibold text-slate-300" role="status">
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
-          Đang kiểm tra phiên đăng nhập...
-        </div>
-      </div>
-    );
+    return <SessionFallback />;
   }
 
-  return status === 'authenticated' ? <AppShell /> : <LoginPage />;
+  return status === 'authenticated'
+    ? <React.Suspense fallback={<SessionFallback />}><AppShell /></React.Suspense>
+    : <LoginPage />;
 }
 
 export function App() {

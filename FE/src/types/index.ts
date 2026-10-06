@@ -2,11 +2,13 @@ export type UserRole =
   | 'employee'        // Người dùng nội bộ (Hỏi BlueAI)
   | 'sales_copilot'   // Sales / CSKH Copilot (Trợ lý bán hàng)
   | 'knowledge_owner' // Quản lý tài liệu (Tài liệu nội bộ / RAG Admin)
+  | 'studio'          // Thiết kế và phát hành chatbot
   | 'admin'           // Quản trị viên hệ thống (System & Security Admin)
+  | 'gemini_usage'    // Theo dõi token Gemini
   | 'reseller'        // Đại lý B2B (Cổng đại lý)
   | 'b2c_customer';   // Khách hàng B2C (Cổng hỗ trợ khách hàng)
 
-export type ConfidenceLevel = 'confirmed' | 'inferred' | 'proposal' | 'ungrounded' | 'danger';
+export type ConfidenceLevel = 'confirmed' | 'context' | 'inferred' | 'proposal' | 'ungrounded' | 'danger' | 'dialog' | 'context_confirmation';
 
 export type AIStreamStatus = 'idle' | 'searching' | 'tool_calling' | 'streaming' | 'complete' | 'abstained' | 'error';
 
@@ -31,6 +33,7 @@ export interface ChatMessage {
   timestamp: string;
   confidence?: ConfidenceLevel;
   citations?: Citation[];
+  contextSources?: ConversationContextReference[];
   toolsUsed?: string[];
   hitlAction?: {
     actionType: 'refund' | 'cancel_order' | 'change_package';
@@ -45,12 +48,22 @@ export interface ChatMessage {
 
 export interface ChatSession {
   id: string;
+  /** Server id is available after the first message for locally-created tabs. */
+  conversationId?: string;
   title: string;
   role: UserRole;
   category: 'today' | 'last_7_days' | 'older';
   isPinned?: boolean;
   messages: ChatMessage[];
   updatedAt: string;
+  contextMode?: 'CURRENT_CONVERSATION' | 'LINKED_CONVERSATIONS' | 'RELEVANT_HISTORY';
+}
+
+export interface ConversationContextReference {
+  type: 'LINKED_CONVERSATION' | 'RELATED_HISTORY' | 'USER_MEMORY' | string;
+  conversationId?: string;
+  title: string;
+  memoryKey?: string;
 }
 
 export interface CustomerData {

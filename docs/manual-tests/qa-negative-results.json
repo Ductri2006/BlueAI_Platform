@@ -1,0 +1,74 @@
+{
+  "startedAt": "2026-10-03T02:36:04.625Z",
+  "tests": [
+    {
+      "id": "KB-07-negative",
+      "name": "Empty, executable and traversal filenames rejected before ingest",
+      "result": "PASS"
+    },
+    {
+      "id": "KB-09",
+      "name": "Invalid chunk sizes and overlaps rejected before creating jobs",
+      "result": "PASS"
+    },
+    {
+      "id": "SEC-02-owner",
+      "name": "Client-supplied owner/role cannot assign a conversation to another user",
+      "result": "PASS"
+    },
+    {
+      "id": "API-09",
+      "name": "Limited client rejects ungranted capability and unknown fields",
+      "result": "PASS"
+    },
+    {
+      "id": "API-06-local",
+      "name": "Shared IP quota across sessions cannot be bypassed by spoofed XFF",
+      "result": "PASS"
+    },
+    {
+      "id": "REL-04",
+      "name": "RAG liveness/startup/worker gates respond independently",
+      "result": "PASS"
+    },
+    {
+      "id": "OPS-07-private",
+      "name": "Public frontend blocks internal routes and actuator",
+      "result": "PASS"
+    },
+    {
+      "id": "SEC-06-headers",
+      "name": "Frontend HTML has CSP/nosniff/frame/referrer headers",
+      "result": "FAIL",
+      "actual": "Missing Content-Security-Policy"
+    }
+  ],
+  "fixtures": {
+    "integrationClientId": "c9e68afb-9f41-47e1-8a8c-23c95acf92d3",
+    "firstIpLimitRequest": 31,
+    "/health": {
+      "status": "ok",
+      "indexPresent": true
+    },
+    "/ready": {
+      "status": "ready"
+    },
+    "/readiness": {
+      "status": "ready",
+      "documentWorker": "ready"
+    },
+    "htmlHeaders": {
+      "content-security-policy": null,
+      "x-content-type-options": null,
+      "x-frame-options": null,
+      "referrer-policy": null
+    },
+    "xssConversationId": "98fa9b62-0f3f-4e72-9b93-b123e71ff62a",
+    "xssTitle": "<img src=x onerror=alert(\"QA-XSS-20261003\")>"
+  },
+  "finishedAt": "2026-10-03T02:36:05.757Z",
+  "summary": {
+    "pass": 7,
+    "fail": 1
+  }
+}

@@ -3,7 +3,7 @@ import { ChatMessage } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { GroundedStatusBadge } from './GroundedStatusBadge';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
-import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles, Info } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles, Info, Layers, GitFork } from 'lucide-react';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -62,7 +62,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
           {message.confidence && (
             <GroundedStatusBadge 
               confidence={message.confidence} 
-              sourcesCount={message.citations?.length || 1} 
+              sourcesCount={message.citations?.length || message.contextSources?.length || 1}
             />
           )}
         </div>
@@ -72,7 +72,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
           <RichMarkdownRenderer content={message.content} citations={message.citations} />
         </div>
 
-        {/* Out-of-scope notice: the answer is honest, not broken */}
+        {message.confidence === 'dialog' && (
+          <div className="flex items-start gap-2 p-3 rounded-xl bg-cobalt-50/50 dark:bg-cobalt-950/20 border border-cobalt-200/60 dark:border-cobalt-900/60 text-[12.5px] text-slate-600 dark:text-slate-300">
+            <GitFork className="w-3.5 h-3.5 mt-0.5 shrink-0 text-cobalt-500" />
+            <span>Nội dung theo kịch bản do quản trị viên cấu hình, không phải trích dẫn tài liệu KB.</span>
+          </div>
+        )}
+
+        {/* Out-of-scope notice applies to Core, not configured Dialog replies. */}
         {message.confidence === 'ungrounded' && (
           <div className="flex items-start gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 text-[12.5px] text-slate-600 dark:text-slate-300">
             <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400 dark:text-slate-500" />
@@ -99,6 +106,26 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
                   <BookOpen className="w-3 h-3 text-cobalt-600 dark:text-cobalt-400" />
                   <span className="font-medium truncate max-w-[200px]">[{idx + 1}] {citation.title}</span>
                 </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {message.contextSources && message.contextSources.length > 0 && (
+          <div className="pt-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <Layers className="h-3 w-3" />
+                {message.confidence === 'context_confirmation' ? 'Context đề xuất (chưa áp dụng):' : 'Context đã dùng:'}
+              </span>
+              {message.contextSources.map((source, index) => (
+                <span
+                  key={`${source.type}:${source.conversationId || source.memoryKey || source.title}:${index}`}
+                  className="inline-flex max-w-[240px] items-center rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-800 dark:border-violet-900/70 dark:bg-violet-950/30 dark:text-violet-200"
+                  title={source.title}
+                >
+                  <span className="truncate">{source.title}</span>
+                </span>
               ))}
             </div>
           </div>

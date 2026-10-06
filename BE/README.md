@@ -29,6 +29,12 @@ Luồng xử lý: `HTTP request → Controller → Service → Repository → My
 - Refresh token chỉ được lưu dưới dạng SHA-256, được rotate sau mỗi lần dùng và có phát hiện reuse để thu hồi cả session family.
 - Đăng xuất thu hồi refresh-token family. Access token đã phát hành tiếp tục hợp lệ đến khi hết hạn.
 - Endpoint `me` được bảo vệ bằng Bearer JWT.
+- Frontend dùng `/api/v1/auth/browser/login|refresh|logout`: refresh token nằm
+  trong cookie HttpOnly, SameSite=Strict, host-only; Secure bắt buộc ở profile
+  production. Access token chỉ nằm trong bộ nhớ, không lưu localStorage.
+  Ba endpoint này yêu cầu Origin nằm trong `APP_CORS_ALLOWED_ORIGINS` và header
+  `X-BlueAI-Browser: 1`. Response không chứa refresh token. Các ví dụ token API
+  bên dưới dành cho client không phải trình duyệt, không dùng để lưu token ở FE.
 - Flyway quản lý schema MySQL, lỗi API có cấu trúc thống nhất, CORS được cấu hình bằng biến môi trường.
 
 ## Chạy bằng Docker
@@ -46,6 +52,11 @@ Compose khởi động đồng thời FE, Java API, MySQL và Python RAG/Gemini 
 Hợp đồng giữa Java và Python được mô tả tại [`RAG_WORKER_CONTRACT.md`](RAG_WORKER_CONTRACT.md).
 Nếu một trong hai upstream chưa sẵn sàng, API trả lỗi `503/502` có mã rõ ràng để
 frontend hiển thị, không tự chuyển sang câu trả lời giả.
+
+Cho môi trường thật, không chạy file Compose local nguyên trạng. Dùng
+[`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) cùng
+`compose.production.yaml`: nó bỏ host port của API/MySQL/RAG, bắt buộc secret
+và CORS production, đồng thời bật production gate chống cấu hình local.
 
 ## API
 

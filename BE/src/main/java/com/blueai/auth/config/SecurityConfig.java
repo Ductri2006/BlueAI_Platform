@@ -2,6 +2,8 @@ package com.blueai.auth.config;
 
 import com.blueai.auth.exception.RestAccessDeniedHandler;
 import com.blueai.auth.exception.RestAuthenticationEntryPoint;
+import com.blueai.auth.model.User;
+import com.blueai.auth.repository.UserRepository;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.context.annotation.Bean;
@@ -12,7 +14,9 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtClaimNames;
@@ -53,10 +57,22 @@ public class SecurityConfig {
                                 "/api/v1/auth/login",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/logout",
+                                "/api/v1/auth/browser/login",
+                                "/api/v1/auth/browser/refresh",
+                                "/api/v1/auth/browser/logout",
                                 "/api/v1/internal/documents/**",
-                                "/actuator/health"
+                                "/api/v1/widget/**",
+                                "/api/v1/runtime/**",
+                                "/actuator/prometheus",
+                                "/actuator/health",
+                                "/actuator/health/**"
                         ).permitAll()
-                        .requestMatchers("/api/v1/admin/**", "/api/v1/documents/**", "/api/v1/system/**").hasRole("ADMIN")
+                        // Health and the internal-network Prometheus scrape are public at
+                        // the app security boundary. The deployment network must still
+                        // restrict exposure of the app port; all other actuator data is
+                        // operationally sensitive.
+                        .requestMatchers("/actuator/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/admin/**", "/api/v1/documents/**", "/api/v1/system/**", "/api/v1/studio/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
@@ -96,7 +112,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey secretKey, JwtProperties properties) {
+    JwtDecoder jwtDecoder(SecretKey secretKey, JwtProperties properties, UserRepository userRepository) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
@@ -110,26 +126,57 @@ public class SecurityConfig {
                 "type",
                 "access"::equals
         );
+        OAuth2TokenValidator<Jwt> accountValidator = jwt -> {
+            User user = userRepository.findById(jwt.getSubject()).orElse(null);
+            Number tokenVersion = jwt.getClaim("authVersion");
+            if (user == null || user.getStatus() != com.blueai.auth.model.UserStatus.ACTIVE
+                    || user.isDeleted() || tokenVersion == null
+                    || tokenVersion.longValue() != user.getAuthVersion()) {
+                return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                        "invalid_token",
+                        "The account is disabled or the access token has been revoked.",
+                        null
+                ));
+            }
+            return OAuth2TokenValidatorResult.success();
+        };
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 issuerValidator,
                 audienceValidator,
-                tokenTypeValidator
+                tokenTypeValidator,
+                accountValidator
         ));
         return decoder;
     }
 
     @Bean
     CorsConfigurationSource corsConfigurationSource(CorsProperties properties) {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(properties.getAllowedOrigins());
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID"));
-        configuration.setExposedHeaders(List.of("X-Request-ID"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
+        CorsConfiguration applicationConfiguration = new CorsConfiguration();
+        applicationConfiguration.setAllowedOrigins(properties.getAllowedOrigins());
+        applicationConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        applicationConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID", "X-BlueAI-Browser"));
+        applicationConfiguration.setExposedHeaders(List.of("X-Request-ID"));
+        applicationConfiguration.setAllowCredentials(true);
+        applicationConfiguration.setMaxAge(3600L);
+
+        // The embedded widget is intentionally public and never sends browser
+        // credentials. It must therefore use its own origin policy instead of
+        // inheriting the authenticated application policy above. Origin
+        // patterns allow the documented "*" default and explicit production
+        // allowlists via APP_WIDGET_ALLOWED_ORIGINS.
+        CorsConfiguration widgetConfiguration = new CorsConfiguration();
+        widgetConfiguration.setAllowedOriginPatterns(properties.getWidgetAllowedOrigins());
+        widgetConfiguration.setAllowedMethods(List.of("POST", "OPTIONS"));
+        widgetConfiguration.setAllowedHeaders(List.of("Content-Type", "X-Widget-Token"));
+        // widget.js reads this header to tell a visitor when a 429 can be retried.
+        widgetConfiguration.setExposedHeaders(List.of("Retry-After"));
+        widgetConfiguration.setAllowCredentials(false);
+        widgetConfiguration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/api/v1/widget/**", widgetConfiguration);
+        source.registerCorsConfiguration("/api/v1/runtime/**", widgetConfiguration);
+        source.registerCorsConfiguration("/**", applicationConfiguration);
         return source;
     }
 

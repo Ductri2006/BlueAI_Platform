@@ -7,6 +7,7 @@ import java.util.List;
 public record RagAnswerResponse(
         ConversationMessageResponse userMessage,
         ConversationMessageResponse assistantMessage,
-        List<RagSourceResponse> sources
+        List<RagSourceResponse> sources,
+        List<ConversationContextSourceResponse> contextSources
 ) {
 }

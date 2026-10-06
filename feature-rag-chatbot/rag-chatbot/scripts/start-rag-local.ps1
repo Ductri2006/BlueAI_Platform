@@ -18,7 +18,6 @@ if (-not $geminiKey -or $geminiKey -match "your_.*_key") {
 }
 
 $env:JAVA_API_BASE_URL = $JavaApiBaseUrl
-$env:JAVA_WORKER_API_KEY = if ($env:JAVA_WORKER_API_KEY) { $env:JAVA_WORKER_API_KEY } else { "local-worker-api-key-change-before-production" }
 $env:RAG_INDEX_DIR = if ($env:RAG_INDEX_DIR) { $env:RAG_INDEX_DIR } else { Join-Path $projectDir ".rag-index" }
 $env:GEMINI_CHAT_MODEL = if ($env:GEMINI_CHAT_MODEL) { $env:GEMINI_CHAT_MODEL } else { "gemini-3.5-flash-lite" }
 $env:GEMINI_EMBEDDING_MODEL = if ($env:GEMINI_EMBEDDING_MODEL) { $env:GEMINI_EMBEDDING_MODEL } else { "gemini-embedding-001" }

@@ -1,0 +1,1904 @@
+{
+  "generatedAt": "2026-10-04T03:08:49.420Z",
+  "scope": "Uncommitted local QA; not an approved production release",
+  "images": {
+    "auth-api": {
+      "tag": "blueai-preprod-api:followup-20261004",
+      "id": "sha256:7a82d2603a8690a6b800d500becf13a4a08102a66ddbffc5a817d5e54e603e55",
+      "health": "healthy"
+    },
+    "rag-ai": {
+      "tag": "blueai-preprod-rag:followup-20261004",
+      "id": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb",
+      "health": "healthy"
+    },
+    "frontend": {
+      "tag": "blueai-preprod-frontend:followup-20261004",
+      "id": "sha256:8e7952c45a66d760e85bb455a83c610efe854a5e003f40f5f7dfbd8c65b4ff87",
+      "health": "healthy"
+    },
+    "mysql": {
+      "tag": "mysql:8.4",
+      "id": "sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb",
+      "health": "healthy"
+    },
+    "redis": {
+      "tag": "redis:7.4-alpine",
+      "id": "sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf",
+      "health": "healthy"
+    }
+  },
+  "backend": {
+    "suites": 56,
+    "tests": 402,
+    "skipped": 30,
+    "failures": 0,
+    "errors": 0,
+    "executed": 372
+  },
+  "frontend": {
+    "passed": 123,
+    "build": "PASS",
+    "source": "Observed Vitest and TypeScript/Vite runs"
+  },
+  "rag": {
+    "passed": 70,
+    "source": "Observed unittest run on the rebuilt runtime with tests/scripts mounted; network disabled"
+  },
+  "separateLegacyMySql": {
+    "executed": 2,
+    "passed": 2,
+    "versions": [
+      1,
+      3
+    ],
+    "target": 9,
+    "source": "Observed qa-followup-mysql.ps1 run; empty disposable MySQL 8.4 databases, no baseline/repair",
+    "countNote": "Do not sum as unique backend tests; this conditional class is skipped without environment variables in full verify."
+  },
+  "api": {
+    "generatedAt": "2026-10-03T23:32:27.749Z",
+    "scope": "Isolated QA only; synthetic inputs; no provider chat calls",
+    "tests": [
+      {
+        "id": "KB-07-spoofed-file-through-real-ingress",
+        "result": "PASS"
+      },
+      {
+        "id": "KB-08-2MB-20MB-21MB-real-ingress",
+        "result": "PASS"
+      },
+      {
+        "id": "SEC-01-create-literal-conversation-message-fixture",
+        "result": "PASS"
+      },
+      {
+        "id": "SEC-01-literal-node-and-preview-fixture",
+        "result": "PASS"
+      },
+      {
+        "id": "API-06-live-Redis-outage-fails-closed-and-recovers",
+        "result": "PASS"
+      },
+      {
+        "id": "API-06-live-session-window-quota",
+        "result": "PASS"
+      }
+    ],
+    "fixtures": {
+      "payload": "<img src=x onerror=\"window.__qaXss=1\"><script>window.__qaXss=1</script>",
+      "size2Document": "acfeee84-27cc-45fe-a870-0cbfcf3166fd",
+      "size20Document": "5b34cc51-7031-4c90-86e2-e8f43f955a51",
+      "conversationId": "807d4bea-5bbd-49fc-aa1a-2c685675d6f2",
+      "botId": "9ba41c8f-83d9-40d2-a39e-02eaf3349d4b",
+      "botName": "QA security preview mut11h75",
+      "widgetSessionId": "8d89fab4-79c1-4b3a-9639-7a1e4dec27c3"
+    },
+    "redisRecoveryMs": 9742,
+    "summary": {
+      "pass": 6,
+      "fail": 0
+    }
+  },
+  "ui": {
+    "date": "2026-10-04",
+    "scope": "Browser interactions on http://localhost:23000; synthetic QA only",
+    "tests": [
+      {
+        "id": "SEC-01-user-message",
+        "result": "PASS",
+        "actual": "Literal img/script payload visible in the chat; zero img[onerror] and zero script nodes containing the injected marker.",
+        "evidence": "evidence-2026-10-04/11-literal-user-message-XSS-PASS.jpg"
+      },
+      {
+        "id": "SEC-01-node-and-assistant-preview",
+        "result": "PASS",
+        "actual": "Selected fallback node and sent unmatched input through Try It Out; literal payload shown in node heading, assistant response and trace. Zero injected image/script nodes. Bot was not activated.",
+        "evidence": "evidence-2026-10-04/12-dialog-preview-XSS-PASS.jpg"
+      },
+      {
+        "id": "KB-08-browser-oversized-file",
+        "result": "PASS",
+        "actual": "After loading the rebuilt frontend, selected a synthetic 21 MiB TXT file. Vietnamese 20 MiB limit toast appeared; document table remained unchanged. Unit test separately proves no network request is sent.",
+        "evidence": "evidence-2026-10-04/14-oversized-upload-toast-PASS.jpg"
+      }
+    ],
+    "limitations": "Representative payloads, not a universal XSS proof; no customer documents or paid provider calls in this UI follow-up. Older FAILED document retained as prior failure evidence."
+  },
+  "secrets": {
+    "generatedAt": "2026-10-03T23:38:22.844Z",
+    "scope": "Local runtime image secret scan; not provider revocation proof",
+    "images": [
+      {
+        "image": "blueai-preprod-api:followup-20261004",
+        "id": "sha256:7a82d2603a8690a6b800d500becf13a4a08102a66ddbffc5a817d5e54e603e55",
+        "findings": [],
+        "result": "PASS"
+      },
+      {
+        "image": "blueai-preprod-rag:followup-20261004",
+        "id": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb",
+        "findings": [],
+        "result": "PASS"
+      },
+      {
+        "image": "blueai-preprod-frontend:followup-20261004",
+        "id": "sha256:8e7952c45a66d760e85bb455a83c610efe854a5e003f40f5f7dfbd8c65b4ff87",
+        "findings": [],
+        "result": "PASS"
+      }
+    ]
+  },
+  "vulnerabilities": {
+    "generatedAt": "2026-10-03T23:37:37.422Z",
+    "scope": "Exact local runtime image IDs; findings are not exploitability determinations",
+    "images": [
+      {
+        "tag": "blueai-preprod-api:followup-20261004",
+        "id": "sha256:7a82d2603a8690a6b800d500becf13a4a08102a66ddbffc5a817d5e54e603e55",
+        "counts": {
+          "high": 0,
+          "critical": 0
+        },
+        "findings": []
+      },
+      {
+        "tag": "blueai-preprod-frontend:followup-20261004",
+        "id": "sha256:8e7952c45a66d760e85bb455a83c610efe854a5e003f40f5f7dfbd8c65b4ff87",
+        "counts": {
+          "high": 0,
+          "critical": 0
+        },
+        "findings": []
+      },
+      {
+        "tag": "blueai-preprod-rag:followup-20261004",
+        "id": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb",
+        "counts": {
+          "high": 45,
+          "critical": 0
+        },
+        "findings": [
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-76642",
+            "package": "bsdutils",
+            "installed": "1:2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78408",
+            "package": "bsdutils",
+            "installed": "1:2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78409",
+            "package": "bsdutils",
+            "installed": "1:2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78410",
+            "package": "bsdutils",
+            "installed": "1:2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-54369",
+            "package": "libacl1",
+            "installed": "2.3.2-2+b1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-76642",
+            "package": "libblkid1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78408",
+            "package": "libblkid1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78409",
+            "package": "libblkid1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78410",
+            "package": "libblkid1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-76642",
+            "package": "liblastlog2-2",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78408",
+            "package": "liblastlog2-2",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78409",
+            "package": "liblastlog2-2",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78410",
+            "package": "liblastlog2-2",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-76642",
+            "package": "libmount1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78408",
+            "package": "libmount1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78409",
+            "package": "libmount1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78410",
+            "package": "libmount1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2025-69720",
+            "package": "libncursesw6",
+            "installed": "6.5+20250216-2",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-103111",
+            "package": "libpcre2-8-0",
+            "installed": "10.46-1~deb13u2",
+            "fixed": "10.46-1~deb13u3"
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-76642",
+            "package": "libsmartcols1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78408",
+            "package": "libsmartcols1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78409",
+            "package": "libsmartcols1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78410",
+            "package": "libsmartcols1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-16742",
+            "package": "libsystemd0",
+            "installed": "257.13-1~deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2025-69720",
+            "package": "libtinfo6",
+            "installed": "6.5+20250216-2",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-16742",
+            "package": "libudev1",
+            "installed": "257.13-1~deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-76642",
+            "package": "libuuid1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78408",
+            "package": "libuuid1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78409",
+            "package": "libuuid1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78410",
+            "package": "libuuid1",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-76642",
+            "package": "login",
+            "installed": "1:4.16.0-2+really2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78408",
+            "package": "login",
+            "installed": "1:4.16.0-2+really2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78409",
+            "package": "login",
+            "installed": "1:4.16.0-2+really2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78410",
+            "package": "login",
+            "installed": "1:4.16.0-2+really2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-76642",
+            "package": "mount",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78408",
+            "package": "mount",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78409",
+            "package": "mount",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78410",
+            "package": "mount",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2025-69720",
+            "package": "ncurses-base",
+            "installed": "6.5+20250216-2",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2025-69720",
+            "package": "ncurses-bin",
+            "installed": "6.5+20250216-2",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-9538",
+            "package": "perl-base",
+            "installed": "5.40.1-6+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-76642",
+            "package": "util-linux",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78408",
+            "package": "util-linux",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78409",
+            "package": "util-linux",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          },
+          {
+            "class": "os-pkgs",
+            "target": "sha256:26f1d74bd983224ea9c706101b2ded15bfc514ef4c7f2cdf3ba0ae3e8a048abb (debian 13.7)",
+            "severity": "HIGH",
+            "id": "CVE-2026-78410",
+            "package": "util-linux",
+            "installed": "2.41.5-0+deb13u1",
+            "fixed": null
+          }
+        ]
+      }
+    ]
+  },
+  "npm": {
+    "all": {
+      "exitCode": 1,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 5,
+        "critical": 0,
+        "total": 5
+      }
+    },
+    "runtime": {
+      "exitCode": 0,
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      }
+    }
+  },
+  "buildInputHashes": [
+    {
+      "path": "BE/Dockerfile",
+      "sha256": "1651859b6b7e4cc86a7eb7029f041fa294f9f2375d93f0040f5a733b2ac2f39f"
+    },
+    {
+      "path": "BE/pom.xml",
+      "sha256": "cd382a027d8e0ae8c38ce35bbff7823d1d71a30ae37f3417edd625ff61aaa015"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/BlueAiAuthApplication.java",
+      "sha256": "fa3608cb9b2f5023554c318c5cda3f0aa1ee3e2c003afae1bd3680a3a9625cc8"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiCompletionProvider.java",
+      "sha256": "4bf453182dfdfd969bbcb957c426c2f2b0f499b0193a3dc07a4c2a365d686a37"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiRetrievalProvider.java",
+      "sha256": "4f442e77bc9d6a238f718df299aecca065187923b76d884fba35f9fd2967253d"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiTaskController.java",
+      "sha256": "939b7d60459bd6fdf7ea2dde18270b09e4485fa2e2b87cc19f539738b5b84473"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiTaskCredentialFilter.java",
+      "sha256": "f0327730f2e037a5d4dce64ce52bba548c13918bc8a8b9229c85b72a2842c525"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiTaskException.java",
+      "sha256": "52285265e1054e909fda1ceffc3514e92db6a4d49ecc5de8b22efec3274c2643"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiTaskExceptionHandler.java",
+      "sha256": "80467c8e7890649cb7b1cd8101f603528467dfea0f83ccae1e6c84cd37432454"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiTaskProperties.java",
+      "sha256": "52f0b3f64a21cbd1e2f0153ff22326f53b7c446bf4a570280a730ae8eb2c8e59"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiTaskRecoveryScheduler.java",
+      "sha256": "64b3d7ed098fabd73fa94d02f3b71d8defeb7b90dd61a4129aa9d02cbf887bac"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiTaskRecoveryService.java",
+      "sha256": "73f22dbd495273583d478c6ffa844519c178cbc2d8674bbae3eae1c9330605d6"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiTaskRequestSizeFilter.java",
+      "sha256": "52471d9bea7839157ee2f18b4335229ab979baacf34a9b3cf63f26861bec4921"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiTaskSecurityConfiguration.java",
+      "sha256": "f95a428ed2be4c587eaea7913392be98a6b323c66cced1da9dcc412416b89bb3"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/AiTaskService.java",
+      "sha256": "7bcd9232a138466e70479bd3efb7bb6418c7c62ae5b690903c5117b180dc1f7e"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/ai/task/ConfiguredAiProviders.java",
+      "sha256": "24096eb43f3880969d96194257c57e3d32c7463ded21e44c1ee80f758931372a"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/config/AdminAccountBootstrap.java",
+      "sha256": "36963c45b299dcd37d1d7a36ad79c6fe8cb16e88cb10ea31d617073570740652"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/config/AuthRecordRetentionSchedulingConfiguration.java",
+      "sha256": "6012a1bf99ca752f4e1ecac6a4398fa4304f0f21bbb24bd7656e8988355c569a"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/config/AuthRetentionProperties.java",
+      "sha256": "51587e5fdf7ce25d7892bb2ecc52081de6326a9642e735b3da3af59e8339c429"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/config/CorsProperties.java",
+      "sha256": "3a36e4aa7ffb4fc2d746723417b513c5230ea8760cac42df0480f9cfb1d664ec"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/config/JwtProperties.java",
+      "sha256": "069f7b06b1bf75ae755406e9254c9caffbf883258be3c223fbde7fdf3106ebd9"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/config/ProductionSecurityConfigurationValidator.java",
+      "sha256": "6f2950997cf6f462de9dbc38797f4f348c577e6f42d443d377dad0d889b4c22d"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/config/SecurityConfig.java",
+      "sha256": "343c816024998112406c5fe8d9ec2574fd75132b70bde04c87a8bf96d1a91c23"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/config/TomcatConnectorConfig.java",
+      "sha256": "52f86add4ed5c7328f020b4c1a9fc74590ba58d3a4280a86432fc331b599db9c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/controller/AdminUserController.java",
+      "sha256": "e0dd146cb8e80e19dc2db1f019a709ac803629ab185b6e760b566c5610198a23"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/controller/AuthController.java",
+      "sha256": "20e08ddb351d2b4315885bc700e23d60561c64429ccb39f9e8fbae44f5a1f3af"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/controller/BrowserAuthController.java",
+      "sha256": "443facac1fe9244d8e6daed0a88f87d18106709f20833f44523bc801198e6531"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/controller/RegistrationController.java",
+      "sha256": "176d7e5de305543d85ebfc0fd508e4e2565038f4864a093dc68f0e6b801da014"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/AdminSetPasswordRequest.java",
+      "sha256": "4c023d339f661bce16b6113dfa42a253fdd276b656b972c5b49c1a1476b88bcf"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/AuthAuditLogResponse.java",
+      "sha256": "84f6b27764d8060544f7fce16b2737d87a9c4590bd2cffc4c3c1b47921bb6841"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/AuthResponse.java",
+      "sha256": "881ab386b34accd2ecee70c23688491ada0c58bee9c00c5d137a0ed4c05c22e4"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/BrowserAuthResponse.java",
+      "sha256": "71db885eacebbb62ddf7f0cb82b48cecdc57586f99428658bf90236060f1e043"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/CreateManagedUserRequest.java",
+      "sha256": "356e343f62d82968738a1592160801be1d1f6768972b0e9975cdf047827690b3"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/LoginRequest.java",
+      "sha256": "2f31693524eb6e5ce1db2b10eb9fed8f306fb1e1b764053a29b4bdf191dfbda1"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/LogoutRequest.java",
+      "sha256": "7a373d55eb6ad7e0df9584532bfde70f2bda2cf646a45581f5faee65fdb008b7"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/PageResponse.java",
+      "sha256": "9d3ed24bdc9e8a03337a93ce3ca0d1b342addcd2757fdf2af9b7afa9fcd19a13"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/PurgeAuthRecordsRequest.java",
+      "sha256": "adf898ebe7eb35790b52cfb48102bc6a1dce373bbd45349110954b57d24f20ce"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/PurgeAuthRecordsResponse.java",
+      "sha256": "16e2fe1af0b0d533b2cd7c673c1729a8f9e3b35ee275c1a128b4466d96aedd2d"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/RefreshRequest.java",
+      "sha256": "59faccd0728a00157911a00f4db20200e73ee72b5c72faa2f94cd7048d336551"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/RegisterRequest.java",
+      "sha256": "b69ff76fe969c6eb58aba66314593a34b856169fabab4823fba35d76135cbecb"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/UpdateUserStatusRequest.java",
+      "sha256": "d20b12bdf452821e9ef44bbfdba91008a1de43410cff2a8c4de4c2701e7e15e9"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/dto/UserResponse.java",
+      "sha256": "4617e627b9073d29626dc8c065ab9f7f74ca061f5a711a8f8311ec0034ef4bd3"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/exception/ApiError.java",
+      "sha256": "6a61317ad65bc42ab1127930476087c2b7026a4208e2f9af69aa4290c38ae520"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/exception/ApiException.java",
+      "sha256": "e6a2b97b5889f0426910b32b7adab9616fc535658dbc102c68e351ed28aa3296"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/exception/GlobalExceptionHandler.java",
+      "sha256": "afc43318b8d282e079333f45377965122efd22e372bafb625b9800901bfd13f2"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/exception/RestAccessDeniedHandler.java",
+      "sha256": "2481fe5205997805e2bfbc9b1c47779ee1c16043a3b99620da1063ee5eca9580"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/exception/RestAuthenticationEntryPoint.java",
+      "sha256": "4ce5e79b01277206c48923c023b8fa02e8d11fdb2a37246e7a20742c35a2e899"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/model/AuthAuditLog.java",
+      "sha256": "66ae9c5c32fb2b7b61b76dc5b68aa9341a3dcc01387e91b43bac3b6b9f09e62b"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/model/PasswordResetToken.java",
+      "sha256": "c31910dff4bd7a3e4822e67f13f8d2d0e039b01a078d965266a21fa956de2840"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/model/RefreshToken.java",
+      "sha256": "e3e9504725dfc35a969d0971e406f2ce9e051e25d9c42dd87a5ce8eedf23c047"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/model/User.java",
+      "sha256": "00782d17fb1f1763df210235387cc01ba5a7a0db08f38c0d91e32333c8900e43"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/model/UserRole.java",
+      "sha256": "95b3513a7555904fed578a72fa255b917fdf4ae33dd212e593917eae3c2d9313"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/model/UserStatus.java",
+      "sha256": "c215cdde96da73b5996634e3eee721bd9398f39ac933c5b5bb5570239131772a"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/repository/AuthAuditLogRepository.java",
+      "sha256": "01ba1f5109b0a393bc0f4a0ea6592131f81f15c601bf9f5446b1c4e5fb67dccf"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/repository/PasswordResetTokenRepository.java",
+      "sha256": "319298ecaabaae980fb5f9d25b6028d30a71c99e960bf958fea01f96ffe694cf"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/repository/RefreshTokenRepository.java",
+      "sha256": "3fcb31c0195ad43b0e13e7b5833160fe4aaa8d7e8efabcd18e46a03eed10162e"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/repository/UserRepository.java",
+      "sha256": "944bf53bfe54e25cfa08755ce96d770d5094d18330cd3572b5bb81c200c130b9"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/service/AdminUserService.java",
+      "sha256": "bc8c38e8d10b4f8d63c613e05444b6ed720c1bbab7622e3642a58d9a7914a7b4"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/service/AuthAuditLogService.java",
+      "sha256": "a9f0254f473d9bee20981b1c4c864b92199f116de23235ede3bd49d988bd4d20"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/service/AuthRecordRetentionScheduler.java",
+      "sha256": "c9e390c1368f8462163a789ca4e628b22579b6be2ea687f62b64c09db144672c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/service/AuthRecordRetentionService.java",
+      "sha256": "eb9ab3948055c0ce88c44ed4cca121a153d322315136f6b7ac1f6531e31c0ea6"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/auth/service/AuthService.java",
+      "sha256": "2e05543372660bb585a32bae6674bc7f75362e8a920da770b3146d13a6e3af3c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/chat/RagChatProperties.java",
+      "sha256": "e8af50fa418839efd23c81d95581a19b835ac9f8f255868f79be83a303717896"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/chat/controller/RagChatController.java",
+      "sha256": "e8190c974e8a88fd874675894e1515dbc103c11580496e12bb454970b46cff3f"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/chat/dto/AskQuestionRequest.java",
+      "sha256": "4f987a19bcccd0c24df6e14474d549dc3c403aec32da03ca1735b48f3ef7bad4"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/chat/dto/ConversationContextSourceResponse.java",
+      "sha256": "04e42bb35bd5304e7fb71dfbee0b01c9905086059db2c55b632dc277fe0991fe"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/chat/dto/RagAnswerResponse.java",
+      "sha256": "36d54bb1477fb223bf80d2ccca444dc57b97321d80f7eb1c68a82dfe7b0606d8"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/chat/dto/RagSourceResponse.java",
+      "sha256": "accf630374668397a40e9b741f78c39ed762391bd2aaf4161d8ea39b695938e2"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/chat/service/LlmChatMessage.java",
+      "sha256": "252b280cb451324ee2424caa7c8eb49f6694e9471c89a0105b3e6a98f931148e"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/chat/service/RagChatService.java",
+      "sha256": "dfb52c82c4ea8f98b6c6ea31fbfcaed5272646c3a7c3e90b337658e81ed3643d"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/chat/service/RagCompletionClient.java",
+      "sha256": "80dea6b1ded106667e43498f3d72b8d6f6db0c159f67f9f63483a41ec28582f7"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/chat/service/RagRestClientFactory.java",
+      "sha256": "a9bc9959d231686ad8e381cd5e3bd2570f7eebdd5f796c544b18de44d519a265"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/context/ContextBudgetPolicy.java",
+      "sha256": "daa799604c6d808ee860d51c16606c94c7410cc874ad839dff2cdd91bd80e318"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/context/ContextBudgetProperties.java",
+      "sha256": "66528b0222d016b681d5c50bed93544499a63ddc835bc871ec457d07c0304646"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/context/ContextRelevanceRanker.java",
+      "sha256": "620a6a5290ec1f04d7164d0f436db5b1e63639983caf61ddcb26e34c0e07c383"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/context/ContextSourceType.java",
+      "sha256": "91ded9cbb3d009e2eece3eca8c4b5328b5be952ea9e24d5e1c57d083b6c59fc0"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/context/ConversationContextFragment.java",
+      "sha256": "dc759da62ed2c123c53f7512880cf2894577b18638dd19bee13e8bb692aeccf2"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/context/ConversationContextService.java",
+      "sha256": "f0a23f625afb59d1ac385f0469c61ff22ed08c38322c38778e3405eef77dd3ef"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/context/ConversationContextSource.java",
+      "sha256": "67368bd47d993309e4901022b588198d739487f25be079e5c7976f6f516f0938"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/context/ConversationHistoryMessage.java",
+      "sha256": "32113e02499e4d6d2e7a1af9e8a9110f88ead8a22e25b5f7ee7ce696f1b238a4"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/context/ResolvedConversationContext.java",
+      "sha256": "bdefb88aebd1f8e169dd59e575e98b15c3022fc4437b83ad1561d3452989c6eb"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/config/ConversationContextAsyncConfiguration.java",
+      "sha256": "4516fc75415062bbcd6d344f804d0260194a5e61b923fa06bee14c6f6d69c614"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/controller/ConversationContextController.java",
+      "sha256": "b6b78b1b4d7be4948b179bac28b9cf5f659b50f19f533409ab8df00523b6e396"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/controller/ConversationController.java",
+      "sha256": "567188e64cb5afb05dcf841cbfe5b737870e29c51d9484bc1906ad815da6903b"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/controller/ConversationMessageController.java",
+      "sha256": "bf37cabbc784363fc8dc6b7cf7e22194089aa045037eb640ae2be7deaf53f6af"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/dto/ConversationContextSettingsRequest.java",
+      "sha256": "427f5786a49819d0dda8753c04a21eacf8f3cf95cb2017b3223ed29bfa957ab4"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/dto/ConversationContextSettingsResponse.java",
+      "sha256": "bd26b5a17a642f64a7e3a2b766767510f3c3279f4976d5fcdba2261577370237"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/dto/ConversationLinkResponse.java",
+      "sha256": "afcc1fa6ac83dee04ad3d36fbbd01c68b9928abb77b3f9f81b07e0e322a09a11"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/dto/ConversationMessageResponse.java",
+      "sha256": "5fb7a65d55f115148e756b850f7030ed5fc5b58a3e3fcee8662d495abaadc9d3"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/dto/ConversationPageResponse.java",
+      "sha256": "148d4bf2c41d55ccc149be2f24a3384ebb94e5860827e2cf468906e47881430c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/dto/ConversationResponse.java",
+      "sha256": "e4c8ea98eb8a22a0b77e0073e2fcd51bb969a71b07b18549efc0b8f1b039dfea"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/dto/CreateConversationLinkRequest.java",
+      "sha256": "e62f167fa0ee10ea58154543a9f0bec18d841ccf3b4627555901ea9ada99556f"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/dto/CreateConversationRequest.java",
+      "sha256": "ee066bd84f2b1c81e95af66b7fbf8495aeb9395d1ad000b07d7429b59fe2a09c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/dto/CreateUserMessageRequest.java",
+      "sha256": "463da113e4ebbcb1e6b2fdb10736620a602188bc7bea73b42280f82281246f09"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/event/ConversationTurnCompletedEvent.java",
+      "sha256": "0ab287188d7151a47cd475cfa1e09aba357e4c5feeedd63ee8e69124a40005cc"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/model/AnswerOrigin.java",
+      "sha256": "bf87ef09b1fc6ff75bf10a4da05919799da3ec9c1c681f1440c69e5e298717d8"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/model/Conversation.java",
+      "sha256": "f0c39f4fe474494d654d5472347376cc81ac01387c0033dd080476697cdab825"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/model/ConversationContextMode.java",
+      "sha256": "455f4d7d81e6830169ba92209d1bbaf47b745b567ba2596e742d6cfc0b697c65"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/model/ConversationLink.java",
+      "sha256": "3320884ba77debf37468fe7dd44e724be6822035c4888445075e62028d9a8c3e"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/model/ConversationMessage.java",
+      "sha256": "a7f675ede3e45ffcba696f7da12948cc0ee68e2dcabccb61f8a3cd0ec4e74b60"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/model/ConversationSummary.java",
+      "sha256": "2d1c11950257af0a64049c0ff803b9ce703bae5765de53637649a969b91a3094"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/model/MessageEvidence.java",
+      "sha256": "24c7b0fb705ffc0eaedb7edcc91469dbfa5c30e22088f7fdedbef1f9cd139fc8"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/model/MessageEvidenceConverter.java",
+      "sha256": "1d961b17701451cbbff19f4895d028333c39f4763fbc739f5c063e0f212eb689"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/model/MessageRole.java",
+      "sha256": "cc245775242e26e86866f851f9fc27c0a82dd6b9179a743db568984986413d6c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/repository/ConversationLinkRepository.java",
+      "sha256": "ebe42467135ec69093e22b5d464518835524c83b2d193f12ac82c76419740c7f"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/repository/ConversationMessageRepository.java",
+      "sha256": "1457aacd15d479587483bb8a07a08be84ac3f719f652e735d80c6a192783f736"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/repository/ConversationRepository.java",
+      "sha256": "990e94e541c3bce4bfd247482af79ff9ea331d4ba2b49b0b63a20d12f8a9b382"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/repository/ConversationSummaryRepository.java",
+      "sha256": "0cddf1cc46b3fad17aff1ef28a404a506a427be8ba46e7c876d4ea512133e01c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/service/ConversationContextSnapshotFactory.java",
+      "sha256": "aebe6ef692e1150feea859b285d7ce15663a4b5f0c44e39cea073e9172c37a8d"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/service/ConversationLinkService.java",
+      "sha256": "0fb3d0495255599d28737b7234c5c43c6111d5f2339a4cb45c903f8c02cec7d5"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/service/ConversationMessageService.java",
+      "sha256": "b4d01645f9df2855ad77f42fe8a6af806dc7dfa3556c8b1976018cdf924e75d4"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/service/ConversationService.java",
+      "sha256": "a77ec6fa33be45c776d125d4d96c7003c4156deb5e9ff92d01642886eaf4b532"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/conversation/service/ConversationSummaryService.java",
+      "sha256": "37c406ced1942b0e5fbc002953a706b9fcae163e6a8970d9dde1a5987389f5aa"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/controller/DocumentController.java",
+      "sha256": "d088a30c9952e0dc8838e30404397e8781eaeb1c9229ba27ba8f64e198194dc2"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/controller/WorkerDocumentController.java",
+      "sha256": "3cae6ce92fb372e1c303b9dbb9df7aa4c0a73fbc26ad9b9a423ca8f06949966d"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/dto/DocumentPageResponse.java",
+      "sha256": "cbb7def946e5fe77032b748976b43899dbd0fedf44e05f4b0a949c8fbe0231b6"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/dto/DocumentProcessingResultRequest.java",
+      "sha256": "2ff83dc19b2c4849b58ddb3b2a8a8ad6d1e37db7978d6e804f8a723ab016d170"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/dto/DocumentResponse.java",
+      "sha256": "6851a2a2c76224ab262ac5bb8e7f8190907ffa54f835a7d666e2e7995d07d51c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/dto/DocumentUploadResponse.java",
+      "sha256": "ed8f1b5ba8137d510c8bb7c0c5d19c4f1245b5907e81b615212fc737b68c0ecd"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/dto/WorkerDocumentResponse.java",
+      "sha256": "b5d18074142a26eb8ee6052d6de5749f746e8d8625b2c0913166158b5afae87c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/model/DocumentStatus.java",
+      "sha256": "d7b7574a267a881e2bade1d44293a909037f7cb69f3c82326d007da51e780509"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/model/RagDocument.java",
+      "sha256": "84cb6b0a7ef7461a18eebbc520873a43288821acfeeb664a8d39f903871b0eb0"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/repository/RagDocumentRepository.java",
+      "sha256": "d903bcaf0613aafae2e96e278a3311e4449f1603658085ff5c59cbf89b524b26"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/service/DocumentContentValidator.java",
+      "sha256": "5bf9d766afc100656a0e202b91678efd5fa5e692686e9c5f3e8df59d2864baf4"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/service/DocumentIngestionTrigger.java",
+      "sha256": "52f4f9593a02224f90802059e635cfe1657cc582f2702a571c22fa68e6f8ff9f"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/document/service/DocumentService.java",
+      "sha256": "a8143762f7f483edb17eb7d6e80a9ac8a89bf903052699055c5ac0068b5052eb"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/memory/controller/UserMemoryController.java",
+      "sha256": "49d15b94571e2e57eda5e9177b94bfb5c5b2fe9652435b5147614f816a1f4bc7"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/memory/dto/UpsertUserMemoryRequest.java",
+      "sha256": "8023edc63d866147cf3be51404112cc50fd5380564e0a0ebe15e1dd6a9d2b3b0"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/memory/dto/UserMemoryResponse.java",
+      "sha256": "0cff70f6622fbf577e75ba3a428e9587f2388594202ee72decf76a7d7b9e29b1"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/memory/model/MemoryScope.java",
+      "sha256": "25efbb6a8ab8f38db6696cd55255e9833107ab1545705c23af2cbe478f676b46"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/memory/model/MemoryStatus.java",
+      "sha256": "8d22f552fac4672bd20255bb09ac83554ed3052d1a8d70162ad529a4476ca432"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/memory/model/UserMemory.java",
+      "sha256": "355b8d0597908f76183c5898c56add03c698f427a5e4ede2eb3cfa16cfdc6160"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/memory/repository/UserMemoryRepository.java",
+      "sha256": "8d323839cbb8c85808501fa32c2756c93d8237678d64bcda392d2a8631e0e55c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/rag/memory/service/UserMemoryService.java",
+      "sha256": "a2db4113976196d7d6945020e1b902c60aefcb666891cd51703451dc22bd76f1"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/config/WidgetProtectionProperties.java",
+      "sha256": "4f798557ab2315f6f52678ca677313a38cf9bb670d2278fe3bfbac7776bf754f"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/controller/BotRuntimeController.java",
+      "sha256": "aecd15a5e2f0d0f34948522f94abc6265bd02e7082a81f495901e2a28b73d290"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/controller/BotStudioController.java",
+      "sha256": "42a7b593cdd8cb58e7dd1195c004aee27c182e70815cd9ddd33ec00d962bc089"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/dto/BotStudioDtos.java",
+      "sha256": "c3c17733f1fc3d5fbef043e358c8ea8741984c48f94bdb2d4716731ff04a7614"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/Bot.java",
+      "sha256": "3f90c40b11295fa76bc9cb9ecfced83c8bf45b2dd24b713cf947762474476258"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/BotCreationTemplate.java",
+      "sha256": "31d28360bfa118fcf368ca852549929a8cf40b47dd1908e4767be98417b6788c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/BotDialogNode.java",
+      "sha256": "d5870931e5526708f965151955f9911739175b812b3af8246722dacc6f8ece8d"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/BotEntityDefinition.java",
+      "sha256": "6fef58e73f8d8451ababb6a2e3c03bb47de190d10df37f21359ec15fb4d9a9c2"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/BotEntityValue.java",
+      "sha256": "8a039bee2ad3e4cc941219bfd8bd00a201cd702e4088e863d359a2ff05a667af"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/BotIntent.java",
+      "sha256": "9d2454ba96b5ebf2ef722e48a2ca477ac59b0ddf52436087de0a0372ba6bc227"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/BotRelease.java",
+      "sha256": "a050aa52d63b02c9664c253cbd5fb77714d4b76cd1c1bee1f679255567d970bd"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/BotSession.java",
+      "sha256": "481448612f9b9d35c42d5702294759e2b808111917037247e1982202217a3b9b"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/BotStatus.java",
+      "sha256": "dc047e1bfb283bde982b0da55988d74f51bbe73cf6971df2e8b85fda43527145"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/BotTurn.java",
+      "sha256": "bcef5dec6140f988382c75a31937a87e3323e52f372d1fdb7d1b7c0b887a42a0"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/DialogContextReusePolicy.java",
+      "sha256": "a9c1b5672f0c7fe4837e2db046c05245258f1a9dd51d23bd2dff2075f04a5700"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/DialogNextStep.java",
+      "sha256": "55bd562de26be9e4288486aed7277da062923f328e15c71c055c8299e7c33f6f"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/model/DialogNodeType.java",
+      "sha256": "b4fcbd1bf7ea67829f24e2e4c9a40f4532f336a4aade329fc3ec48e839cd6ead"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/repository/BotDialogNodeRepository.java",
+      "sha256": "f1d6ea8ee3b6c781cdafc94c583791fd992c63e27eae87c81a901a81b2621bd3"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/repository/BotEntityDefinitionRepository.java",
+      "sha256": "3412f091743b05cddcab3a1949a24ced0d3295efe43e591439ba3352fac3aa5b"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/repository/BotEntityValueRepository.java",
+      "sha256": "afcdb24e5e7441e3fad9273a13fb01e6f73af0bb86e19f2107fed7a0ba12f5b4"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/repository/BotIntentRepository.java",
+      "sha256": "2e3b497abd31e6b9dcd97b0774a16e894c166a0b1576e8d6c568b6c1eb925b36"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/repository/BotReleaseRepository.java",
+      "sha256": "9fcb02282e1e6f3d9aad8471c35f1a941223e1c0ac30ca5242e2b2a5a9f67d70"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/repository/BotRepository.java",
+      "sha256": "91e5a27e2356a95dd9312948bae15a8663ed6b516398b1661ab7d220fe452176"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/repository/BotSessionRepository.java",
+      "sha256": "df49046edf222aaee8fa6af15f9223f9c17ed8b42c726608956d854f94716c1f"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/repository/BotTurnRepository.java",
+      "sha256": "eba898f8036b348fafa3fee3161b9297616ca153e90d7df9aa5a6978cf97ee0d"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/BotRuntimeService.java",
+      "sha256": "c793cfdd808d365d65d2f29629d5745476f7b228bb15944e112c66f4cdaaa821"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/BotSnapshot.java",
+      "sha256": "e58aaf44b1fb161253454a8c10918db425d624e2ee33f962757c6a7763cdaf9e"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/BotStudioService.java",
+      "sha256": "7d985ddf06444fd8e245d6be8081cbaac75685452d8cb00480e3310c1fe86043"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/DialogConfigurationValidator.java",
+      "sha256": "a933fa81bc7a5024cdb838ade57403d169e41ec9c2387e883d48c8483af307fa"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/DialogContextBridge.java",
+      "sha256": "fe3c517b2d6a1622b17d3c1207897dd327f40cb076337f5c15e4dcb8878da457"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/DialogRuntimeService.java",
+      "sha256": "c0cc71ee96982ef40c87ca2afdf5e83ff6246879ae935b44d845aeabb990f3d5"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/SalesDialogDemoTemplate.java",
+      "sha256": "1ddec17adb475ccd38d8238ec189cdf6db6e3dd8724937cd547dc9cb7b13c736"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/WidgetClientAddressResolver.java",
+      "sha256": "e140719c3066c0cbc6ce8e9930137c574fe8c3695c313d8df20b125c501d762d"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/WidgetConversationContextStore.java",
+      "sha256": "0a59bdba276a8503eed6c86d83f0637d3e05060f96248c3e3e6f56c98d174c96"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/WidgetProtectionMetrics.java",
+      "sha256": "c8f2c29d801ba93ef1871de566a6310b89198c26566f220943ecaeb072319d1c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/WidgetRateLimiter.java",
+      "sha256": "0aec0fa655ccc2b837026eab89a19c4da06748133219018a72be79e7ab1757d2"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/WidgetSessionCleanupService.java",
+      "sha256": "3e4a66361dab5a1ec379b6cb5474e486b3713413925faee5843633c62be656de"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/studio/service/WidgetSessionRequestCoordinator.java",
+      "sha256": "58c37b3d78d96bfd4a19c4b43dd9a6f6d653bf137615d986371ceeb93e4e7344"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/system/controller/GeminiUsageController.java",
+      "sha256": "23c0adfc6679a280bf02c10cc8bbcffbc3ffd001e7abd18263b9ad6352cf2205"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/system/controller/SystemMetricsController.java",
+      "sha256": "73dbb428050b33e4de7794caba2ddd5736013c94235fa7a03971ae9ea5b918e3"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/system/dto/GeminiUsageReport.java",
+      "sha256": "f87a700b6b4b93f0aaf7529852b17cd9c72434e76d15ec7977a709547de04c8c"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/system/dto/SystemMetricsResponse.java",
+      "sha256": "34a773b25617e3ad65c43c12ebe153dab19ac524cec53212f770852a00597326"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/system/service/GeminiUsageService.java",
+      "sha256": "04bbadaf145486e4ec11fe3d5e856757e19a96fa2b0cc7800c530736916991d8"
+    },
+    {
+      "path": "BE/src/main/java/com/blueai/system/service/SystemMetricsService.java",
+      "sha256": "b3c6dca4d51d69f7d122b809c24a9ad7e09c5096ea3f922e08d536923163c0df"
+    },
+    {
+      "path": "BE/src/main/resources/application.properties",
+      "sha256": "78dfa908054fd8aa727a9000d47e115ac4bdcdb74919636e0fb0fa5132fb3869"
+    },
+    {
+      "path": "BE/src/main/resources/db/migration/V1__baseline_entity_schema.sql",
+      "sha256": "55d9cfba0b92efa1350a056dc72a958c4b08649f6716a7766e620e61388cbde0"
+    },
+    {
+      "path": "BE/src/main/resources/db/migration/V2__auth_document_retention.sql",
+      "sha256": "751e164f2014042fe02dd8eb9a756b197d621f151daedd8367fa5509ef785380"
+    },
+    {
+      "path": "BE/src/main/resources/db/migration/V3__rotate_failed_document_purges.sql",
+      "sha256": "a8387d2209f9ea310574ea122edabea4f0390c42dbb1f2dccffae54ecc272603"
+    },
+    {
+      "path": "BE/src/main/resources/db/migration/V4__high_load_query_indexes.sql",
+      "sha256": "28dc159a33f9e061a7e919b0f166c7b1eaa87ab8c0de1f73c4d804da0c26dc17"
+    },
+    {
+      "path": "BE/src/main/resources/db/migration/V5__workflow_ai_tasks.sql",
+      "sha256": "68ee61076ced38de3f774408701129be6c18a97bd52a2090a4add7c6bbea5ff8"
+    },
+    {
+      "path": "BE/src/main/resources/db/migration/V6__gemini_usage_events.sql",
+      "sha256": "e326f5246ab6613219cfb8e3c04bb3ff313ab967c8b947f5d47ec1f6ea7fef5f"
+    },
+    {
+      "path": "BE/src/main/resources/db/migration/V7__ai_task_expiration.sql",
+      "sha256": "5c2a1f3f926eb64a802d84f07bbb4503ec6e5d25c5ceb2ee5cf0f7941d4c1eab"
+    },
+    {
+      "path": "BE/src/main/resources/db/migration/V8__ai_task_exact_keys_and_recovery_indexes.sql",
+      "sha256": "4d3e549ae92e0d071bc86b4dab4b8f22fb428716ec28900699bcedc5da61dcaa"
+    },
+    {
+      "path": "BE/src/main/resources/db/migration/V9__dialog_context_reuse_policy.sql",
+      "sha256": "1381c1674cb7381d19c72870a90854fc089d04d7e97e0850b3892ec3a531cc21"
+    },
+    {
+      "path": "BE/src/main/resources/studio/sales-dialog-demo.json",
+      "sha256": "5c300404019586759aa32d0996be426664e193afb0d49991f194fc620af1cd38"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/ai/task/AiTaskApiIntegrationTest.java",
+      "sha256": "ee6becaf885fbab7ca90360160f3bffe6fc012cbdc253729afe51ff9eb116e64"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/ai/task/AiTaskDispatchLeaseIntegrationTest.java",
+      "sha256": "2c54f677b01889a24b6ba61a0b6216dc7f40b331838127782d31e95c250ecdf3"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/ai/task/AiTaskMySqlAuthorizationIntegrationTest.java",
+      "sha256": "88d3de565b0eec3ab225796a8fa9875205a7bf675b150eb9ad4eb4e3517ee421"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/ai/task/AiTaskMySqlRecoveryIntegrationTest.java",
+      "sha256": "ad988da86a6bc11a2e8c7f07385bc549bd36924698463bf160e90ad47d574d03"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/ai/task/AiTaskRecoverySchedulerTest.java",
+      "sha256": "c6996700335a92851b5ee7a9e0f918670900312b56057b5d265592e53315003b"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/ai/task/ConfiguredAiProvidersTest.java",
+      "sha256": "a65bf7bab042d41090841420187faea45002509e95a72c8098186f29acaeaddc"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/config/ProductionSecurityConfigurationValidatorTest.java",
+      "sha256": "41db362ee8132ab7f8bc7399324f18592e5d41683eab2ca99181c2b351c3f811"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/controller/AdminUserIntegrationTest.java",
+      "sha256": "2a1f0a69e849c90b3d7373c383b2fc01f19753ca9ea24b7aa8ca2c0c489b72d8"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/controller/AuthFlowIntegrationTest.java",
+      "sha256": "10211f4d4a4a87fdbc1b0d1b34116ab78364b18775e3f0d5b600655603bd5f1d"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/controller/AuthSecurityIntegrationTest.java",
+      "sha256": "a5a01f945c3fbc3fff5969e25b854f4df38a1a1b491b76fb34e03468c3875b9f"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/controller/BrowserAuthCookieTest.java",
+      "sha256": "f90e742f49f976368f199e01d3ef97c6bb3dda4338a8c90859a65660cb242e95"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/controller/BrowserAuthIntegrationTest.java",
+      "sha256": "9160d94c56ea4e1292eb2cb7d21d1e9db428fa28851a5ceeec3c278a745c5912"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/controller/PasswordResetIntegrationTest.java",
+      "sha256": "36f24af040a8f9623f3790a8c1757bd29cbdbd86e17b8f99149ff16207a61df9"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/service/AuthAdminMutationMySqlIntegrationTest.java",
+      "sha256": "e03047c4db70974560b62893e02ecaedbaaaa023fbdb81659b2a1d7a8774098f"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/service/AuthAuditCapacityIntegrationTest.java",
+      "sha256": "3194fa8b0aa50c16e763a211278ac7efd5391e095a1b320b461fcec802dca796"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/service/AuthMySqlConcurrencyIntegrationTest.java",
+      "sha256": "bec2007a3fff79cdeb1a717694e335dde18ecb44dead2caf31469c8c6053df7b"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/service/AuthPasswordConcurrencyIntegrationTest.java",
+      "sha256": "dc690ee48cf47130c61de7e8191e865681ddc4146bdbb24d754bb903b524359e"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/service/AuthRecordRetentionOrderingTest.java",
+      "sha256": "31d2a8adaab97d04ed371c7effa52118e8b03a08cfa5449283358234acd833b5"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/auth/service/AuthRecordRetentionSchedulerTest.java",
+      "sha256": "359885eb727ba806d372ba3d2727608ae79d431ba0733a1d08affb2f228b944e"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/migration/FlywayMigrationIntegrationTest.java",
+      "sha256": "791a8f851ef4194af020754b629ae372762389237c369bef22ec96a766dd6a73"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/migration/MySqlFlywayUpgradeIntegrationTest.java",
+      "sha256": "4a460fca7047b1d9caaec6508f214aad54d76447301d0241314f7886035891ce"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/migration/MySqlLegacyMigrationIntegrationTest.java",
+      "sha256": "70cea364f30147a7f21607f9f12901b445534b358995122f9a781de85662fc23"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/migration/MySqlMigrationIntegrationTest.java",
+      "sha256": "da5088d4e6b8fcf369bd8e0c1d238ee20d0f02f8744143fa367544bfceb35281"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/migration/ProductionNoMailConfigurationIntegrationTest.java",
+      "sha256": "39ff295e68f7917a1b8a234ecd8a6947718338d6b0d1a1966fceeb2e7a08c649"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/chat/controller/DialogSalesContextIntegrationTest.java",
+      "sha256": "8c1b85ec5648b8e9af20eb55609f697cc729648b385a8ae82d5bb669a5a3aacb"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/chat/controller/RagChatConfiguredIntegrationTest.java",
+      "sha256": "3701e8e22dd881099227ebd5e67fae20555215ab5d3a2b0242c58bbb6729d9d5"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/chat/controller/RagChatConversationContextIntegrationTest.java",
+      "sha256": "1355b2068f0d7afdc9af78b581b85b7c844e5b84affa09eaf3a047079eba283c"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/chat/controller/RagChatIntegrationTest.java",
+      "sha256": "04eea6078ccd59502844c2fada3c143332f08217107d14d63661e1dd0dab6f9b"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/chat/controller/RagContextProductionGateIntegrationTest.java",
+      "sha256": "4b2422616e981587040c1ace06d01070ee04627395a2e8a30a21c1697c0ef8f6"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/chat/service/RagCompletionUsageTest.java",
+      "sha256": "00d5cf26061078eb5fd9eae5da0365b0275da42d33602faf796e71cc01987183"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/context/ContextBudgetPolicyTest.java",
+      "sha256": "4297397ddb03b1fba90f91b3e282ab3867fb1fbcbfedd1bb7c32cb9ebaa843f1"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/context/ContextRelevanceRankerTest.java",
+      "sha256": "17c9a0bafa7f1ef8db3c43a0a7e2bb974d2bdca0fb2b2ad70908fcdc1342ddeb"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/conversation/controller/ConversationContextIntegrationTest.java",
+      "sha256": "c7ff5c31540f232604ee5cfd5e61b8893a9dad3cc38d5ae9af000479f1180f2b"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/conversation/controller/ConversationIntegrationTest.java",
+      "sha256": "7e6fd0d41c4bc15d46418dd7236028c33c1f4ffa0e58deef65c03f99aab7ed31"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/conversation/controller/ConversationMessageIntegrationTest.java",
+      "sha256": "556f7412b81621f4f61dcfd445aceb728e1939a75dcab1501572c44042784f77"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/conversation/model/ConversationMessageOrderingTest.java",
+      "sha256": "d6be78c5ca81e57b259721abe4feb93454e312dd0a1de227d16b170b09591106"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/conversation/model/MessageEvidenceConverterTest.java",
+      "sha256": "311184e555886de8eecfc894b05b4fa3df2dffca727f8deb049f8f9576a45e00"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/conversation/service/ConversationContextSnapshotFactoryTest.java",
+      "sha256": "70f3617b19a779741df4f7706b11aaefcacf0b39477ca1d4fef287dba8464405"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/conversation/service/ConversationServiceRetentionTest.java",
+      "sha256": "c6de090cd4fc81a7e8e05a9c1ce30d20e6dd34f4bd6b8be419e9305d514da4f5"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/conversation/service/ConversationSummaryServiceIntegrationTest.java",
+      "sha256": "64bc3a57b5b246961938e622f6a97abda45cc29d05d8b5de6932dddb64aa9815"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/document/controller/DocumentUploadIntegrationTest.java",
+      "sha256": "ee2f00271f6f353f432bd0ade011410ed444df7cfefbd40787144ec7014e3f92"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/document/controller/WorkerDocumentIntegrationTest.java",
+      "sha256": "6d6c9d329b5f6cf62a03cb16edcae605e4497c50ce68c7fc4fdddb8c027e9d83"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/document/model/RagDocumentRetryTest.java",
+      "sha256": "6b9625c4e7c26af1d762cda1d1fd75e9f79bee1a1de0a8a2f5d51cee9754f705"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/document/service/DocumentServicePurgeTest.java",
+      "sha256": "dd79cca5a7dc99cc5c0b20bc9f5228c4edb22665434e74ac9b60d09632b0aae0"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/rag/memory/controller/UserMemoryIntegrationTest.java",
+      "sha256": "99b21495bf47c4eb9487fbb459f689d8ce7f57fcffa14ec39dccef114608e251"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/studio/controller/BotStudioIntegrationTest.java",
+      "sha256": "693e340686958127f0df4dc0cf02aa9130ce08c6fe525b3950bbd0b23ec2a56b"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/studio/service/DialogConfigurationValidatorTest.java",
+      "sha256": "8fdda03bfa39c04eb6461237afb8e89bd17527e9b4449fd9f0ec0bb6aaa8efb2"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/studio/service/DialogContextRuntimeTest.java",
+      "sha256": "d133cbe7921681fe9211b3c9c6dd5ade851f3c09c6345f2834ad273086bf49b5"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/studio/service/SalesDialogDemoTemplateTest.java",
+      "sha256": "413f167cb8046b312580752f696f302a189aa583a18ef9eb84f3fadecf6b9e1c"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/studio/service/WidgetClientAddressResolverTest.java",
+      "sha256": "336b801b9617fdf7ef6b2c649c459c213337147d4450c237b57b79c33f2c1416"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/studio/service/WidgetConversationContextStoreTest.java",
+      "sha256": "92b7ac318b0985ed81f15577039fd8cf17233a6ffe585ceca64a3663d29294bd"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/studio/service/WidgetRateLimiterTest.java",
+      "sha256": "3960dc5ea9c850277508b664a9cba604d8a2a8f2e9eb16dce2d4788860e3b671"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/studio/service/WidgetSessionRequestCoordinatorTest.java",
+      "sha256": "6571bdc9197fc5aa6a389da1f040dd8e136cc7f8c12efeea4c709696dd36124f"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/system/controller/GeminiUsageIntegrationTest.java",
+      "sha256": "7110d184e24e15992253e9bcd2619bf6db63a98ecb9739d3186a9474d9d75360"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/system/controller/SystemMetricsIntegrationTest.java",
+      "sha256": "d9cd063df4e48e3231abb6e455d5e67e9aa2b0284cd2170d5ea1185c9257cf1e"
+    },
+    {
+      "path": "BE/src/test/java/com/blueai/system/service/SystemMetricsServiceTest.java",
+      "sha256": "5b869bf95b91dcbe120f8a6740213927c1dc026e6c5c0c06fd3ec5df1a4bd6f5"
+    },
+    {
+      "path": "BE/src/test/resources/application-test.properties",
+      "sha256": "b88c62af0d44b1ec1f09e26f957aff50a38b1009426eebe8747273ed18af3076"
+    },
+    {
+      "path": "FE/Dockerfile",
+      "sha256": "5441ed7916e07af2735e291618a85f514494a4d7bd72f51b42aca699a4424301"
+    },
+    {
+      "path": "FE/index.html",
+      "sha256": "3c3e772410f344a291425c12ade87255dd91c047174ec0ab41d67343c9bcd240"
+    },
+    {
+      "path": "FE/nginx.conf",
+      "sha256": "e15e38ad93f93297e1cc2af8ab82e60a75c9cae3904ee46fed1b65a91e58e172"
+    },
+    {
+      "path": "FE/package-lock.json",
+      "sha256": "6a3aad2c1a896f7832622daf85a98c44cceea60be00cea881506baf529e631c9"
+    },
+    {
+      "path": "FE/package.json",
+      "sha256": "1263c62277eba7b036e2192ea11608c49317c04746fd07152346e46665e2beac"
+    },
+    {
+      "path": "FE/postcss.config.js",
+      "sha256": "374f669f08b18e67d0a7264fa45b71228017e604fe7f6db8a5c1bd5ba27e5c98"
+    },
+    {
+      "path": "FE/public/widget.js",
+      "sha256": "786f14650137cdea6cd8064c16b3a98fbb275f517fae6e22d80ca46dcc194a5c"
+    },
+    {
+      "path": "FE/security-headers.conf",
+      "sha256": "e146f086f4058022ff29c154e25096ea9f77b3399e8eca11827b2281a26b6606"
+    },
+    {
+      "path": "FE/src/App.tsx",
+      "sha256": "467e599e1946e5519fcdf9d68e864769722e24797d2555e58d375bcf09da26fd"
+    },
+    {
+      "path": "FE/src/api/blueAiApi.test.ts",
+      "sha256": "bb7253a6a7c2942f6e85cc34bddf1bdc5559d95705b0bcaf0097c2b5080d8f7b"
+    },
+    {
+      "path": "FE/src/api/blueAiApi.ts",
+      "sha256": "29d4a8e497b982d84ba2236ecece19bb0f2cb862b13939f104b44716213e301e"
+    },
+    {
+      "path": "FE/src/api/studioPreviewApi.test.ts",
+      "sha256": "06ab48119dcd395d2493ee7ca01762b6af4995dfb8ef861680b874cb2d695cf7"
+    },
+    {
+      "path": "FE/src/auth/AuthContext.tsx",
+      "sha256": "f9a972fbf9149c1b831f47e6c48d27021c12bd3d90d29b07a666c890cdb13116"
+    },
+    {
+      "path": "FE/src/components/3d/IntelligenceOrb.tsx",
+      "sha256": "b4d4ea55eefb377c7cba6c0d59d39777ed5ffa867ad14d25953e45e66c7cc20a"
+    },
+    {
+      "path": "FE/src/components/auth/LoginPage.tsx",
+      "sha256": "30152ed819e611102172dcdb00af2b1660ef8626b8be419b3eb2b210ed46e417"
+    },
+    {
+      "path": "FE/src/components/chat/AttachmentModal.tsx",
+      "sha256": "62c023024d28c6b89c85edb4d8f73c6541e4f974ab57b53d12c4dd8493dc4368"
+    },
+    {
+      "path": "FE/src/components/chat/ChatWorkspace.tsx",
+      "sha256": "35ac2e693bd8d1b887f8da73584b41a9ee7c5e49f02bc43091f133b6920c2bcb"
+    },
+    {
+      "path": "FE/src/components/chat/Composer.tsx",
+      "sha256": "1a6bf42c024ddb9b687e1312388e1e485052e7ed52489ea87e555a8ea11d0b4b"
+    },
+    {
+      "path": "FE/src/components/chat/ConversationContextPanel.tsx",
+      "sha256": "e7c7bf7539a0f9230c0e73242f91a933265086d107acb47371039a2613eeee6d"
+    },
+    {
+      "path": "FE/src/components/chat/EvidenceDrawer.tsx",
+      "sha256": "e1fb4fc9a732d6d6cb7b6ad14ffe89033498e2dcf688626238df138d96098b6f"
+    },
+    {
+      "path": "FE/src/components/chat/GroundedStatusBadge.tsx",
+      "sha256": "dcade63d368cae6e0a62b3bc159f479658c98cae75e43bad100a51f0266c825d"
+    },
+    {
+      "path": "FE/src/components/chat/KnowledgeGraph3DModal.tsx",
+      "sha256": "f32e3d4974e121760bb7a27755938f3190b7cc054f542a4812de1b4772777807"
+    },
+    {
+      "path": "FE/src/components/chat/MessageItem.tsx",
+      "sha256": "ad38f147aeed04da605ec9f446a44567f27f5daa47cebbc1b9d264037431e21e"
+    },
+    {
+      "path": "FE/src/components/chat/RagMiniChat.tsx",
+      "sha256": "851327bb43a9307ef51f8785ae0e0dadd4baf4f939a5377e7717436d1dd99aa3"
+    },
+    {
+      "path": "FE/src/components/chat/RichMarkdownRenderer.tsx",
+      "sha256": "e93655375c5d4d9dd4fe22a20f4db0c3dc9d58d8f04a0f19955e21d5c9304424"
+    },
+    {
+      "path": "FE/src/components/chat/SlashCommandMenu.tsx",
+      "sha256": "0d70cc1c5145f1df022f32a4f730fd39e1716a03af380bac2f13daeda8b41aba"
+    },
+    {
+      "path": "FE/src/components/chat/VoiceInputModal.tsx",
+      "sha256": "c17e5bbe30f7ce62b2e167322429d0c51d5c8c33d27d7c06dd865cbeaec7a569"
+    },
+    {
+      "path": "FE/src/components/chat/contentSecurity.test.tsx",
+      "sha256": "1b23c3c58847322c7a1acafde5b8934c09bacd92451a73a0c41994adc03514fe"
+    },
+    {
+      "path": "FE/src/components/chat/dialogAnswerOrigin.test.tsx",
+      "sha256": "a8bf596aa486cc563354526be4b133bea4c69840cda6d7f10428f410d9401ecd"
+    },
+    {
+      "path": "FE/src/components/copilot/HITLReviewDialog.tsx",
+      "sha256": "ace62d2dd1711feeb62dc588530a970588f2993d668232e2ced1cdaeb5139339"
+    },
+    {
+      "path": "FE/src/components/copilot/SalesCopilotWorkspace.tsx",
+      "sha256": "0db05f4d5776e09c5cb78fbf87bfbb3bdabcde56e22d38ec8c71adf195a4dd48"
+    },
+    {
+      "path": "FE/src/components/dashboards/AdminDashboard.tsx",
+      "sha256": "2119d3f227a337de25a043e450f31a07a9af3571396ed79482d662342a36895f"
+    },
+    {
+      "path": "FE/src/components/dashboards/B2CDashboard.tsx",
+      "sha256": "1e967238490ea565e8f1dca8dbab5809f10419e4778f134e00c8101306b33ab6"
+    },
+    {
+      "path": "FE/src/components/dashboards/GeminiUsagePage.tsx",
+      "sha256": "82ab9189d92e92a8740f103b1aefad7a2ecde9da8dc035162a9bb0410b7679bd"
+    },
+    {
+      "path": "FE/src/components/dashboards/KnowledgeDashboard.tsx",
+      "sha256": "a07b1f9e4fcfb43aa896e2f0272d18e27807be79b24f2c32a7aa7e706112108e"
+    },
+    {
+      "path": "FE/src/components/dashboards/ResellerDashboard.tsx",
+      "sha256": "3d598e6cea4c2b7dfda63f19e5d7bc874dc670b96234b7c7478b26411a92bf82"
+    },
+    {
+      "path": "FE/src/components/dashboards/geminiUsagePolling.test.ts",
+      "sha256": "80aae0a6e093915ca3bc6d58fa8aab285e66699a2cbda70bc77480f4e4292dd9"
+    },
+    {
+      "path": "FE/src/components/dashboards/geminiUsagePolling.ts",
+      "sha256": "1cba03a39abea9ca0de46aeffec6e5748543fbccf6df47cfd2e8f9ea6cf9b274"
+    },
+    {
+      "path": "FE/src/components/layout/AppShell.tsx",
+      "sha256": "13338e799ff3284c81fc84fe02bcfc3753fb6724b2cb31a637c8a9b85a5c4520"
+    },
+    {
+      "path": "FE/src/components/layout/SidebarRail.tsx",
+      "sha256": "25af4ead0eb7446518458fce0d0f82fd0c24ceff81e81882fbd27fb594e7bf11"
+    },
+    {
+      "path": "FE/src/components/layout/TopHeader.tsx",
+      "sha256": "37f7f6726c65edb890e7e81b5ee087db521ee47567774ccebd99b9f413e6431d"
+    },
+    {
+      "path": "FE/src/components/layout/workspaceLoaders.ts",
+      "sha256": "e2514ab0f7b0786d8f7ba8ad2b86d2c80192d0da9fa89342c112d4b3bac9ceb4"
+    },
+    {
+      "path": "FE/src/components/studio/ChatbotStudio.tsx",
+      "sha256": "3087cdfcd032c6a8073d921112f14bbc60d032e940604e87b8dd8c6427505161"
+    },
+    {
+      "path": "FE/src/components/studio/DialogContextPolicy.tsx",
+      "sha256": "e3acd0b48c428db53ade65b39327cb3af040ad9ffd609e4a2ae832df50f6d0b4"
+    },
+    {
+      "path": "FE/src/components/studio/DialogNodeNameField.tsx",
+      "sha256": "ccea77b3ec9c1ffe15496f83c8e94376621ad6ef7addb64155a387a7e51424d0"
+    },
+    {
+      "path": "FE/src/components/studio/StudioDiscardDialog.test.tsx",
+      "sha256": "b305d8c09bfc4854a8c97aec7740c20e659dcf57b2c8a417c21f32169c8465af"
+    },
+    {
+      "path": "FE/src/components/studio/StudioDiscardDialog.tsx",
+      "sha256": "1cb50008aaec2877432b6bc5ee654a2d84ffe921edc15d901c1f9f1ee358fa15"
+    },
+    {
+      "path": "FE/src/components/studio/StudioPreviewFallbackBadge.test.tsx",
+      "sha256": "2c2c81af737752fa970343bef598a3a774c0e3a59d113919ad24e444c9eb730f"
+    },
+    {
+      "path": "FE/src/components/studio/StudioPreviewFallbackBadge.tsx",
+      "sha256": "fddf3aad46f892e55f0b89b5d259b1abd60dc7335ea19a731119065ee52a533d"
+    },
+    {
+      "path": "FE/src/components/studio/StudioTemplateSelector.test.tsx",
+      "sha256": "86c4e9fdc85150948d7393debd7778820e9abed75e99a1e96836ba64ffadaa79"
+    },
+    {
+      "path": "FE/src/components/studio/StudioTemplateSelector.tsx",
+      "sha256": "1ba981f8a4bca2cfdf192062165d2c570ce6dd5a36f765af0729b1f79a03afae"
+    },
+    {
+      "path": "FE/src/components/studio/TryItOutPanel.tsx",
+      "sha256": "c4060fc4847e2bff2ace42a17e695a9e381669795cf0cf39e8e668b65dcb9c94"
+    },
+    {
+      "path": "FE/src/components/studio/dialogNodeOperations.ts",
+      "sha256": "34ce7d8ed2744b6a0d6f31ee288b2fe80c932a64a1e56d50672e061be251ffd0"
+    },
+    {
+      "path": "FE/src/components/studio/dialogSales.test.tsx",
+      "sha256": "d865fdbe55da00ef8524d7096d805f57a930de2e3abfbe01ddc85f1ae4a53b93"
+    },
+    {
+      "path": "FE/src/components/studio/dialogValidation.ts",
+      "sha256": "f594e2fcda7d8695763c302de12840630616eaddf350d420aefd6b397dc92cfe"
+    },
+    {
+      "path": "FE/src/components/studio/studioDraftProtection.test.ts",
+      "sha256": "10b3b817b78ba18b2026647b14d8046dd3a13c6568527fa9e44d83ec61419422"
+    },
+    {
+      "path": "FE/src/components/studio/studioDraftProtection.ts",
+      "sha256": "f7dd0a39b1ef08c35f81cb3df59c024754b7fd60e9d2951664569ba9ca5f4c22"
+    },
+    {
+      "path": "FE/src/components/studio/studioDrafts.test.ts",
+      "sha256": "aae63a0139adac521f17ccfaf749c1babd10b33bf66085202d0954110b9e93c4"
+    },
+    {
+      "path": "FE/src/components/studio/studioDrafts.ts",
+      "sha256": "a9281888440209ca1f7c0b3e02f22c6e6fd8c5bcc3157a62fb33ec3d00dbe0a8"
+    },
+    {
+      "path": "FE/src/components/ui/Badge.tsx",
+      "sha256": "920058964466256f9b51b78a40ba50aab068ddcf1198015bfa307b580f4ad51e"
+    },
+    {
+      "path": "FE/src/components/ui/Button.tsx",
+      "sha256": "dad704816854c694852028a405131dcb0639bb191ff2d7125243593f28ddd9dc"
+    },
+    {
+      "path": "FE/src/components/ui/Card.tsx",
+      "sha256": "33bae80c2cb20bf04973b84cc1dd9d0acec1b0fd3682e3bd89f7eee7b4441444"
+    },
+    {
+      "path": "FE/src/index.css",
+      "sha256": "050e19a00f2071f49466a0cb5edaa91c34946bb8945369bda22e43c187cd972b"
+    },
+    {
+      "path": "FE/src/main.tsx",
+      "sha256": "04bc6c664005d207f6c9a42cac1a11810f6257a77604ecc9a2dfa1f0a68959ba"
+    },
+    {
+      "path": "FE/src/store/useAppStore.ts",
+      "sha256": "311e2b0f40549ffccaf4babdeaabb981ddb414747fe1a317a1ac4f1e4aa52a1d"
+    },
+    {
+      "path": "FE/src/types/index.ts",
+      "sha256": "b133cd8747664f701897ce0009216805c90c6590acf3c9180bfa14b0e37aea92"
+    },
+    {
+      "path": "FE/src/vite-env.d.ts",
+      "sha256": "424faf9241dd699dda995b367ed36665732da1e6ec1f33b2fd40394488ecac92"
+    },
+    {
+      "path": "FE/tailwind.config.js",
+      "sha256": "77141e4833d6573cee017b9378854f5533bfba0176117bfdc5e82787b1bb87c7"
+    },
+    {
+      "path": "FE/tsconfig.json",
+      "sha256": "5a610f4e7cbb41b07a4db1c349d44de57b89d6278a2ec6903d7e180bc267dfe2"
+    },
+    {
+      "path": "FE/vite.config.ts",
+      "sha256": "0d88abb7d1a0d7f863be9dd791a8adca56442affce947730406cfb7fcffbd665"
+    },
+    {
+      "path": "feature-rag-chatbot/rag-chatbot/Dockerfile",
+      "sha256": "8e974c55a05f052dba69bc78fd136ce8a9b12b9d21b5885d89203d0576e8831f"
+    },
+    {
+      "path": "feature-rag-chatbot/rag-chatbot/api.py",
+      "sha256": "dc9e2d21b6c1e8035041e770a532deeccf960ec79ab0fcc32e24fa6cd6ee47ca"
+    },
+    {
+      "path": "feature-rag-chatbot/rag-chatbot/chatbot.py",
+      "sha256": "7f9c321d5a3ff9aeb4a4b6872e061d43b121bb0aec9cb80c2584408d838cb2ee"
+    },
+    {
+      "path": "feature-rag-chatbot/rag-chatbot/ingestion.py",
+      "sha256": "dcc97003e693e52ac80287a6bad30ea5cc3391aee48823dabb15d30ec50601a0"
+    },
+    {
+      "path": "feature-rag-chatbot/rag-chatbot/requirements.txt",
+      "sha256": "dc083bf79c720cae39d327b087fd34d4d2d0da4341bfb7903c52ddfe6afe95b4"
+    }
+  ],
+  "tailwind": "Keep v3 per user decision",
+  "mainApplication": "Not rebuilt/restarted/mutated",
+  "commitOrPush": "Not performed"
+}

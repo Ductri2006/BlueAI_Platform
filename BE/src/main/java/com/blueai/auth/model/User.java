@@ -43,6 +43,12 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    @Column(name = "auth_version", nullable = false)
+    private long authVersion;
+
     protected User() {
     }
 
@@ -60,7 +66,29 @@ public class User {
     }
 
     public void changeStatus(UserStatus status) {
+        if (this.status != status) {
+            this.authVersion++;
+        }
         this.status = status;
+    }
+
+    public void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.authVersion++;
+    }
+
+    public void softDelete(Instant when) {
+        this.deletedAt = when;
+        this.status = UserStatus.DISABLED;
+        this.authVersion++;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
+    public void changeRole(UserRole role) {
+        this.role = role;
     }
 
     @PrePersist
@@ -108,5 +136,13 @@ public class User {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public long getAuthVersion() {
+        return authVersion;
     }
 }
