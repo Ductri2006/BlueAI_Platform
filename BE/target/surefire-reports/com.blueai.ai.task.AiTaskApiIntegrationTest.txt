@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.blueai.ai.task.AiTaskApiIntegrationTest
+-------------------------------------------------------------------------------
+Tests run: 12, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 11.73 s -- in com.blueai.ai.task.AiTaskApiIntegrationTest
