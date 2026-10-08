@@ -72,7 +72,7 @@ class MySqlLegacyMigrationIntegrationTest {
             }
         }
         Flyway latest = configuration(url, username, password).load();
-        assertThat(latest.migrate().migrationsExecuted).isEqualTo(9 - version);
+        assertThat(latest.migrate().migrationsExecuted).isEqualTo(10 - version);
         latest.validate();
         assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("10");
         assertThat(latest.info().pending()).isEmpty();
@@ -82,7 +82,7 @@ class MySqlLegacyMigrationIntegrationTest {
         assertThat(newChecksums).containsAllEntriesOf(oldChecksums);
         try (var connection = DriverManager.getConnection(url, username, password)) {
             try (var statement = connection.prepareStatement("""
-                    SELECT u.auth_version,c.title,c.deleted_at,m.content,d.status,d.attempt_count,d.produced_chunk_count
+                    SELECT u.auth_version,u.active_session_id,c.title,c.deleted_at,m.content,d.status,d.attempt_count,d.produced_chunk_count
                     FROM app_users u JOIN rag_conversations c ON c.owner_id=u.id
                     JOIN rag_conversation_messages m ON m.conversation_id=c.id JOIN rag_documents d ON d.owner_id=u.id
                     WHERE u.id=? AND c.id=? AND m.id=? AND d.id=?
@@ -92,6 +92,7 @@ class MySqlLegacyMigrationIntegrationTest {
                 try (var row = statement.executeQuery()) {
                     assertThat(row.next()).isTrue();
                     assertThat(row.getLong("auth_version")).isZero();
+                    assertThat(row.getString("active_session_id")).isNull();
                     assertThat(row.getString("title")).isEqualTo("Legacy customer context");
                     assertThat(row.getTimestamp("deleted_at")).isNull();
                     assertThat(row.getString("content")).isEqualTo("Khách hàng có 37 sales; mã TV-4712");
