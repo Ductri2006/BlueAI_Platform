@@ -1013,7 +1013,11 @@ function BlueAiCorePanel({ configuration, onChange, onCustomizationChange }: { c
         <label><span className={labelClass}>Mức chủ động / hỏi lại</span><select value={customization.proactivity || 'ask_when_needed'} onChange={event => updateCustomization({ proactivity: event.target.value })} className={inputClass}><option value="low">Ít chủ động</option><option value="ask_when_needed">Hỏi lại khi cần</option><option value="proactive">Chủ động gợi ý</option></select></label>
         <label><span className={labelClass}>Dẫn nguồn</span><select value={customization.citationPolicy || 'always_when_available'} onChange={event => updateCustomization({ citationPolicy: event.target.value })} className={inputClass}><option value="always_when_available">Luôn dẫn nguồn khi có</option><option value="when_factual">Dẫn nguồn cho thông tin thực tế</option></select></label>
         <label><span className={labelClass}>Khi không có nguồn</span><select value={customization.noSourcePolicy || 'say_not_found'} onChange={event => updateCustomization({ noSourcePolicy: event.target.value })} className={inputClass}><option value="say_not_found">Nói rõ chưa tìm thấy</option><option value="ask_clarification">Hỏi lại để làm rõ</option><option value="escalate">Chuyển hỗ trợ</option></select></label>
-        <label><span className={labelClass}>Hồ sơ phản hồi / node Dialog</span><input value={customization.responseProfile || ''} onChange={event => updateCustomization({ responseProfile: event.target.value })} className={inputClass} placeholder="Tên profile hoặc node tuỳ chọn" /></label>
+        <label>
+          <span className={labelClass}>Định hướng phản hồi (tùy chọn)</span>
+          <input value={customization.responseProfile || ''} onChange={event => updateCustomization({ responseProfile: event.target.value })} className={inputClass} placeholder="Ví dụ: Hướng dẫn từng bước, hỏi lại khi thiếu thông tin" maxLength={120} aria-describedby="response-guidance-help" />
+          <span id="response-guidance-help" className="mt-1 block text-xs leading-5 text-slate-500">Mô tả ngắn cách AI/RAG nên trả lời, tối đa 120 ký tự.</span>
+        </label>
       </div>
     </section>
 
