@@ -1,4 +1,6 @@
-package com.blueai.ai.task;
+package com.blueai.ai.task.scheduler;
+
+import com.blueai.ai.task.service.AiTaskRecoveryService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,7 +9,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnProperty(name = "app.ai.tasks.recovery-enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(
+        name = "app.ai.tasks.recovery-enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class AiTaskRecoveryScheduler {
     private static final Logger LOG = LoggerFactory.getLogger(AiTaskRecoveryScheduler.class);
     private final AiTaskRecoveryService recovery;
@@ -20,7 +25,10 @@ public class AiTaskRecoveryScheduler {
     public void recoverExpiredTasks() {
         int recovered = recovery.recoverExpiredTasks();
         if (recovered > 0) {
-            LOG.warn("Expired {} AI tasks whose results were not committed; no provider requests were retried.", recovered);
+            LOG.warn(
+                    "Expired {} AI tasks whose results were not committed; no provider requests"
+                        + " were retried.",
+                    recovered);
         }
     }
 }

@@ -5,7 +5,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import api
+from app import main as api
+from app.controllers import health as health_controller, documents as document_controller
+from app.controllers import retrieval as retrieval_controller, completion as completion_controller
+from app.core import config
+from app.models import schemas
+from app.repositories import faiss_repository
+from app.services import runtime as runtime_module, completion as completion_service, retrieval as retrieval_service
 from fastapi.testclient import TestClient
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage
@@ -84,20 +90,20 @@ class IngestionVectorStore(PurgeableVectorStore):
 
 class RagApiTest(unittest.TestCase):
     def test_http_contract_after_fastapi_starlette_upgrade(self):
-        match = api.RetrievalMatch(
+        match = schemas.RetrievalMatch(
             documentId="doc-1", chunkId="chunk-1", content="Grounded text",
             score=0.9, filename="guide.pdf", sourceType="ENTERPRISE_DOCUMENT",
             approvalStatus="READY",
         )
-        answer = api.ChatCompletionResponse(
+        answer = schemas.ChatCompletionResponse(
             id="chat-test", model="mock-model",
-            choices=[api.CompletionChoice(message=api.ChatMessage(role="assistant", content="Answer"))],
+            choices=[schemas.CompletionChoice(message=schemas.ChatMessage(role="assistant", content="Answer"))],
         )
         worker_headers = {"X-Worker-Api-Key": "worker-key"}
         with patch.dict("os.environ", {"JAVA_WORKER_API_KEY": "worker-key"}), \
                 patch.object(api, "start_worker", return_value=None), TestClient(api.app) as client:
             self.assertEqual(200, client.get("/health").status_code)
-            with patch.object(api.runtime, "search", return_value=[match]) as search:
+            with patch.object(runtime_module.runtime, "search", return_value=[match]) as search:
                 response = client.post("/v1/retrieval/search", headers=worker_headers, json={
                     "userId": "user-1", "query": "policy", "limit": 4,
                 })
@@ -108,7 +114,7 @@ class RagApiTest(unittest.TestCase):
                 "/v1/retrieval/search", headers=worker_headers, json={"query": "policy"}
             ).status_code)
 
-            with patch.object(api.runtime, "complete", return_value=answer):
+            with patch.object(runtime_module.runtime, "complete", return_value=answer):
                 response = client.post("/v1/chat/completions", headers=worker_headers, json={
                     "messages": [{"role": "user", "content": "Hello"}],
                 })
@@ -117,14 +123,14 @@ class RagApiTest(unittest.TestCase):
 
             with patch.dict("os.environ", {
                 "JAVA_API_BASE_URL": "http://auth-api:8080", "JAVA_WORKER_API_KEY": "worker-key",
-            }), patch.object(api, "request_run") as request_run:
+            }), patch.object(document_controller, "request_run") as request_run:
                 self.assertEqual(401, client.post("/v1/internal/ingest/run").status_code)
                 response = client.post("/v1/internal/ingest/run", headers={"X-Worker-API-Key": "worker-key"})
                 self.assertEqual(202, response.status_code)
                 request_run.assert_called_once_with()
 
     def test_health(self):
-        response = api.health()
+        response = health_controller.health()
         self.assertEqual("ok", response["status"])
         self.assertEqual("gemini", response["provider"])
         self.assertIn("geminiConfigured", response)
@@ -135,7 +141,7 @@ class RagApiTest(unittest.TestCase):
             "JAVA_API_BASE_URL": "http://auth-api:8080",
             "JAVA_WORKER_API_KEY": "k",
         }):
-            response = api.health()
+            response = health_controller.health()
         self.assertEqual("http://auth-api:8080", response["documentWorker"]["javaApiBaseUrl"])
         self.assertIn("lastError", response["documentWorker"])
 
@@ -144,33 +150,33 @@ class RagApiTest(unittest.TestCase):
             "JAVA_API_BASE_URL": "http://127.0.0.1:8080",
             "JAVA_WORKER_API_KEY": "worker-key",
         }):
-            with patch.object(api, "request_run") as request_run:
-                with self.assertRaises(api.HTTPException) as wrong_key:
-                    api.trigger_ingest(x_worker_api_key="nope")
+            with patch.object(document_controller, "request_run") as request_run:
+                with self.assertRaises(health_controller.HTTPException) as wrong_key:
+                    document_controller.trigger_ingest(x_worker_api_key="nope")
                 self.assertEqual(401, wrong_key.exception.status_code)
-                with self.assertRaises(api.HTTPException) as no_key:
-                    api.trigger_ingest(x_worker_api_key=None)
+                with self.assertRaises(health_controller.HTTPException) as no_key:
+                    document_controller.trigger_ingest(x_worker_api_key=None)
                 self.assertEqual(401, no_key.exception.status_code)
                 request_run.assert_not_called()
 
-                self.assertEqual({"status": "queued"}, api.trigger_ingest(x_worker_api_key="worker-key"))
+                self.assertEqual({"status": "queued"}, document_controller.trigger_ingest(x_worker_api_key="worker-key"))
                 request_run.assert_called_once_with()
 
     def test_ingest_trigger_reports_an_unconfigured_worker(self):
         with patch.dict("os.environ", {}, clear=True):
-            with self.assertRaises(api.HTTPException) as error:
-                api.trigger_ingest(x_worker_api_key="anything")
+            with self.assertRaises(health_controller.HTTPException) as error:
+                document_controller.trigger_ingest(x_worker_api_key="anything")
         self.assertEqual(503, error.exception.status_code)
 
     def test_readiness_rejects_missing_gemini_key(self):
         with patch.dict("os.environ", {}, clear=True):
-            with self.assertRaises(api.HTTPException) as error:
-                api.readiness()
+            with self.assertRaises(health_controller.HTTPException) as error:
+                health_controller.readiness()
         self.assertEqual(503, error.exception.status_code)
 
     def test_readiness_accepts_gemini_key(self):
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=True):
-            self.assertEqual({"status": "ready", "provider": "gemini"}, api.readiness())
+            self.assertEqual({"status": "ready", "provider": "gemini"}, health_controller.readiness())
 
     def test_operational_readiness_rejects_disabled_stalled_or_failing_worker(self):
         healthy = {
@@ -187,17 +193,17 @@ class RagApiTest(unittest.TestCase):
                 patch.object(api, "start_worker", return_value=None), TestClient(api.app) as client:
             self.assertEqual(200, client.get("/ready").status_code)
             for state in invalid_states:
-                with self.subTest(state=state), patch.object(api, "worker_status", return_value=state):
+                with self.subTest(state=state), patch.object(health_controller, "worker_status", return_value=state):
                     self.assertEqual(503, client.get("/readiness").status_code)
                     self.assertEqual(200, client.get("/health").status_code)
-            with patch.object(api, "worker_status", return_value=healthy), \
-                    patch.object(api.runtime, "complete") as complete, patch.object(api.runtime, "search") as search:
+            with patch.object(health_controller, "worker_status", return_value=healthy), \
+                    patch.object(runtime_module.runtime, "complete") as complete, patch.object(runtime_module.runtime, "search") as search:
                 self.assertEqual(200, client.get("/readiness").status_code)
                 complete.assert_not_called()
                 search.assert_not_called()
 
     def test_retrieval_contract(self):
-        match = api.RetrievalMatch(
+        match = schemas.RetrievalMatch(
             documentId="DOC-DEMO",
             chunkId="REC-1",
             content="Demo content",
@@ -207,16 +213,16 @@ class RagApiTest(unittest.TestCase):
             approvalStatus="PENDING_OWNER_REVIEW",
         )
         with patch.dict("os.environ", {"JAVA_WORKER_API_KEY": "worker-key"}), \
-                patch.object(api.runtime, "search", return_value=[match]) as search:
-            response = api.retrieval_search(
-                api.RetrievalRequest(userId="user-1", query="question", limit=4),
+                patch.object(runtime_module.runtime, "search", return_value=[match]) as search:
+            response = retrieval_controller.retrieval_search(
+                schemas.RetrievalRequest(userId="user-1", query="question", limit=4),
                 x_worker_api_key="worker-key",
             )
         search.assert_called_once_with("user-1", "question", 4)
         self.assertEqual("DOC-DEMO", response.matches[0].documentId)
 
     def test_retrieval_filters_private_chunks_by_owner(self):
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         runtime._vectorstore = StubVectorStore([
             (_document("other", "other", owner="user-2"), 0.1),
             (_document("mine", "mine", owner="user-1", filename="mine.md"), 0.2),
@@ -230,7 +236,7 @@ class RagApiTest(unittest.TestCase):
         self.assertAlmostEqual(0.9, matches[0].score, places=6)
 
     def test_retrieval_caps_chunks_per_document_without_losing_recall(self):
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         runtime._vectorstore = StubVectorStore([
             (_document("doc-a", "a1", owner="user-1"), 0.10),
             (_document("doc-a", "a2", owner="user-1"), 0.12),
@@ -247,7 +253,7 @@ class RagApiTest(unittest.TestCase):
                          [match.score for match in matches])
 
     def test_retrieval_drops_duplicate_chunk_content(self):
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         runtime._vectorstore = StubVectorStore([
             (_document("doc-a", "Chinh sach hoan tien 7 ngay.", owner="user-1"), 0.10),
             (_document("doc-b", "  Chinh sach hoan tien 7 ngay. ", owner="user-1"), 0.20),
@@ -256,7 +262,7 @@ class RagApiTest(unittest.TestCase):
         self.assertEqual(["doc-a"], [match.documentId for match in matches])
 
     def test_retrieval_applies_minimum_relevance(self):
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         runtime._vectorstore = StubVectorStore([
             (_document("doc-a", "strong match", owner="user-1"), 0.2),
             (_document("doc-b", "weak match", owner="user-1"), 1.4),
@@ -266,7 +272,7 @@ class RagApiTest(unittest.TestCase):
         self.assertEqual(["doc-a"], [match.documentId for match in matches])
 
     def test_retrieval_requests_a_wider_candidate_pool_than_the_limit(self):
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         store = StubVectorStore([])
         runtime._vectorstore = store
         runtime.search("user-1", "query", 6)
@@ -286,7 +292,7 @@ class RagApiTest(unittest.TestCase):
                 return self.results[:k]
 
         store = IndexedStore(unauthorized + authorized)
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         runtime._vectorstore = store
         matches = runtime.search("user-1", "query", 1, ["granted"])
 
@@ -295,7 +301,7 @@ class RagApiTest(unittest.TestCase):
 
     def test_empty_integration_allowlist_skips_vector_search(self):
         store = StubVectorStore([])
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         runtime._vectorstore = store
         self.assertEqual([], runtime.search("user-1", "query", 1, []))
         self.assertIsNone(store.k)
@@ -304,18 +310,18 @@ class RagApiTest(unittest.TestCase):
         class LargeIndexedStore(StubVectorStore):
             index = SimpleNamespace(ntotal=100_001)
 
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         runtime._vectorstore = LargeIndexedStore([])
         with self.assertRaisesRegex(RuntimeError, "100,000-vector"):
             runtime.search("user-1", "query", 1, ["granted"])
 
     def test_retrieval_ignores_blank_query(self):
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         runtime._vectorstore = StubVectorStore([(_document("doc-a", "content", owner="user-1"), 0.1)])
         self.assertEqual([], runtime.search("user-1", "   \n  ", 5))
 
     def test_document_purge_compacts_faiss_docstore_and_is_idempotent(self):
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         store = PurgeableVectorStore()
         runtime._vectorstore = store
         with tempfile.TemporaryDirectory() as directory, patch.dict("os.environ", {"RAG_INDEX_DIR": directory}):
@@ -327,16 +333,16 @@ class RagApiTest(unittest.TestCase):
             self.assertIn("vector-3", store.docstore._dict)
 
     def test_document_purge_save_failure_restores_durable_view_and_retry_cleans_disk(self):
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         store = PurgeableVectorStore()
         durable_store = PurgeableVectorStore()
         # Disk recovery must be testable without a provider key or network call.
         with tempfile.TemporaryDirectory() as directory, \
                 patch.dict("os.environ", {"RAG_INDEX_DIR": directory}, clear=True), \
-                patch.object(api.RagRuntime, "_embeddings", return_value=unittest.mock.Mock()):
+                patch.object(runtime_module.RagRuntime, "_embeddings", return_value=unittest.mock.Mock()):
             store.save_local(directory)
             store.fail_next_save = True
-            with patch.object(api.FAISS, "load_local", return_value=durable_store):
+            with patch.object(faiss_repository.FAISS, "load_local", return_value=durable_store):
                 with self.assertRaises(OSError):
                     runtime._vectorstore = store
                     runtime.purge_document("doc-1")
@@ -346,13 +352,13 @@ class RagApiTest(unittest.TestCase):
             self.assertEqual(2, runtime.purge_document("doc-1"))
             self.assertNotIn("doc-1", Path(directory, "index.pkl").read_text(encoding="utf-8"))
 
-            restarted = api.RagRuntime()
-            with patch.object(api.FAISS, "load_local", return_value=PurgeableVectorStore.from_disk(directory)):
+            restarted = runtime_module.RagRuntime()
+            with patch.object(faiss_repository.FAISS, "load_local", return_value=PurgeableVectorStore.from_disk(directory)):
                 self.assertEqual(0, restarted.purge_document("doc-1"))
             self.assertNotIn("doc-1", restarted._vectorstore.docstore._dict)
 
     def test_add_user_document_replaces_existing_chunks_on_retry(self):
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         store = IngestionVectorStore()
         fake_embeddings = unittest.mock.Mock()
         fake_embeddings.embed_documents.return_value = [[0.1]]
@@ -371,13 +377,13 @@ class RagApiTest(unittest.TestCase):
 
     def test_document_purge_endpoint_requires_worker_key(self):
         with patch.dict("os.environ", {"JAVA_WORKER_API_KEY": "worker-key"}, clear=True), \
-                patch.object(api.runtime, "purge_document", return_value=3) as purge:
-            with self.assertRaises(api.HTTPException) as error:
-                api.purge_document("doc-1", x_worker_api_key="wrong")
+                patch.object(runtime_module.runtime, "purge_document", return_value=3) as purge:
+            with self.assertRaises(health_controller.HTTPException) as error:
+                document_controller.purge_document("doc-1", x_worker_api_key="wrong")
             self.assertEqual(401, error.exception.status_code)
             self.assertEqual(
                 {"status": "purged", "documentId": "doc-1", "removedChunks": 3},
-                api.purge_document("doc-1", x_worker_api_key="worker-key"),
+                document_controller.purge_document("doc-1", x_worker_api_key="worker-key"),
             )
             purge.assert_called_once_with("doc-1")
 
@@ -386,8 +392,8 @@ class RagApiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             index_dir = Path(directory) / "mounted-index"
             original_mkdtemp = tempfile.mkdtemp
-            with patch.object(api.tempfile, "mkdtemp", wraps=original_mkdtemp) as staging:
-                api.RagRuntime._save_vectorstore_atomically(store, index_dir)
+            with patch.object(faiss_repository.tempfile, "mkdtemp", wraps=original_mkdtemp) as staging:
+                runtime_module.RagRuntime._save_vectorstore_atomically(store, index_dir)
             self.assertEqual(index_dir, staging.call_args.kwargs["dir"])
             self.assertEqual({"index.faiss", "index.pkl"}, {p.name for p in index_dir.iterdir()})
 
@@ -398,19 +404,19 @@ class RagApiTest(unittest.TestCase):
             store.save_local(directory)
             old_files = {p.name: p.read_bytes() for p in index_dir.iterdir()}
             store.delete(["vector-1"])
-            original_replace = api.os.replace
+            original_replace = faiss_repository.os.replace
             def fail_second_install(source, target):
                 source, target = Path(source), Path(target)
                 if source.parent.name.startswith(".staging-") and target.name == "index.pkl":
                     raise OSError("injected second-file install failure")
                 return original_replace(source, target)
-            with patch.object(api.os, "replace", side_effect=fail_second_install):
+            with patch.object(faiss_repository.os, "replace", side_effect=fail_second_install):
                 with self.assertRaisesRegex(OSError, "second-file"):
-                    api.RagRuntime._save_vectorstore_atomically(store, index_dir)
+                    runtime_module.RagRuntime._save_vectorstore_atomically(store, index_dir)
             self.assertEqual(old_files, {p.name: p.read_bytes() for p in index_dir.iterdir()})
 
     def test_ingestion_save_failure_restores_memory_and_retry_does_not_duplicate(self):
-        runtime = api.RagRuntime()
+        runtime = runtime_module.RagRuntime()
         store, durable_store = IngestionVectorStore(), IngestionVectorStore()
         embeddings = unittest.mock.Mock()
         embeddings.embed_documents.return_value = [[0.1]]
@@ -421,7 +427,7 @@ class RagApiTest(unittest.TestCase):
             store.save_local(directory)
             before = Path(directory, "index.pkl").read_bytes()
             store.fail_next_save = True
-            with patch.object(api.FAISS, "load_local", return_value=durable_store):
+            with patch.object(faiss_repository.FAISS, "load_local", return_value=durable_store):
                 with self.assertRaises(OSError):
                     runtime.add_user_document("new-doc", "user-1", "USER_DOCUMENT", "new.txt", "new content", 1200, 0)
             self.assertIs(runtime._vectorstore, durable_store)
@@ -435,30 +441,30 @@ class RagApiTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             index_dir = Path(directory)
             with patch.dict("os.environ", {"GEMINI_EMBEDDING_MODEL": "model-a"}):
-                api.RagRuntime._write_index_model(index_dir)
-                self.assertEqual("model-a", api.RagRuntime._read_index_model(index_dir))
+                runtime_module.RagRuntime._write_index_model(index_dir)
+                self.assertEqual("model-a", runtime_module.RagRuntime._read_index_model(index_dir))
             with patch.dict("os.environ", {"GEMINI_EMBEDDING_MODEL": "model-b"}):
-                self.assertNotEqual(api._embedding_model(), api.RagRuntime._read_index_model(index_dir))
+                self.assertNotEqual(config._embedding_model(), runtime_module.RagRuntime._read_index_model(index_dir))
 
     def test_index_metadata_is_absent_for_a_legacy_index(self):
         with tempfile.TemporaryDirectory() as directory:
-            self.assertIsNone(api.RagRuntime._read_index_model(Path(directory)))
+            self.assertIsNone(runtime_module.RagRuntime._read_index_model(Path(directory)))
 
     def test_extract_text_handles_every_content_shape(self):
-        self.assertEqual("plain", api._extract_text("plain"))
-        self.assertEqual("", api._extract_text([]))
-        self.assertEqual("", api._extract_text(None))
-        self.assertEqual("a b", api._extract_text(["a b"]))
-        self.assertEqual("cau tra loi", api._extract_text([{"text": "cau tra loi"}]))
+        self.assertEqual("plain", completion_service._extract_text("plain"))
+        self.assertEqual("", completion_service._extract_text([]))
+        self.assertEqual("", completion_service._extract_text(None))
+        self.assertEqual("a b", completion_service._extract_text(["a b"]))
+        self.assertEqual("cau tra loi", completion_service._extract_text([{"text": "cau tra loi"}]))
         self.assertEqual(
             "Hello! How can I help you today?",
-            api._extract_text([{
+            completion_service._extract_text([{
                 "type": "text",
                 "text": "Hello! How can I help you today?",
                 "extras": {"signature": "El4KXAERTTIPWM4oUT1zee1BHK2xUEDa"},
             }]),
         )
-        self.assertEqual("Cau tra loi", api._extract_text([
+        self.assertEqual("Cau tra loi", completion_service._extract_text([
             {"type": "reasoning", "reasoning": "suy nghi noi bo"},
             {"type": "text", "text": "Cau tra loi"},
         ]))
@@ -472,9 +478,9 @@ class RagApiTest(unittest.TestCase):
                      "extras": {"signature": "El4KXAERTTIPWM4oUT1zee1BHK2xUEDa"}},
                 ], usage_metadata={"input_tokens": 120, "output_tokens": 24, "total_tokens": 160})
 
-        request = api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="hoan tien?")])
-        with patch.object(api, "ChatGoogleGenerativeAI", return_value=FakeLlm()):
-            response = api.RagRuntime().complete(request)
+        request = schemas.ChatCompletionRequest(messages=[schemas.ChatMessage(role="user", content="hoan tien?")])
+        with patch.object(completion_service, "ChatGoogleGenerativeAI", return_value=FakeLlm()):
+            response = runtime_module.RagRuntime().complete(request)
         self.assertEqual("Chinh sach hoan tien la 7 ngay. [S1]", response.choices[0].message.content)
         self.assertEqual(120, response.usage.prompt_tokens)
         self.assertEqual(24, response.usage.completion_tokens)
@@ -485,10 +491,10 @@ class RagApiTest(unittest.TestCase):
             def invoke(self, _messages):
                 return AIMessage(content=[{"type": "reasoning", "reasoning": "chi suy nghi"}])
 
-        request = api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="hoan tien?")])
-        with patch.object(api, "ChatGoogleGenerativeAI", return_value=ThinkingOnlyLlm()):
+        request = schemas.ChatCompletionRequest(messages=[schemas.ChatMessage(role="user", content="hoan tien?")])
+        with patch.object(completion_service, "ChatGoogleGenerativeAI", return_value=ThinkingOnlyLlm()):
             with self.assertRaises(RuntimeError):
-                api.RagRuntime().complete(request)
+                runtime_module.RagRuntime().complete(request)
 
     def test_completion_falls_back_after_a_transient_model_failure(self):
         attempted_models = []
@@ -506,51 +512,51 @@ class RagApiTest(unittest.TestCase):
             attempted_models.append(model)
             return FakeLlm(model)
 
-        request = api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="hello")])
+        request = schemas.ChatCompletionRequest(messages=[schemas.ChatMessage(role="user", content="hello")])
         with patch.dict("os.environ", {
             "GEMINI_CHAT_MODEL": "primary-model",
             "GEMINI_CHAT_FALLBACK_MODELS": "fallback-model",
         }):
-            with patch.object(api, "ChatGoogleGenerativeAI", side_effect=fake_factory):
-                response = api.RagRuntime().complete(request)
+            with patch.object(completion_service, "ChatGoogleGenerativeAI", side_effect=fake_factory):
+                response = runtime_module.RagRuntime().complete(request)
 
         self.assertEqual(["primary-model", "fallback-model"], attempted_models)
         self.assertEqual("fallback-model", response.model)
         self.assertEqual("fallback ok", response.choices[0].message.content)
 
     def test_openai_compatible_completion_contract(self):
-        expected = api.ChatCompletionResponse(
+        expected = schemas.ChatCompletionResponse(
             id="chatcmpl-test",
             model="test-model",
-            choices=[api.CompletionChoice(message=api.ChatMessage(role="assistant", content="answer"))],
+            choices=[schemas.CompletionChoice(message=schemas.ChatMessage(role="assistant", content="answer"))],
         )
-        request = api.ChatCompletionRequest(
+        request = schemas.ChatCompletionRequest(
             model="test-model",
-            messages=[api.ChatMessage(role="user", content="question")],
+            messages=[schemas.ChatMessage(role="user", content="question")],
         )
         with patch.dict("os.environ", {"JAVA_WORKER_API_KEY": "worker-key"}), \
-                patch.object(api.runtime, "complete", return_value=expected):
-            response = api.chat_completions(request, x_worker_api_key="worker-key")
+                patch.object(runtime_module.runtime, "complete", return_value=expected):
+            response = completion_controller.chat_completions(request, x_worker_api_key="worker-key")
         self.assertEqual("answer", response.choices[0].message.content)
 
     def test_completion_budget_has_no_nested_sdk_retries(self):
         fake = unittest.mock.Mock()
         fake.invoke.return_value = AIMessage(content="ok")
-        with patch.object(api, "ChatGoogleGenerativeAI", return_value=fake) as factory:
-            api.RagRuntime().complete(api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="test")]))
+        with patch.object(completion_service, "ChatGoogleGenerativeAI", return_value=fake) as factory:
+            runtime_module.RagRuntime().complete(schemas.ChatCompletionRequest(messages=[schemas.ChatMessage(role="user", content="test")]))
         self.assertEqual(1, factory.call_args.kwargs["max_retries"])
         self.assertEqual(12, factory.call_args.kwargs["timeout"])
 
     def test_model_list_deduplicates_and_bounds_provider_attempts(self):
         with patch.dict("os.environ", {"GEMINI_CHAT_MODEL": "primary", "GEMINI_CHAT_FALLBACK_MODELS": "primary, backup, third"}):
-            self.assertEqual(["primary", "backup"], api._chat_models())
+            self.assertEqual(["primary", "backup"], config._chat_models())
 
     def test_authentication_failure_does_not_try_fallback(self):
         fake = unittest.mock.Mock()
         fake.invoke.side_effect = RuntimeError("401 UNAUTHENTICATED")
-        with patch.object(api, "ChatGoogleGenerativeAI", return_value=fake) as factory:
+        with patch.object(completion_service, "ChatGoogleGenerativeAI", return_value=fake) as factory:
             with self.assertRaises(RuntimeError):
-                api.RagRuntime().complete(api.ChatCompletionRequest(messages=[api.ChatMessage(role="user", content="test")]))
+                runtime_module.RagRuntime().complete(schemas.ChatCompletionRequest(messages=[schemas.ChatMessage(role="user", content="test")]))
         self.assertEqual(1, factory.call_count)
 
 

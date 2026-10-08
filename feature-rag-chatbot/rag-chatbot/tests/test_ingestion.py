@@ -3,7 +3,7 @@ import io
 import unittest
 from unittest.mock import patch
 
-import ingestion
+from app.workers import ingestion
 
 
 class FakeResponse:

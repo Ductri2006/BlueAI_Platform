@@ -1,5 +1,15 @@
 package com.blueai.ai.task;
 
+import com.blueai.ai.task.exception.AiTaskException;
+import com.blueai.ai.task.service.AiTaskService;
+import com.blueai.ai.task.service.AiTaskRecoveryService;
+import com.blueai.ai.task.config.AiTaskProperties;
+import com.blueai.ai.task.provider.AiCompletionProvider;
+import com.blueai.ai.task.provider.AiRetrievalProvider;
+import com.blueai.ai.task.model.AiClientPrincipal;
+import com.blueai.ai.task.repository.AiTaskRepository;
+import com.blueai.ai.task.repository.IntegrationClientRepository;
+
 import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserRole;
 import com.blueai.auth.repository.UserRepository;
@@ -106,7 +116,7 @@ class AiTaskMySqlAuthorizationIntegrationTest {
                     ? "{\"label\":\"sales\",\"abstain\":false,\"reason\":\"explicit\"}"
                     : "{\"answer\":\"private answer\",\"abstain\":false,\"citations\":[\"chunk-1\"]}";
         });
-        var recovery = spy(new AiTaskRecoveryService(jdbc, mapper, transactions));
+        var recovery = spy(new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions));
         doAnswer(invocation -> {
             int expired = (int) invocation.callRealMethod();
             if (providerReturned.get() && pauseFinalAuthorization.compareAndSet(true, false)) {
@@ -119,7 +129,7 @@ class AiTaskMySqlAuthorizationIntegrationTest {
         }).when(recovery).expireLockedClient(client.clientId());
         var properties = new AiTaskProperties();
         properties.setDeadline(Duration.ofSeconds(45));
-        tasks = new AiTaskService(jdbc, mapper, transactions, documents, users, completion, retrieval, properties, recovery);
+        tasks = new AiTaskService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions, documents, completion, retrieval, properties, recovery);
     }
 
     @AfterEach

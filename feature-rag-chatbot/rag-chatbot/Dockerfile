@@ -23,10 +23,11 @@ RUN python -m pip install --no-cache-dir --requirement requirements.txt \
 COPY --chown=blueai:blueai chatbot.py ./chatbot.py
 COPY --chown=blueai:blueai api.py ./api.py
 COPY --chown=blueai:blueai ingestion.py ./ingestion.py
+COPY --chown=blueai:blueai app ./app
 COPY --chown=blueai:blueai Papers ./Papers
 
 USER blueai
 
 EXPOSE 8000
 
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

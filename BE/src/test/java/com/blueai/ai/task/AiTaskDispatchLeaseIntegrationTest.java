@@ -1,5 +1,14 @@
 package com.blueai.ai.task;
 
+import com.blueai.ai.task.service.AiTaskService;
+import com.blueai.ai.task.service.AiTaskRecoveryService;
+import com.blueai.ai.task.config.AiTaskProperties;
+import com.blueai.ai.task.provider.AiCompletionProvider;
+import com.blueai.ai.task.provider.AiRetrievalProvider;
+import com.blueai.ai.task.model.AiClientPrincipal;
+import com.blueai.ai.task.repository.AiTaskRepository;
+import com.blueai.ai.task.repository.IntegrationClientRepository;
+
 import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserRole;
 import com.blueai.auth.repository.UserRepository;
@@ -59,7 +68,7 @@ class AiTaskDispatchLeaseIntegrationTest {
         var manager = new DataSourceTransactionManager(source);
         transactions = new AfterClaimTransactions(manager);
         // Recovery has its own template so the barrier only pauses the service's committed claim.
-        recovery = new AiTaskRecoveryService(jdbc, mapper, new TransactionTemplate(manager));
+        recovery = new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, new TransactionTemplate(manager));
         User owner = new User(UUID.randomUUID() + "@dispatch.example.test", "not-a-password-hash", "Dispatch test", UserRole.ADMIN);
         client = new AiClientPrincipal(UUID.randomUUID().toString(), owner.getId());
         Instant now = Instant.now();
@@ -91,7 +100,7 @@ class AiTaskDispatchLeaseIntegrationTest {
         });
         properties = new AiTaskProperties();
         properties.setDeadline(Duration.ofSeconds(10));
-        tasks = new AiTaskService(jdbc, mapper, transactions, documents, users, completion, retrieval, properties, recovery);
+        tasks = new AiTaskService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions, documents, completion, retrieval, properties, recovery);
     }
 
     @AfterEach

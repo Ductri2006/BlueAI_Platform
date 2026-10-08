@@ -22,4 +22,4 @@ $env:RAG_INDEX_DIR = if ($env:RAG_INDEX_DIR) { $env:RAG_INDEX_DIR } else { Join-
 $env:GEMINI_CHAT_MODEL = if ($env:GEMINI_CHAT_MODEL) { $env:GEMINI_CHAT_MODEL } else { "gemini-3.5-flash-lite" }
 $env:GEMINI_EMBEDDING_MODEL = if ($env:GEMINI_EMBEDDING_MODEL) { $env:GEMINI_EMBEDDING_MODEL } else { "gemini-embedding-001" }
 
-& $python -m uvicorn api:app --app-dir $projectDir --host $HostAddress --port $Port
+& $python -m uvicorn app.main:app --app-dir $projectDir --host $HostAddress --port $Port

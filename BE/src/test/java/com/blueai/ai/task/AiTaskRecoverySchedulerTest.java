@@ -1,5 +1,10 @@
 package com.blueai.ai.task;
 
+import com.blueai.ai.task.service.AiTaskRecoveryService;
+import com.blueai.ai.task.scheduler.AiTaskRecoveryScheduler;
+import com.blueai.ai.task.repository.AiTaskRepository;
+import com.blueai.ai.task.repository.IntegrationClientRepository;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -45,7 +50,7 @@ class AiTaskRecoverySchedulerTest {
     @Test
     void oneBrokenClientDoesNotStarveOtherClientsInTheSweep() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        AiTaskRecoveryService recovery = spy(new AiTaskRecoveryService(jdbc, new ObjectMapper(), mock(TransactionTemplate.class)));
+        AiTaskRecoveryService recovery = spy(new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), new ObjectMapper(), mock(TransactionTemplate.class)));
         doReturn(Instant.now()).when(recovery).databaseNow();
         when(jdbc.queryForList(anyString(), any(Object[].class)))
                 .thenReturn(List.of(candidate("task-1", "broken-client"), candidate("task-2", "healthy-client")));
@@ -59,7 +64,7 @@ class AiTaskRecoverySchedulerTest {
     @Test
     void failedFullPageDoesNotStarveTheNextClientAndIsRetriedAfterWrapping() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        AiTaskRecoveryService recovery = spy(new AiTaskRecoveryService(jdbc, new ObjectMapper(), mock(TransactionTemplate.class)));
+        AiTaskRecoveryService recovery = spy(new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), new ObjectMapper(), mock(TransactionTemplate.class)));
         Instant firstCutoff = Instant.parse("2026-01-02T00:00:00Z");
         AtomicReference<Instant> clock = new AtomicReference<>(firstCutoff);
         doAnswer(invocation -> clock.get()).when(recovery).databaseNow();
@@ -93,7 +98,7 @@ class AiTaskRecoverySchedulerTest {
     @Test
     void emptyFirstPageClearsTheCutoffBeforeLaterWorkExpires() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        AiTaskRecoveryService recovery = spy(new AiTaskRecoveryService(jdbc, new ObjectMapper(), mock(TransactionTemplate.class)));
+        AiTaskRecoveryService recovery = spy(new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), new ObjectMapper(), mock(TransactionTemplate.class)));
         Instant firstCutoff = Instant.parse("2026-01-02T00:00:00Z");
         AtomicReference<Instant> clock = new AtomicReference<>(firstCutoff);
         doAnswer(invocation -> clock.get()).when(recovery).databaseNow();

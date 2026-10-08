@@ -3,7 +3,13 @@
 import unittest
 from unittest.mock import patch
 
-import api
+from app import main as api
+from app.controllers import health as health_controller, documents as document_controller
+from app.controllers import retrieval as retrieval_controller, completion as completion_controller
+from app.core import config
+from app.models import schemas
+from app.repositories import faiss_repository
+from app.services import runtime as runtime_module, completion as completion_service, retrieval as retrieval_service
 from fastapi.testclient import TestClient
 
 
@@ -23,10 +29,10 @@ class WorkerAuthenticationTest(unittest.TestCase):
                         "JAVA_WORKER_API_KEY": configured_key,
                     }, clear=True), \
                     patch.object(api, "start_worker", return_value=None), \
-                    patch.object(api.runtime, "search") as search, \
-                    patch.object(api.runtime, "complete") as complete, \
-                    patch.object(api.runtime, "purge_document") as purge, \
-                    patch.object(api, "request_run") as ingest, TestClient(api.app) as client:
+                    patch.object(runtime_module.runtime, "search") as search, \
+                    patch.object(runtime_module.runtime, "complete") as complete, \
+                    patch.object(runtime_module.runtime, "purge_document") as purge, \
+                    patch.object(document_controller, "request_run") as ingest, TestClient(api.app) as client:
                 for endpoint, body in self.ENDPOINTS:
                     response = client.post(endpoint, json=body, headers={"X-Worker-Api-Key": configured_key})
                     self.assertEqual(503, response.status_code, endpoint)
@@ -41,10 +47,10 @@ class WorkerAuthenticationTest(unittest.TestCase):
                         "JAVA_WORKER_API_KEY": "test-only-private-worker-key",
                     }, clear=True), \
                     patch.object(api, "start_worker", return_value=None), \
-                    patch.object(api.runtime, "search") as search, \
-                    patch.object(api.runtime, "complete") as complete, \
-                    patch.object(api.runtime, "purge_document") as purge, \
-                    patch.object(api, "request_run") as ingest, TestClient(api.app) as client:
+                    patch.object(runtime_module.runtime, "search") as search, \
+                    patch.object(runtime_module.runtime, "complete") as complete, \
+                    patch.object(runtime_module.runtime, "purge_document") as purge, \
+                    patch.object(document_controller, "request_run") as ingest, TestClient(api.app) as client:
                 for endpoint, body in self.ENDPOINTS:
                     response = client.post(endpoint, json=body, headers=headers)
                     self.assertEqual(401, response.status_code, endpoint)
@@ -54,7 +60,7 @@ class WorkerAuthenticationTest(unittest.TestCase):
     def test_valid_auth_preserves_integration_document_allowlist(self):
         with patch.dict("os.environ", {"JAVA_WORKER_API_KEY": "test-only-private-worker-key"}, clear=True), \
                 patch.object(api, "start_worker", return_value=None), \
-                patch.object(api.runtime, "search", return_value=[]) as search, TestClient(api.app) as client:
+                patch.object(runtime_module.runtime, "search", return_value=[]) as search, TestClient(api.app) as client:
             response = client.post("/v1/retrieval/search", headers={
                 "X-Worker-Api-Key": "test-only-private-worker-key",
             }, json={"userId": "user-1", "query": "policy", "limit": 4, "allowedDocumentIds": ["doc-1"]})

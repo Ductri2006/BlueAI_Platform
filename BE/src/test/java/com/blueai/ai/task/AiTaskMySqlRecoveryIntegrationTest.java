@@ -1,5 +1,9 @@
 package com.blueai.ai.task;
 
+import com.blueai.ai.task.service.AiTaskRecoveryService;
+import com.blueai.ai.task.repository.AiTaskRepository;
+import com.blueai.ai.task.repository.IntegrationClientRepository;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.flywaydb.core.Flyway;
@@ -92,7 +96,7 @@ class AiTaskMySqlRecoveryIntegrationTest {
         String completed = claim("completed", true);
         jdbc.update("update ai_task_ledger set status='COMPLETED',response_json='{}' where id=?", completed);
         // A new service instance has no in-memory knowledge of the original worker.
-        AiTaskRecoveryService restarted = new AiTaskRecoveryService(jdbc, mapper, transactions);
+        AiTaskRecoveryService restarted = new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions);
         assertThat(restarted.recoverExpiredTasks()).isEqualTo(1);
         assertThat(restarted.recoverExpiredTasks()).isZero();
         assertThat(jdbc.queryForObject("select error_code from ai_task_ledger where id=?", String.class, expired)).isEqualTo("AI_TASK_EXPIRED");
@@ -109,11 +113,11 @@ class AiTaskMySqlRecoveryIntegrationTest {
         try {
             var first = executor.submit(() -> {
                 assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
-                return new AiTaskRecoveryService(jdbc, mapper, transactions).recoverExpiredTasks();
+                return new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions).recoverExpiredTasks();
             });
             var second = executor.submit(() -> {
                 assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
-                return new AiTaskRecoveryService(jdbc, mapper, transactions).recoverExpiredTasks();
+                return new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions).recoverExpiredTasks();
             });
             start.countDown();
             assertThat(first.get(10, TimeUnit.SECONDS) + second.get(10, TimeUnit.SECONDS)).isEqualTo(4);
@@ -139,11 +143,11 @@ class AiTaskMySqlRecoveryIntegrationTest {
             }
             return mapper.writeValueAsString(invocation.getArgument(0));
         }).when(broken).writeValueAsString(any());
-        assertThatThrownBy(() -> new AiTaskRecoveryService(jdbc, broken, transactions).recoverClient(clientId))
+        assertThatThrownBy(() -> new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), broken, transactions).recoverClient(clientId))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(jdbc.queryForObject("select status from ai_task_ledger where id=?", String.class, id)).isEqualTo("PROCESSING");
         assertThat(jdbc.queryForObject("select count(*) from ai_task_ledger where client_id=? and status='PROCESSING'", Integer.class, clientId)).isEqualTo(2);
-        assertThat(new AiTaskRecoveryService(jdbc, mapper, transactions).recoverClient(clientId)).isEqualTo(2);
+        assertThat(new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions).recoverClient(clientId)).isEqualTo(2);
         assertThat(jdbc.queryForObject("select idempotency_key from ai_task_ledger where id=?", String.class, id)).isEqualTo("recovery:retry");
     }
 
@@ -195,7 +199,7 @@ class AiTaskMySqlRecoveryIntegrationTest {
         String nextPlan = jdbc.queryForObject("EXPLAIN ANALYZE " + nextPageSql, String.class,
                 cutoff, expired, expired, cursorId);
         assertIndexedPageWork(nextPlan, 100);
-        assertThat(new AiTaskRecoveryService(jdbc, mapper, transactions).recoverExpiredTasks()).isEqualTo(1_000);
+        assertThat(new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions).recoverExpiredTasks()).isEqualTo(1_000);
     }
 
     @Test
@@ -227,7 +231,7 @@ class AiTaskMySqlRecoveryIntegrationTest {
     @Test
     void continuallyNewExpiriesDoNotStarveAClientAfterItsLockIsReleased() throws Exception {
         String abandoned = claim("busy:abandoned", true);
-        var recovery = spy(new AiTaskRecoveryService(jdbc, mapper, transactions));
+        var recovery = spy(new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions));
         AtomicReference<Instant> clock = new AtomicReference<>(recovery.databaseNow());
         // Control only time; paging, NOWAIT, lock release and recovery commits use real MySQL.
         doAnswer(invocation -> clock.get()).when(recovery).databaseNow();
@@ -297,11 +301,11 @@ class AiTaskMySqlRecoveryIntegrationTest {
             }));
             assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
             org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(java.time.Duration.ofSeconds(3), () ->
-                    assertThat(new AiTaskRecoveryService(jdbc, mapper, transactions).recoverExpiredTasks()).isZero());
+                    assertThat(new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions).recoverExpiredTasks()).isZero());
             assertThat(jdbc.queryForObject("select status from ai_task_ledger where id=?", String.class, task)).isEqualTo("PROCESSING");
             release.countDown();
             owner.get(10, TimeUnit.SECONDS);
-            assertThat(new AiTaskRecoveryService(jdbc, mapper, transactions).recoverExpiredTasks()).isEqualTo(1);
+            assertThat(new AiTaskRecoveryService(new AiTaskRepository(jdbc), new IntegrationClientRepository(jdbc), mapper, transactions).recoverExpiredTasks()).isEqualTo(1);
         } finally {
             release.countDown();
             executor.shutdownNow();

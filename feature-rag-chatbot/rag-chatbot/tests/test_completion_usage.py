@@ -2,7 +2,13 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-import api
+from app import main as api
+from app.controllers import health as health_controller, documents as document_controller
+from app.controllers import retrieval as retrieval_controller, completion as completion_controller
+from app.core import config
+from app.models import schemas
+from app.repositories import faiss_repository
+from app.services import runtime as runtime_module, completion as completion_service, retrieval as retrieval_service
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
@@ -19,7 +25,7 @@ class CompletionUsageTest(unittest.TestCase):
             content=" Answer ",
             usage_metadata={"input_tokens": 120, "output_tokens": 24, "total_tokens": 160},
         )
-        self.factory = self.enterContext(patch.object(api, "ChatGoogleGenerativeAI", return_value=self.llm))
+        self.factory = self.enterContext(patch.object(completion_service, "ChatGoogleGenerativeAI", return_value=self.llm))
         self.enterContext(patch.object(api, "start_worker", return_value=None))
         self.client = self.enterContext(TestClient(api.app))
 

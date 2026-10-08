@@ -4,7 +4,8 @@ import unittest
 from unittest.mock import patch
 
 import httpx
-import ingestion
+from app.workers import ingestion
+from app.services import document_parser
 from test_ingestion import FakeClient, FakeResponse
 
 
@@ -81,7 +82,7 @@ class IngestionSecurityTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(["attempt-1", "attempt-2"], [item["attemptId"] for item in processed])
 
     def test_rejects_empty_and_oversized_documents_before_parsing(self):
-        for content in (b"", b"a" * (ingestion.MAX_DOCUMENT_BYTES + 1)):
+        for content in (b"", b"a" * (document_parser.MAX_DOCUMENT_BYTES + 1)):
             with self.subTest(size=len(content)), self.assertRaisesRegex(ValueError, "size"):
                 ingestion.extract_text(content, "text/plain", "fixture.txt")
 

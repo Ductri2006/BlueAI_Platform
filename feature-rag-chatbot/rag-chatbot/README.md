@@ -6,6 +6,33 @@ Chatbot RAG cho hệ sinh thái eSIM Bluecom. Module đọc knowledge base
 dạng CSV, tạo embedding bằng Gemini, lưu vector trong FAISS và dùng Gemini để
 trả lời dựa trên các tài liệu được truy xuất.
 
+## Cấu trúc ứng dụng
+
+```text
+rag-chatbot/
+├── app/
+│   ├── main.py               # ASGI app, đăng ký router, vòng đời worker
+│   ├── controllers/          # HTTP: health, retrieval, completion, documents
+│   ├── services/             # Retrieval, Gemini completion, đọc tài liệu, runtime
+│   ├── repositories/         # FAISS persistence và đọc knowledge base CSV
+│   ├── models/               # Pydantic request/response, giữ contract với Java
+│   ├── core/                 # Cấu hình .env và xác thực worker API key
+│   ├── workers/              # Claim → ingest → report kết quả về Java
+│   ├── prompts/              # Prompt cho CLI demo
+│   └── cli/                  # Chatbot chạy trong terminal
+├── tests/
+├── scripts/
+├── Papers/
+├── api.py                    # Entry point tương thích uvicorn api:app
+├── chatbot.py                # Entry point tương thích python chatbot.py
+└── ingestion.py              # Export tương thích cho worker
+```
+
+Luồng HTTP: `Controller → Service → Repository`; JSON từ Pydantic model là
+representation của API. Worker dùng cùng runtime/index với các request HTTP.
+Controller không tạo Gemini client hoặc quản lý FAISS; repository không phụ thuộc
+vào FastAPI. Test mock dependency tại module sở hữu nó.
+
 ## Dữ liệu
 
 File `Papers/blueai_rag_knowledge_base_sample.csv` gồm 33 record tổng hợp phục vụ
@@ -31,6 +58,15 @@ hai thì Google client ưu tiên `GOOGLE_API_KEY`. Sau đó chạy service cùng
 ```powershell
 .\scripts\start-rag-local.ps1
 ```
+
+Hoặc khởi động trực tiếp từ thư mục `rag-chatbot` (đọc cấu hình trong `.env`):
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Lệnh cũ `uvicorn api:app` vẫn dùng được. CLI chạy bằng `python chatbot.py`
+hoặc `python -m app.cli.chatbot`.
 
 Service cung cấp `GET /health`, `GET /ready`, `POST /v1/retrieval/search` và endpoint tương thích
 OpenAI `POST /v1/chat/completions`. Java BE gọi hai API nội bộ với header
@@ -85,4 +121,13 @@ secret bằng file `.env` cục bộ thay vì đưa API key vào image:
 ```powershell
 docker run --rm --env-file .env -p 8000:8000 `
   ghcr.io/ductri2006/blueai_platform/rag-chatbot:rag-v0.1.0
+```
+
+## Kiểm thử cấu trúc đã tách
+
+Chạy từ thư mục `rag-chatbot`; các bài test không gọi provider thật:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -q
+.\.venv\Scripts\python.exe -m compileall -q app api.py chatbot.py ingestion.py
 ```
