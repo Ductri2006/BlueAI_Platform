@@ -79,6 +79,10 @@ def _safe_failure_reason(error: Exception) -> str:
     """Return bounded public diagnostics, never provider bodies, URLs or credentials."""
     if isinstance(error, httpx.TimeoutException):
         return "Document service timed out."
+    if isinstance(error, httpx.ConnectError):
+        return "Document service connection failed."
+    if isinstance(error, httpx.RequestError):
+        return "Document service network request failed."
     if isinstance(error, httpx.HTTPStatusError):
         return f"Document service returned HTTP {error.response.status_code}."
     if isinstance(error, (ValueError, UnicodeError)):
@@ -192,8 +196,12 @@ async def worker_loop(indexer: Indexer) -> None:
             except asyncio.CancelledError:
                 raise
             except httpx.HTTPStatusError as error:
+                _record_failure(f"Java document API: {_safe_failure_reason(error)}")
+                delay = _interval()
+            except httpx.ConnectError:
                 _record_failure(
-                    f"{error.request.method} {error.request.url} -> HTTP {error.response.status_code}"
+                    "Cannot connect to Java document API. Start the Java backend "
+                    "and check JAVA_API_BASE_URL (local default: http://127.0.0.1:8080)."
                 )
                 delay = _interval()
             except Exception as error:
