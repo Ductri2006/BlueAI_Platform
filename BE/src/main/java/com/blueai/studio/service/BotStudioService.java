@@ -6,6 +6,9 @@ import com.blueai.auth.model.UserRole;
 import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.UserRepository;
 import com.blueai.rag.chat.service.RagChatService;
+import com.blueai.rag.document.repository.RagDocumentRepository;
+import com.blueai.rag.document.model.DocumentStatus;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.blueai.studio.dto.BotStudioDtos.BotConfigurationResponse;
 import com.blueai.studio.dto.BotStudioDtos.BotSummaryResponse;
 import com.blueai.studio.dto.BotStudioDtos.CreateBotRequest;
@@ -61,6 +64,7 @@ public class BotStudioService {
     private final DialogRuntimeService runtimeService;
     private final RagChatService ragChatService;
     private final ObjectMapper objectMapper;
+    private final RagDocumentRepository documentRepository;
 
     public BotStudioService(
             UserRepository userRepository,
@@ -72,7 +76,8 @@ public class BotStudioService {
             BotReleaseRepository releaseRepository,
             DialogRuntimeService runtimeService,
             RagChatService ragChatService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            RagDocumentRepository documentRepository
     ) {
         this.userRepository = userRepository;
         this.botRepository = botRepository;
@@ -84,6 +89,7 @@ public class BotStudioService {
         this.runtimeService = runtimeService;
         this.ragChatService = ragChatService;
         this.objectMapper = objectMapper;
+        this.documentRepository = documentRepository;
     }
 
     @Transactional(readOnly = true)
@@ -103,10 +109,10 @@ public class BotStudioService {
                 locale,
                 timezone
         ));
-        if (request.template() == BotCreationTemplate.SALES_DEMO) {
+        if (request.template() == BotCreationTemplate.SALES_DEMO || request.template() == BotCreationTemplate.RAG_DIALOG_DEMO) {
             var template = SalesDialogDemoTemplate.load(objectMapper);
             validate(template.intents(), template.entities(), template.dialogNodes());
-            bot.updateCustomization(false, null);
+            bot.updateCustomization(request.template() == BotCreationTemplate.RAG_DIALOG_DEMO, null);
             persistConfiguration(bot, template.intents(), template.entities(), template.dialogNodes());
         } else if (request.template() == BotCreationTemplate.STARTER
                 || !Boolean.FALSE.equals(request.includeStarterTemplate())) {
@@ -130,6 +136,12 @@ public class BotStudioService {
                     "Bản nháp đã được thay đổi ở nơi khác. Hãy tải lại trước khi lưu."
             );
         }
+        boolean dialogEnabled = request.dialogEnabled() == null ? bot.isDialogEnabled() : request.dialogEnabled();
+        validateRuntimeOptions(dialogEnabled, !Boolean.FALSE.equals(request.blueAiCoreEnabled()));
+        List<String> publicDocuments = request.widgetDocumentIds() == null
+                ? publicDocumentIds(bot) : request.widgetDocumentIds().stream().distinct().toList();
+        validatePublicDocuments(ownerId, publicDocuments);
+        bot.updateRuntimeOptions(dialogEnabled, writeJson(publicDocuments));
         validate(request.intents(), request.entities(), request.dialogNodes());
         bot.updateMetadata(
                 request.name().trim(),
@@ -180,6 +192,8 @@ public class BotStudioService {
     public PublishResponse publish(String ownerId, String botId) {
         Bot bot = requireOwnedBot(ownerId, botId);
         BotSnapshot snapshot = snapshot(bot);
+        validateRuntimeOptions(snapshot.isDialogEnabled(), !Boolean.FALSE.equals(snapshot.blueAiCoreEnabled()));
+        validatePublicDocuments(ownerId, snapshot.publicDocumentIds());
         validate(snapshot.intents(), snapshot.entities(), snapshot.dialogNodes());
         BotRelease release = releaseRepository.findByBot_IdAndRevision(botId, bot.getDraftRevision())
                 .orElseGet(() -> releaseRepository.saveAndFlush(new BotRelease(
@@ -226,7 +240,7 @@ public class BotStudioService {
     BotSnapshot snapshot(Bot bot) {
         BotConfigurationResponse configuration = configuration(bot);
         return new BotSnapshot(
-                2,
+                3,
                 bot.getId(),
                 bot.getOwner().getId(),
                 bot.getName(),
@@ -239,7 +253,9 @@ public class BotStudioService {
                 customization(bot),
                 configuration.intents(),
                 configuration.entities(),
-                configuration.dialogNodes()
+                configuration.dialogNodes(),
+                bot.isDialogEnabled(),
+                publicDocumentIds(bot)
         );
     }
 
@@ -300,7 +316,9 @@ public class BotStudioService {
                 release.getId(),
                 release.getCreatedAt(),
                 true,
-                activeCustomization
+                activeCustomization,
+                snapshot.isDialogEnabled(),
+                snapshot.publicDocumentIds()
         );
         return new BotConfigurationResponse(
                 activeSummary,
@@ -511,12 +529,38 @@ public class BotStudioService {
         }
     }
 
+    private void validateRuntimeOptions(boolean dialog, boolean rag) {
+        if (!dialog && !rag) throw new ApiException(HttpStatus.BAD_REQUEST, "BOT_MODE_REQUIRED",
+                "Bật ít nhất một chế độ RAG hoặc Dialog.");
+    }
+
+    private List<String> publicDocumentIds(Bot bot) {
+        if (bot.getWidgetDocumentIds() == null) return List.of();
+        try {
+            return objectMapper.readValue(bot.getWidgetDocumentIds(),
+                    new TypeReference<List<String>>() {});
+        } catch (JsonProcessingException exception) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "WIDGET_KNOWLEDGE_INVALID", "Cấu hình tài liệu widget không hợp lệ.");
+        }
+    }
+
+    private void validatePublicDocuments(String ownerId, List<String> ids) {
+        for (String id : ids) {
+            if (documentRepository.findByIdAndOwner_Id(id, ownerId)
+                    .filter(document -> document.getStatus() == DocumentStatus.READY).isEmpty()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "WIDGET_DOCUMENT_UNAVAILABLE",
+                        "Chỉ được công khai tài liệu READY thuộc tài khoản quản trị bot.");
+            }
+        }
+    }
+
     private BotSummaryResponse summary(Bot bot) {
         return new BotSummaryResponse(
                 bot.getId(), bot.getName(), bot.getDescription(), bot.getLocale(), bot.getTimezone(),
                 bot.isBlueAiCoreEnabled(), bot.getCustomInstructions(),
                 bot.getStatus(), bot.getPublicKey(), bot.getDraftRevision(), bot.getPublishedReleaseId(), bot.getUpdatedAt(),
-                bot.isActiveForRelease(bot.getPublishedReleaseId()), customization(bot)
+                bot.isActiveForRelease(bot.getPublishedReleaseId()), customization(bot),
+                bot.isDialogEnabled(), publicDocumentIds(bot)
         );
     }
 

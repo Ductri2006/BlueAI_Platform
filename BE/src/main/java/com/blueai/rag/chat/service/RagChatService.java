@@ -280,7 +280,39 @@ public class RagChatService {
         ));
     }
 
+    @Transactional(readOnly = true)
+    public String answerForWidget(BotSnapshot snapshot, String question, List<LlmChatMessage> history) {
+        requireActiveUser(snapshot.ownerId());
+        List<String> allowed = snapshot.publicDocumentIds().stream()
+                .filter(id -> documentRepository.findByIdAndOwner_Id(id, snapshot.ownerId())
+                        .filter(document -> document.getStatus() == DocumentStatus.READY).isPresent()).toList();
+        CustomizationInput customization = (snapshot.customization() == null
+                ? CustomizationInput.defaults() : snapshot.customization()).withDefaults();
+        if (allowed.isEmpty()) return customization.fallbackMessage();
+        List<RetrievedChunk> chunks = retrieve(snapshot.ownerId(), question, allowed);
+        List<RagSourceResponse> sources = new ArrayList<>();
+        for (RetrievedChunk chunk : chunks) {
+            if (!allowed.contains(chunk.documentId()) || chunk.chunkId() == null || chunk.content() == null) continue;
+            documentRepository.findByIdAndOwner_Id(chunk.documentId(), snapshot.ownerId())
+                    .filter(document -> document.getStatus() == DocumentStatus.READY)
+                    .ifPresent(document -> sources.add(toSource(document, chunk)));
+        }
+        if (sources.isEmpty()) return customization.fallbackMessage();
+        List<LlmChatMessage> messages = new ArrayList<>();
+        messages.add(new LlmChatMessage("system", buildSystemPrompt(List.of(), null, sources, List.of(), false,
+                customization, snapshot.name(), snapshot.customInstructions())));
+        history.stream().filter(item -> "user".equals(item.role()) || "assistant".equals(item.role()))
+                .skip(Math.max(0, history.size() - 20))
+                .forEach(item -> messages.add(new LlmChatMessage(item.role(), shorten(item.content(), 2000))));
+        messages.add(new LlmChatMessage("user", question));
+        return completionClient.complete(messages);
+    }
+
     private List<RetrievedChunk> retrieve(String ownerId, String question) {
+        return retrieve(ownerId, question, null);
+    }
+
+    private List<RetrievedChunk> retrieve(String ownerId, String question, List<String> allowedDocumentIds) {
         if (!properties.isRetrieverConfigured()) {
             throw new ApiException(
                     HttpStatus.SERVICE_UNAVAILABLE,
@@ -296,7 +328,7 @@ public class RagChatService {
                     .post()
                     .uri(properties.getRetrievalSearchPath())
                     .header("X-Worker-Api-Key", workerApiKey)
-                    .body(new RetrievalRequest(ownerId, question, RETRIEVAL_LIMIT))
+                    .body(new RetrievalRequest(ownerId, question, RETRIEVAL_LIMIT, allowedDocumentIds))
                     .retrieve()
                     .body(RetrievalResponse.class);
             return response == null || response.matches() == null ? List.of() : response.matches();
@@ -620,7 +652,7 @@ public class RagChatService {
         return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength) + "...";
     }
 
-    private record RetrievalRequest(String userId, String query, int limit) {
+    private record RetrievalRequest(String userId, String query, int limit, List<String> allowedDocumentIds) {
     }
 
     private record RetrievalResponse(List<RetrievedChunk> matches) {

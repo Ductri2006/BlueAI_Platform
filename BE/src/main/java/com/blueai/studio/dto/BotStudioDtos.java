@@ -51,7 +51,9 @@ public final class BotStudioDtos {
             String publishedReleaseId,
             Instant updatedAt,
             boolean active,
-            CustomizationInput customization
+            CustomizationInput customization,
+            boolean dialogEnabled,
+            List<String> widgetDocumentIds
     ) {
     }
 
@@ -175,7 +177,9 @@ public final class BotStudioDtos {
             @NotNull List<@Valid IntentInput> intents,
             @NotNull List<@Valid EntityInput> entities,
             @NotNull List<@Valid DialogNodeInput> dialogNodes,
-            @Valid CustomizationInput customization
+            @Valid CustomizationInput customization,
+            Boolean dialogEnabled,
+            @Size(max = 100) List<@NotBlank @Pattern(regexp = "[0-9a-fA-F-]{36}") String> widgetDocumentIds
     ) {
     }
 

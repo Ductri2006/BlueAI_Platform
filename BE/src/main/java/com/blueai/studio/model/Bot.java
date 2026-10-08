@@ -122,6 +122,19 @@ public class Bot {
     @Column(name = "row_version", nullable = false)
     private long rowVersion;
 
+    @Column(name = "dialog_enabled")
+    private Boolean dialogEnabled;
+
+    @Column(name = "widget_document_ids", length = 4000)
+    private String widgetDocumentIds;
+
+    public boolean isDialogEnabled() { return !Boolean.FALSE.equals(dialogEnabled); }
+    public String getWidgetDocumentIds() { return widgetDocumentIds; }
+    public void updateRuntimeOptions(boolean dialogEnabled, String widgetDocumentIds) {
+        this.dialogEnabled = dialogEnabled;
+        this.widgetDocumentIds = widgetDocumentIds;
+    }
+
     protected Bot() {
     }
 

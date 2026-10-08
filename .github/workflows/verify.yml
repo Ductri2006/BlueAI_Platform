@@ -89,7 +89,7 @@ jobs:
         run: |
           docker exec "$MYSQL_CONTAINER_ID" mysql --protocol=TCP -h127.0.0.1 -uroot -pci-disposable-root-password -e "CREATE DATABASE blueai_legacy_v1_test; CREATE DATABASE blueai_legacy_v3_test; GRANT ALL ON blueai_legacy_v1_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v3_test.* TO 'migration_test'@'%';"
       - run: mvn -B -Dtest=MySqlMigrationIntegrationTest,MySqlLegacyMigrationIntegrationTest test
-      - run: mvn -B -Dtest=AuthMySqlConcurrencyIntegrationTest,AuthAdminMutationMySqlIntegrationTest,AiTaskMySqlRecoveryIntegrationTest,AiTaskMySqlAuthorizationIntegrationTest test
+      - run: mvn -B -Dtest=AuthMySqlConcurrencyIntegrationTest,SingleLoginMySqlIntegrationTest,AuthAdminMutationMySqlIntegrationTest,AiTaskMySqlRecoveryIntegrationTest,AiTaskMySqlAuthorizationIntegrationTest test
 
   flyway-engine-upgrade:
     name: Flyway 11.7.2 to 11.20.3 on MySQL 8.4

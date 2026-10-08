@@ -19,6 +19,31 @@ src/main/java/com/blueai/auth/
 
 Luồng xử lý: `HTTP request → Controller → Service → Repository → MySQL`; response đi ngược lại qua DTO và được Spring MVC serialize thành JSON.
 
+Module AI task cũng theo cùng cách phân lớp:
+
+```text
+src/main/java/com/blueai/ai/task/
+├── controller/   # HTTP cho AI tasks và admin integration clients
+├── service/      # Use cases, kiểm tra quyền, idempotency, deadline, recovery
+├── repository/   # SQL ledger/client/grant/evidence; giữ nguyên row locks
+├── model/        # AiClientPrincipal
+├── dto/          # Validation JSON request dùng chung
+├── config/       # Properties và SecurityFilterChain
+├── security/     # Credential filter, giới hạn body, hashing
+├── provider/     # Adapter completion/retrieval có timeout và capacity limit
+├── scheduler/    # Trigger định kỳ cho durable recovery
+└── exception/    # Error contract và controller advice
+```
+
+Controller chỉ nhận/trả HTTP; service gọi repository để đọc/ghi dữ liệu.
+Transaction boundary và thứ tự khóa vẫn do service quản lý. SQL `FOR UPDATE`,
+`NOWAIT`, điều kiện expiration và fencing vẫn nằm trong repository, nên việc
+phân lớp không thay đổi idempotency hay cách thu hồi quyền khi task đang chạy.
+Các API `/api/v1/ai/tasks` và `/api/v1/admin/integration-clients` giữ nguyên.
+
+Sau khi chuyển package, chạy Maven với `clean` để xóa các class cũ trong
+`target/classes` trước khi khởi động, ví dụ `mvn clean spring-boot:run` từ `BE`.
+
 ## Chức năng
 
 - Chỉ có hai vai trò `ADMIN` và `USER`; không có đăng ký công khai. Tài khoản chỉ được tạo bởi quản trị viên.

@@ -1,6 +1,6 @@
 import unittest
 
-import chatbot
+from app.cli import chatbot
 
 
 class ChatbotConfigurationTests(unittest.TestCase):

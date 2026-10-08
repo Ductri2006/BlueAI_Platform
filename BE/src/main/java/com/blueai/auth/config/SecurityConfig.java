@@ -131,7 +131,9 @@ public class SecurityConfig {
             Number tokenVersion = jwt.getClaim("authVersion");
             if (user == null || user.getStatus() != com.blueai.auth.model.UserStatus.ACTIVE
                     || user.isDeleted() || tokenVersion == null
-                    || tokenVersion.longValue() != user.getAuthVersion()) {
+                    || tokenVersion.longValue() != user.getAuthVersion()
+                    || jwt.getClaimAsString("sessionId") == null
+                    || !java.util.Objects.equals(user.getActiveSessionId(), jwt.getClaimAsString("sessionId"))) {
                 return OAuth2TokenValidatorResult.failure(new OAuth2Error(
                         "invalid_token",
                         "The account is disabled or the access token has been revoked.",

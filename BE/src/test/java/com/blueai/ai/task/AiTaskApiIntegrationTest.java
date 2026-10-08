@@ -1,5 +1,8 @@
 package com.blueai.ai.task;
 
+import com.blueai.ai.task.service.AiTaskRecoveryService;
+import com.blueai.ai.task.provider.ConfiguredAiProviders;
+
 import com.blueai.BlueAiAuthApplication;
 import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserRole;

@@ -1,6 +1,7 @@
 package com.blueai.studio.service;
 
 import com.blueai.studio.dto.BotStudioDtos.DialogNodeInput;
+import com.blueai.studio.dto.BotStudioDtos.CustomizationInput;
 import com.blueai.studio.dto.BotStudioDtos.EntityInput;
 import com.blueai.studio.dto.BotStudioDtos.EntityValueInput;
 import com.blueai.studio.dto.BotStudioDtos.IntentInput;
@@ -36,6 +37,7 @@ public class DialogRuntimeService {
     }
 
     public RuntimeResponse welcome(BotSnapshot snapshot) {
+        if (!snapshot.isDialogEnabled()) return new RuntimeResponse("Xin chào! Bạn muốn tra cứu thông tin gì?", null, Map.of(), null, emptyContext(), false);
         DialogNodeInput welcome = snapshot.dialogNodes().stream()
                 .filter(node -> node.type() == DialogNodeType.WELCOME)
                 .min(Comparator.comparingInt(DialogNodeInput::priority))
@@ -52,6 +54,12 @@ public class DialogRuntimeService {
 
     public RuntimeResponse evaluate(BotSnapshot snapshot, PreviewContext suppliedContext, String message,
                                     Map<String, DialogContextBridge.Suggestion> suggestions) {
+        if (!snapshot.isDialogEnabled()) {
+            return new RuntimeResponse((snapshot.customization() == null
+                    ? CustomizationInput.defaults() : snapshot.customization().withDefaults()).fallbackMessage(),
+                    null, Map.of(), null, emptyContext(), true)
+                    .withTrace(new DialogTrace("CORE", "Dialog đã tắt; chuyển trực tiếp sang RAG.", List.of(), Map.of(), null));
+        }
         PreviewContext current = suppliedContext == null ? emptyContext() : suppliedContext;
         String normalizedMessage = normalize(message);
         if (Set.of("huy", "cancel", "bat dau lai", "restart", "reset").contains(normalizedMessage)) {

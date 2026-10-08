@@ -4,7 +4,8 @@ import unittest
 from unittest.mock import patch
 
 import httpx
-import ingestion
+from app.workers import ingestion
+from app.services import document_parser
 from test_ingestion import FakeClient, FakeResponse
 
 
@@ -81,7 +82,7 @@ class IngestionSecurityTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(["attempt-1", "attempt-2"], [item["attemptId"] for item in processed])
 
     def test_rejects_empty_and_oversized_documents_before_parsing(self):
-        for content in (b"", b"a" * (ingestion.MAX_DOCUMENT_BYTES + 1)):
+        for content in (b"", b"a" * (document_parser.MAX_DOCUMENT_BYTES + 1)):
             with self.subTest(size=len(content)), self.assertRaisesRegex(ValueError, "size"):
                 ingestion.extract_text(content, "text/plain", "fixture.txt")
 
@@ -91,3 +92,37 @@ class IngestionSecurityTest(unittest.IsolatedAsyncioTestCase):
         error = httpx.HTTPStatusError("private-fixture", request=request, response=response)
         self.assertEqual("Document service returned HTTP 429.", ingestion._safe_failure_reason(error))
         self.assertEqual("Document service timed out.", ingestion._safe_failure_reason(httpx.ReadTimeout("secret")))
+
+    async def test_connection_failure_names_java_and_worker_recovers_next_poll(self):
+        request = httpx.Request("POST", "http://java.invalid/?key=secret-fixture")
+        error = httpx.ConnectError("password=private-fixture", request=request)
+        self.assertEqual("Document service connection failed.", ingestion._safe_failure_reason(error))
+        with patch.dict("os.environ", {"JAVA_API_BASE_URL": "http://java.invalid", "JAVA_WORKER_API_KEY": "worker-key"}), \
+                patch.dict(ingestion._state, {"consecutiveFailures": 0, "lastError": None, "lastSuccessAt": None}), \
+                patch.object(ingestion, "run_worker_once", side_effect=[error, 0]), \
+                patch.object(ingestion, "_sleep_or_trigger", side_effect=[None, asyncio.CancelledError()]), \
+                self.assertLogs(ingestion.LOGGER, level="WARNING") as logs:
+            with self.assertRaises(asyncio.CancelledError):
+                await ingestion.worker_loop(lambda *_args: 1)
+            self.assertIn("Cannot connect to Java document API", str(logs.output))
+            self.assertIn("JAVA_API_BASE_URL", str(logs.output))
+            self.assertNotIn("secret-fixture", str(logs.output))
+            self.assertNotIn("private-fixture", str(logs.output))
+            self.assertEqual(0, ingestion._state["consecutiveFailures"])
+            self.assertIsNone(ingestion._state["lastError"])
+            self.assertIsNotNone(ingestion._state["lastSuccessAt"])
+
+    async def test_poll_http_error_does_not_log_credentials_in_request_url(self):
+        request = httpx.Request("POST", "http://java.invalid/?key=secret-fixture")
+        response = httpx.Response(503, request=request, text="private-fixture")
+        error = httpx.HTTPStatusError("private-fixture", request=request, response=response)
+        with patch.dict("os.environ", {"JAVA_API_BASE_URL": "http://java.invalid", "JAVA_WORKER_API_KEY": "worker-key"}), \
+                patch.dict(ingestion._state, {"consecutiveFailures": 0}), \
+                patch.object(ingestion, "run_worker_once", side_effect=error), \
+                patch.object(ingestion, "_sleep_or_trigger", side_effect=asyncio.CancelledError()), \
+                self.assertLogs(ingestion.LOGGER, level="WARNING") as logs:
+            with self.assertRaises(asyncio.CancelledError):
+                await ingestion.worker_loop(lambda *_args: 1)
+            self.assertIn("HTTP 503", str(logs.output))
+            self.assertNotIn("secret-fixture", str(logs.output))
+            self.assertNotIn("private-fixture", str(logs.output))

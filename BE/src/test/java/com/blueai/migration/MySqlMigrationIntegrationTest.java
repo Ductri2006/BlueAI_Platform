@@ -116,18 +116,24 @@ class MySqlMigrationIntegrationTest {
                         "idempotency_key_type", "VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"))
                 .cleanDisabled(true)
                 .load();
-        assertThat(latest.migrate().migrationsExecuted).isEqualTo(3);
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("9");
+        assertThat(latest.migrate().migrationsExecuted).isEqualTo(4);
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("10");
         latest.validate();
         assertThat(latest.info().pending()).isEmpty();
         assertThat(latest.migrate().migrationsExecuted).isZero();
 
         try (var connection = DriverManager.getConnection(url, username, password);
              var statement = connection.createStatement()) {
-            try (var node = statement.executeQuery("SELECT response_text,context_reuse_policy FROM studio_bot_dialog_nodes")) {
+            try (var node = statement.executeQuery("""
+                    SELECT n.response_text,n.context_reuse_policy,b.dialog_enabled,b.widget_document_ids
+                    FROM studio_bot_dialog_nodes n JOIN studio_bots b ON b.id=n.bot_id
+                    """)) {
                 assertThat(node.next()).isTrue();
                 assertThat(node.getString("response_text")).isEqualTo("Nội dung cũ cần bảo toàn");
                 assertThat(node.getString("context_reuse_policy")).isEqualTo("NONE");
+                assertThat(node.getBoolean("dialog_enabled")).isTrue();
+                assertThat(node.wasNull()).isFalse();
+                assertThat(node.getString("widget_document_ids")).isNull();
                 assertThat(node.next()).isFalse();
             }
             try (var task = connection.prepareStatement("SELECT status,idempotency_key,created_at,expires_at FROM ai_task_ledger WHERE id=?")) {
@@ -140,10 +146,11 @@ class MySqlMigrationIntegrationTest {
                     assertThat(result.getTimestamp("created_at")).isEqualTo(result.getTimestamp("expires_at"));
                 }
             }
-            try (var users = statement.executeQuery("SELECT id,auth_version FROM app_users")) {
+            try (var users = statement.executeQuery("SELECT id,auth_version,active_session_id FROM app_users")) {
                 assertThat(users.next()).isTrue();
                 assertThat(users.getString("id")).isEqualTo(userId);
                 assertThat(users.getLong("auth_version")).isZero();
+                assertThat(users.getString("active_session_id")).isNull();
                 assertThat(users.next()).isFalse();
             }
             String usageId = UUID.randomUUID().toString();

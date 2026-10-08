@@ -61,6 +61,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, [status]);
 
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    let checking = false;
+    const checkSession = async () => {
+      if (checking || document.visibilityState === 'hidden') return;
+      checking = true;
+      try { await blueAiApi.getCurrentUser(); }
+      catch { /* A revoked session is cleared by the API client; network errors keep it. */ }
+      finally { checking = false; }
+    };
+    const interval = window.setInterval(() => { void checkSession(); }, 15000);
+    const onFocus = () => { void checkSession(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [status]);
+
   const login = useCallback(async (credentials: LoginCredentials) => {
     const currentUser = await blueAiApi.login(credentials);
     setUser(currentUser);
