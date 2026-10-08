@@ -1,6 +1,8 @@
 package com.blueai.studio.service;
 
 import com.blueai.auth.exception.ApiException;
+import com.blueai.rag.chat.service.RagChatService;
+import com.blueai.rag.chat.service.LlmChatMessage;
 import com.blueai.studio.config.WidgetProtectionProperties;
 import com.blueai.studio.dto.BotStudioDtos.CreateWidgetSessionResponse;
 import com.blueai.studio.dto.BotStudioDtos.PreviewContext;
@@ -29,6 +31,9 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.UUID;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
 
 @Service
 public class BotRuntimeService {
@@ -44,6 +49,7 @@ public class BotRuntimeService {
     private final WidgetProtectionProperties protectionProperties;
     private final WidgetProtectionMetrics protectionMetrics;
     private final ObjectMapper objectMapper;
+    private final RagChatService ragChatService;
 
     public BotRuntimeService(
             BotRepository botRepository,
@@ -56,7 +62,8 @@ public class BotRuntimeService {
             WidgetSessionRequestCoordinator requestCoordinator,
             WidgetProtectionProperties protectionProperties,
             WidgetProtectionMetrics protectionMetrics,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            RagChatService ragChatService
     ) {
         this.botRepository = botRepository;
         this.releaseRepository = releaseRepository;
@@ -69,6 +76,7 @@ public class BotRuntimeService {
         this.protectionProperties = protectionProperties;
         this.protectionMetrics = protectionMetrics;
         this.objectMapper = objectMapper;
+        this.ragChatService = ragChatService;
     }
 
     @Transactional
@@ -246,8 +254,13 @@ public class BotRuntimeService {
 
             BotRelease release = requireRelease(session.getBot(), session.getReleaseId());
             BotSnapshot snapshot = readJson(release.getConfigurationSnapshot(), BotSnapshot.class);
-            PreviewContext state = readJson(session.getStateJson(), PreviewContext.class);
-            RuntimeResponse result = dialogRuntimeService.evaluate(snapshot, state, trimmedMessage);
+            WidgetState state = readWidgetState(session.getStateJson());
+            RuntimeResponse result = dialogRuntimeService.evaluate(snapshot, state.dialogContext(), trimmedMessage);
+            boolean handled = result.context().pendingEntity() != null || !result.fallback() || result.dialogHandled();
+            if (!handled && !Boolean.FALSE.equals(snapshot.blueAiCoreEnabled())) {
+                String answer = ragChatService.answerForWidget(snapshot, trimmedMessage, state.history());
+                result = new RuntimeResponse(answer, null, Map.of(), "BlueAI Core", result.context(), false);
+            }
             RuntimeMessageResponse response = new RuntimeMessageResponse(
                     request.requestId(),
                     session.getId(),
@@ -257,12 +270,32 @@ public class BotRuntimeService {
             );
 
             String responseJson = writeJson(response);
-            session.updateState(writeJson(result.context()));
+            List<LlmChatMessage> history = new ArrayList<>(state.history());
+            history.add(new LlmChatMessage("user", trimmedMessage));
+            history.add(new LlmChatMessage("assistant", result.message()));
+            history = history.subList(Math.max(0, history.size() - 12), history.size());
+            session.updateState(writeJson(new WidgetState(result.context(), history)));
             session.incrementTurnCount();
             sessionRepository.saveAndFlush(session);
             turnRepository.saveAndFlush(new BotTurn(session, request.requestId(), digest, responseJson));
             contextStore.recordResponse(sessionId, digest, responseJson, trimmedMessage);
             return response;
+        }
+    }
+
+    private record WidgetState(PreviewContext dialogContext, List<LlmChatMessage> history) {
+        private WidgetState {
+            history = history == null ? List.of() : List.copyOf(history);
+        }
+    }
+
+    private WidgetState readWidgetState(String json) {
+        try {
+            if (objectMapper.readTree(json).has("dialogContext")) return readJson(json, WidgetState.class);
+            // Sessions created by the earlier Dialog-only runtime remain readable.
+            return new WidgetState(readJson(json, PreviewContext.class), List.of());
+        } catch (JsonProcessingException exception) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "WIDGET_STATE_INVALID", "Không thể đọc trạng thái widget.");
         }
     }
 

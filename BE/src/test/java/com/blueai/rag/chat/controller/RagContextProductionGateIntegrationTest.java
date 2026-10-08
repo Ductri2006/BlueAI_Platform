@@ -59,6 +59,8 @@ class RagContextProductionGateIntegrationTest {
     @Autowired private ConversationSummaryRepository summaries;
     @Autowired private UserMemoryRepository memories;
     @Autowired private UserRepository users;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired private jakarta.persistence.EntityManager entityManager;
     @MockitoBean private RagRestClientFactory clients;
     private MockRestServiceServer provider;
 
@@ -80,11 +82,17 @@ class RagContextProductionGateIntegrationTest {
     void hundredPersistedMessagesAndOversizedSummaryProduceBoundedProviderHistory() throws Exception {
         String token = register("long-history@example.test");
         Conversation conversation = createConversation(token);
+        Instant fixtureStart = Instant.now().minusSeconds(1000);
         for (int i = 0; i < 100; i++) {
             String content = (i == 99 ? "NEWEST-CORRECTION: 42 sales, budget 3 million. " : "OLD-TURN-" + i + " ")
                     + "synthetic filler ".repeat(180);
-            messages.saveAndFlush(new ConversationMessage(conversation, MessageRole.USER, content));
+            var persisted = messages.saveAndFlush(new ConversationMessage(conversation, MessageRole.USER, content));
+            // This tests context budgets, so fixture order must not depend on wall-clock precision.
+            jdbc.update("UPDATE rag_conversation_messages SET created_at = ? WHERE id = ?",
+                    java.sql.Timestamp.from(fixtureStart.plusMillis(i)), persisted.getId());
         }
+        entityManager.clear();
+        conversation = conversations.findById(conversation.getId()).orElseThrow();
         String oversizedSummary = "SAVED-SUMMARY: Aurora opportunity. " + "summary filler ".repeat(500);
         summaries.saveAndFlush(new ConversationSummary(conversation, oversizedSummary, 80));
         expectCompletion(body -> {

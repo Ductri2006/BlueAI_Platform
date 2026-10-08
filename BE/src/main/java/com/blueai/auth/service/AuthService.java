@@ -129,6 +129,14 @@ public class AuthService {
         // Also bypass a token loaded earlier by a surrounding transaction.
         entityManager.refresh(current, LockModeType.PESSIMISTIC_WRITE);
 
+        // A live legacy token with no active family must reauthenticate. Previously
+        // revoked tokens after logout retain the existing reuse response/audit.
+        if (!current.getFamilyId().equals(user.getActiveSessionId())
+                && (user.getActiveSessionId() != null || current.getRevokedAt() == null)) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "SESSION_REPLACED",
+                    "Tài khoản đã đăng nhập trên thiết bị khác. Vui lòng đăng nhập lại.");
+        }
+
         if (current.getRevokedAt() != null) {
             refreshTokenRepository.revokeFamily(current.getUser().getId(), current.getFamilyId(), now);
             auditLogService.recordInTransaction("REFRESH_TOKEN_REUSE", "FAILURE", current.getUser().getId(), current.getUser().getId());
@@ -164,7 +172,8 @@ public class AuthService {
     @Transactional
     public void logout(String rawRefreshToken) {
         String tokenHash = hashToken(rawRefreshToken);
-        if (lockRefreshTokenOwner(tokenHash).isEmpty()) {
+        Optional<User> lockedOwner = lockRefreshTokenOwner(tokenHash);
+        if (lockedOwner.isEmpty()) {
             // Unauthenticated junk must not generate unbounded audit writes.
             return;
         }
@@ -172,6 +181,11 @@ public class AuthService {
                 .ifPresent(token -> {
                     String userId = token.getUser().getId();
                     int revoked = refreshTokenRepository.revokeFamily(userId, token.getFamilyId(), Instant.now());
+                    User owner = entityManager.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE);
+                    if (token.getFamilyId().equals(owner.getActiveSessionId())) {
+                        owner.replaceSession(null);
+                        userRepository.saveAndFlush(owner);
+                    }
                     if (revoked > 0) {
                         auditLogService.recordInTransaction("LOGOUT", "SUCCESS", userId, userId);
                     }
@@ -203,6 +217,12 @@ public class AuthService {
     }
 
     private AuthResponse issueSession(User user, String familyId) {
+        // The caller holds the user row lock (login) or owns the new row (register).
+        // Revoke before issuing the new family, including sessions from older releases.
+        refreshTokenRepository.revokeAllForUser(user.getId(), Instant.now());
+        user = entityManager.find(User.class, user.getId(), LockModeType.PESSIMISTIC_WRITE);
+        user.replaceSession(familyId);
+        userRepository.saveAndFlush(user);
         return createSessionTokens(user, familyId).response();
     }
 
@@ -241,6 +261,7 @@ public class AuthService {
                 .claim("email", user.getEmail())
                 .claim("roles", List.of(user.getRole().name()))
                 .claim("authVersion", user.getAuthVersion())
+                .claim("sessionId", user.getActiveSessionId())
                 .claim("type", "access")
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).type("JWT").build();

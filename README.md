@@ -291,6 +291,8 @@ Mẫu **Demo sales — 6 kịch bản Dialog** gồm chào hỏi, giờ chi nhá
 > [!WARNING]
 > **Phát hành bot và áp dụng làm BlueAI chính là hai thao tác khác nhau.** Cấu hình active cho **Hỏi BlueAI** dùng chung ở cấp nền tảng; kích hoạt một bot sẽ bỏ active của bot khác. Chưa có tự chọn cấu hình theo phòng ban. Đừng áp dụng bot QA làm cấu hình chính nếu chưa được team đồng ý.
 
+Mẫu **Demo sales — RAG + Dialog cho website** hỗ trợ chọn **RAG + Dialog**, **chỉ RAG** hoặc **chỉ Dialog**. Chọn tài liệu READY được phép công khai cho widget trước khi phát hành. Xem [use case và cách nhúng](docs/RAG_DIALOG_WIDGET_USE_CASE_2026-10-08.md).
+
 ## 7. Tích hợp widget
 
 Bot đã phát hành cung cấp script tại tab **Tích hợp**; widget phục vụ ở `/widget.js`. Đây là kênh nhúng riêng với chat nội bộ có đăng nhập.
@@ -333,6 +335,7 @@ Tên model là **giá trị trong source**, không bảo đảm provider cho ph�
 
 Source có kiểm tra quyền server/ownership, password hashing, refresh rotation, cookie HttpOnly/SameSite, Origin guard, upload validation, quota/idempotency, security headers và CI. Chúng không chứng minh hệ thống hết mọi rủi ro.
 
+- Mỗi tài khoản chỉ có một phiên đăng nhập: login mới thu hồi access/refresh của thiết bị cũ. Frontend kiểm tra phiên mỗi 15 giây khi đang mở và khi quay lại tab.
 - Browser dùng refresh cookie, access token trong RAM; nâng từ bản localStorage cũ cần đăng nhập lại.
 - Production cần HTTPS/cookie Secure; ưu tiên FE/API cùng origin. Nếu `VITE_API_BASE_URL` khác origin, review CORS và CSP `connect-src` trong [security headers](FE/security-headers.conf), không mở wildcard cho tiện.
 - Dùng `compose.yaml` **cùng** `compose.production.yaml`, không chạy override một mình. Runbook nêu điều kiện secret, proxy CIDR, mạng và readiness.

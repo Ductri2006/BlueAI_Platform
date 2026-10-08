@@ -117,7 +117,7 @@ class MySqlMigrationIntegrationTest {
                 .cleanDisabled(true)
                 .load();
         assertThat(latest.migrate().migrationsExecuted).isEqualTo(3);
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("9");
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("10");
         latest.validate();
         assertThat(latest.info().pending()).isEmpty();
         assertThat(latest.migrate().migrationsExecuted).isZero();

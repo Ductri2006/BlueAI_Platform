@@ -7,6 +7,7 @@ interface TryItOutPanelProps {
   botId: string;
   botName: string;
   blueAiCoreEnabled: boolean;
+  dialogEnabled?: boolean;
   customization?: StudioCustomization;
   onClose: () => void;
   welcomeMessage?: string;
@@ -50,8 +51,8 @@ const structureLabels: Record<string, string> = {
   summary_then_detail: 'Tóm tắt → chi tiết',
 };
 
-export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, blueAiCoreEnabled, customization, onClose, welcomeMessage }) => {
-  const welcome = { ...INITIAL_MESSAGE, text: welcomeMessage || INITIAL_MESSAGE.text };
+export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, blueAiCoreEnabled, dialogEnabled = true, customization, onClose, welcomeMessage }) => {
+  const welcome = { ...INITIAL_MESSAGE, text: welcomeMessage || (dialogEnabled ? INITIAL_MESSAGE.text : 'Chế độ chỉ RAG: hỏi đáp trực tiếp từ kho tri thức, không chạy kịch bản Dialog.') };
   const [items, setItems] = React.useState<TranscriptItem[]>([welcome]);
   const [conversations, setConversations] = React.useState<ConversationResponse[]>([]);
   const [conversationId, setConversationId] = React.useState('');
@@ -126,7 +127,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-400">Try it out</p>
           <h2 className="mt-1 text-base font-black">{botName}</h2>
           <div className="mt-2 flex flex-wrap gap-1 text-[10px] font-bold">
-            <span className={`rounded-full px-2 py-0.5 ${blueAiCoreEnabled ? 'bg-emerald-500/20 text-emerald-200' : 'bg-amber-500/20 text-amber-200'}`}>{blueAiCoreEnabled ? 'BlueAI Core bật' : 'Chỉ Dialog'}</span>
+            <span className={`rounded-full px-2 py-0.5 ${blueAiCoreEnabled ? 'bg-emerald-500/20 text-emerald-200' : 'bg-amber-500/20 text-amber-200'}`}>{blueAiCoreEnabled ? (dialogEnabled ? 'RAG + Dialog' : 'Chỉ RAG') : 'Chỉ Dialog'}</span>
             {blueAiCoreEnabled && <>
               <span className="rounded-full bg-white/10 px-2 py-0.5 text-slate-300">{toneLabels[customization?.tonePreset || 'professional'] || customization?.tonePreset}</span>
               <span className="rounded-full bg-white/10 px-2 py-0.5 text-slate-300">{lengthLabels[customization?.answerLength || 'balanced'] || customization?.answerLength}</span>
@@ -190,7 +191,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
             </div>
           </div>
         ))}
-        {isSending && <p className="pl-11 text-xs text-slate-400">Đang chạy Dialog và gọi BlueAI Core khi cần…</p>}
+        {isSending && <p className="pl-11 text-xs text-slate-400">{dialogEnabled ? (blueAiCoreEnabled ? 'Đang chạy Dialog và gọi RAG khi cần…' : 'Đang xử lý Dialog…') : 'Đang tra cứu RAG…'}</p>}
         <div ref={endRef} />
       </div>
 

@@ -12,6 +12,7 @@ import {
   type StudioDialogNode,
   type StudioEntity,
   type StudioIntent,
+  type DocumentResponse,
 } from '../../api/blueAiApi';
 import { useAppStore } from '../../store/useAppStore';
 import { TryItOutPanel } from './TryItOutPanel';
@@ -134,7 +135,7 @@ export const ChatbotStudio: React.FC = () => {
     try {
       const result = await blueAiApi.createStudioBot({
         name: newBotName.trim(),
-        description: newBotTemplate === 'SALES_DEMO'
+        description: newBotTemplate !== 'STARTER'
           ? 'DEMO: 6 kịch bản sales, dữ liệu minh họa; không phải báo giá hay đơn hàng thật.'
           : 'Trải nghiệm BlueAI tùy chỉnh cho nghiệp vụ của doanh nghiệp.',
         locale: 'vi-VN',
@@ -149,7 +150,9 @@ export const ChatbotStudio: React.FC = () => {
       if (newBotTemplate === 'SALES_DEMO') setActiveTab('dialog');
       draftGuard.current.dirty = false;
       setIsDirty(false);
-      showToast(newBotTemplate === 'SALES_DEMO'
+      showToast(newBotTemplate === 'RAG_DIALOG_DEMO'
+        ? 'Đã tạo demo RAG + Dialog. Chọn tài liệu công khai trước khi phát hành và nhúng.'
+        : newBotTemplate === 'SALES_DEMO'
         ? 'Đã tạo bản nháp demo 6 kịch bản. Core/LLM đã tắt; bot đang dùng không thay đổi.'
         : 'Đã tạo cấu hình BlueAI với bộ intent và luồng mẫu.', 'success');
     } catch (requestError) {
@@ -211,6 +214,8 @@ export const ChatbotStudio: React.FC = () => {
         locale: configuration.bot.locale,
         timezone: configuration.bot.timezone,
         blueAiCoreEnabled: configuration.bot.blueAiCoreEnabled !== false,
+        dialogEnabled: configuration.bot.dialogEnabled !== false,
+        widgetDocumentIds: configuration.bot.widgetDocumentIds || [],
         customInstructions: configuration.bot.customInstructions || '',
         customization: configuration.customization || configuration.bot.customization || {},
         intents,
@@ -368,8 +373,9 @@ export const ChatbotStudio: React.FC = () => {
         key={configuration.bot.id}
         botId={configuration.bot.id}
         botName={configuration.bot.name}
-        welcomeMessage={configuration.dialogNodes.find(node => node.type === 'WELCOME')?.responseText}
+        welcomeMessage={configuration.bot.dialogEnabled !== false ? configuration.dialogNodes.find(node => node.type === 'WELCOME')?.responseText : undefined}
         blueAiCoreEnabled={configuration.bot.blueAiCoreEnabled !== false}
+        dialogEnabled={configuration.bot.dialogEnabled !== false}
         customization={configuration.customization || configuration.bot.customization}
         onClose={() => setIsPreviewOpen(false)}
       />}
@@ -957,6 +963,26 @@ function SearchableSelect({ label, value, options, onChange, emptyLabel, disable
   </div>;
 }
 
+function WidgetKnowledgeSelector({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
+  const [documents, setDocuments] = React.useState<DocumentResponse[]>([]);
+  const [loadError, setLoadError] = React.useState('');
+  React.useEffect(() => {
+    let active = true;
+    blueAiApi.listDocuments().then(items => { if (active) setDocuments(items.filter(item => item.status === 'READY')); })
+      .catch(error => { if (active) setLoadError(errorMessage(error)); });
+    return () => { active = false; };
+  }, []);
+  return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0B1324]">
+    <h2 className="text-sm font-black">Tài liệu RAG công khai cho widget</h2>
+    <p className="mt-1 text-xs text-slate-500">Chỉ chọn tài liệu được phép chia sẻ cho khách truy cập website. Widget chỉ dùng tài liệu đã chọn và lịch sử phiên của khách. Lưu và phát hành lại để áp dụng; phiên đang mở tiếp tục dùng bản phát hành cũ.</p>
+    {loadError && <p role="alert" className="mt-2 text-xs text-red-600">{loadError}</p>}
+    <div className="mt-3 max-h-52 space-y-2 overflow-auto">{documents.map(document => <label key={document.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selected.includes(document.id)} onChange={event => onChange(event.target.checked ? [...selected, document.id] : selected.filter(id => id !== document.id))} />{document.originalFilename}</label>)}</div>
+    {documents.length === 0 && !loadError && <p className="mt-2 text-xs text-slate-500">Chưa có tài liệu READY. Thêm tài liệu tại Tài liệu &amp; Tri thức RAG trước.</p>}
+    {selected.some(id => !documents.some(document => document.id === id)) && <button type="button" className="mt-2 text-xs text-red-600" onClick={() => onChange(selected.filter(id => documents.some(document => document.id === id)))}>Bỏ tài liệu không còn khả dụng</button>}
+    {selected.length === 0 && <p className="mt-2 text-xs text-amber-700">Chưa chọn nguồn công khai; widget sẽ trả thông báo chưa đủ thông tin khi cần RAG.</p>}
+  </section>;
+}
+
 function BlueAiCorePanel({ configuration, onChange, onCustomizationChange }: { configuration: StudioBotConfiguration; onChange: (bot: StudioBotConfiguration['bot']) => void; onCustomizationChange: (customization: StudioCustomization) => void }) {
   const enabled = configuration.bot.blueAiCoreEnabled !== false;
   const update = (patch: Partial<StudioBotConfiguration['bot']>) => onChange({ ...configuration.bot, ...patch });
@@ -965,9 +991,11 @@ function BlueAiCorePanel({ configuration, onChange, onCustomizationChange }: { c
 
   return <div className="mx-auto max-w-4xl space-y-4">
     <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-[#0B1324]">
-      <div><h1 className="text-base font-black">Cấu hình BlueAI chính</h1><p className="mt-0.5 text-xs text-slate-500">Dialog được xử lý trước, sau đó dùng RAG/LLM chung của BlueAI.</p></div>
-      <button type="button" role="switch" aria-checked={enabled} onClick={() => update({ blueAiCoreEnabled: !enabled })} className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-black ${enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-100 text-slate-500'}`}><span className={`h-2 w-2 rounded-full ${enabled ? 'bg-emerald-500' : 'bg-slate-400'}`} />{enabled ? 'RAG/LLM bật' : 'Chỉ Dialog'}</button>
+      <div><h1 className="text-base font-black">Cấu hình BlueAI chính</h1><p className="mt-0.5 text-xs text-slate-500">Chọn RAG + Dialog, chỉ RAG hoặc chỉ Dialog. Chế độ được áp dụng cho chat và widget sau khi lưu, phát hành.</p></div>
+      <label className="min-w-48"><span className={labelClass}>Chế độ trợ lý</span><select aria-label="Chế độ trợ lý" value={enabled ? (configuration.bot.dialogEnabled !== false ? 'hybrid' : 'rag') : 'dialog'} onChange={event => update({ blueAiCoreEnabled: event.target.value !== 'dialog', dialogEnabled: event.target.value !== 'rag' })} className={inputClass}><option value="hybrid">RAG + Dialog</option><option value="rag">Chỉ RAG</option><option value="dialog">Chỉ Dialog</option></select></label>
     </div>
+
+    <WidgetKnowledgeSelector selected={configuration.bot.widgetDocumentIds || []} onChange={widgetDocumentIds => update({ widgetDocumentIds })} />
 
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0B1324]">
       <h2 className="text-sm font-black">Danh tính và phong cách</h2>

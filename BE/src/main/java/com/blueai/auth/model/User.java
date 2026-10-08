@@ -49,6 +49,13 @@ public class User {
     @Column(name = "auth_version", nullable = false)
     private long authVersion;
 
+    @Column(name = "active_session_id", length = 36)
+    private String activeSessionId;
+
+    public String getActiveSessionId() { return activeSessionId; }
+
+    public void replaceSession(String sessionId) { this.activeSessionId = sessionId; }
+
     protected User() {
     }
 

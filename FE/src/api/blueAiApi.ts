@@ -178,6 +178,8 @@ export interface StudioBotSummary {
   locale: string;
   timezone: string;
   blueAiCoreEnabled?: boolean;
+  dialogEnabled?: boolean;
+  widgetDocumentIds?: string[];
   customInstructions?: string;
   status: StudioBotStatus;
   publicKey: string;
@@ -528,7 +530,7 @@ export class BlueAiApi {
     locale?: string;
     timezone?: string;
     includeStarterTemplate?: boolean;
-    template?: 'STARTER' | 'SALES_DEMO';
+    template?: 'STARTER' | 'SALES_DEMO' | 'RAG_DIALOG_DEMO';
   }): Promise<StudioBotConfiguration> {
     return this.authorizedRequest<StudioBotConfiguration>('/api/v1/studio/bots', {
       method: 'POST',
@@ -556,6 +558,8 @@ export class BlueAiApi {
       locale: string;
       timezone: string;
       blueAiCoreEnabled?: boolean;
+      dialogEnabled?: boolean;
+      widgetDocumentIds?: string[];
       customInstructions?: string;
       customization?: StudioCustomization;
     },

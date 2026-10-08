@@ -58,7 +58,7 @@ class MySqlFlywayUpgradeIntegrationTest {
                 // A standalone validate before migrate rejects pending migrations.
                 assertThat(flyway.migrate().migrationsExecuted).isEqualTo(3);
                 flyway.validate();
-                assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("9");
+                assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
                 assertThat(flyway.info().pending()).isEmpty();
                 assertThat(flyway.migrate().migrationsExecuted).isZero();
                 verifyPreservationProbes(connection);
