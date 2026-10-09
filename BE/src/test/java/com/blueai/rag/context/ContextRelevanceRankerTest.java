@@ -1,12 +1,40 @@
 package com.blueai.rag.context;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ContextRelevanceRankerTest {
 
     private final ContextRelevanceRanker ranker = new ContextRelevanceRanker();
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Vậy nếu khách dùng máy lock thì sao? Nhắc lại hành trình và số ngày của khách trước khi tư vấn nhé.",
+            "Vay neu khach dung may lock thi sao? Nhac lai hanh trinh va so ngay truoc khi tu van.",
+            "Nhắc lại hành trình của khách rồi đề xuất gói eSIM phù hợp.",
+            "Nhắc lại số ngày, nên chọn gói nào cho khách?",
+            "Khách dùng máy lock thì sao? Nhắc lại tên khách trước nhé.",
+            "Nhắc lại hành trình đã ghi nhận và khuyến nghị cho khách.",
+            "Nhắc lại số lượng từ context, then recommend an eSIM plan.",
+            "Based on context, nhắc lại hành trình and advise on compatibility."
+    })
+    void adviceCombinedWithRecallStillRequiresKnowledge(String question) {
+        assertThat(ranker.isContextRecallQuestion(question)).as(question).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Nhắc lại hành trình và số ngày của khách đã ghi nhận.",
+            "Tôi đã cung cấp số lượng eSIM Nhật Bản nào?",
+            "Nhắc lại tình trạng máy lock mà khách đã cung cấp.",
+            "Nhắc lại gói eSIM và thời hạn tôi đã nói trước đó."
+    })
+    void productAndDeviceFactsAloneRemainContextOnly(String question) {
+        assertThat(ranker.isContextRecallQuestion(question)).as(question).isTrue();
+    }
 
     @Test
     void mixedAndPolicyQuestionsNeverSkipKnowledgeRetrieval() {

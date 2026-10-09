@@ -99,6 +99,63 @@ class RagChatConversationContextIntegrationTest {
     }
 
     @Test
+    void naturalAdviceAndRecallRequestUsesBothKnowledgeAndOwnedHistory() throws Exception {
+        String token = registerAndGetAccessToken("travel-context@example.com");
+        String conversationId = createConversation(token, "Kiểm thử Pháp và Đức");
+        mockMvc.perform(post("/api/v1/conversations/{id}/messages", conversationId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"content":"Khách du lịch Pháp và Đức trong 7 ngày."}
+                                """))
+                .andExpect(status().isCreated());
+        String question = "Vậy nếu khách dùng máy lock thì sao? Nhắc lại hành trình và số ngày của khách trước khi tư vấn nhé.";
+        String evidence = "Không cam kết eSIM hoạt động trên máy khóa mạng; kiểm tra với nhà mạng gốc.";
+        ragStub.expect(once(), requestTo("http://rag-context-stub.test/v1/retrieval/search"))
+                .andExpect(method(POST))
+                .andExpect(jsonPath("$.query", containsString("máy lock")))
+                .andRespond(withSuccess(objectMapper.writeValueAsString(java.util.Map.of(
+                        "matches", java.util.List.of(java.util.Map.of(
+                                "documentId", "lock-fixture", "chunkId", "lock:1", "content", evidence,
+                                "score", 0.9, "filename", "Device-fixture.txt",
+                                "sourceType", "SYNTHETIC_DEMO", "approvalStatus", "PENDING_OWNER_REVIEW")))), MediaType.APPLICATION_JSON));
+        ragStub.expect(once(), requestTo("http://rag-context-stub.test/v1/chat/completions"))
+                .andRespond(request -> {
+                    // Check inside the response so unordered expectation matching
+                    // cannot hide a failed prompt assertion as an unmatched URL.
+                    jsonPath("$.messages[0].content", not(containsString("Turn mode: CONTEXT_ONLY"))).match(request);
+                    jsonPath("$.messages[0].content", containsString(evidence)).match(request);
+                    jsonPath("$.messages[1].content", containsString("Pháp và Đức trong 7 ngày")).match(request);
+                    return withSuccess("""
+                            {"choices":[{"message":{"role":"assistant","content":"Khách đi Pháp và Đức trong 7 ngày. Kiểm tra khóa mạng với nhà mạng gốc trước khi cam kết eSIM. [S1]"}}]}
+                            """, MediaType.APPLICATION_JSON).createResponse(request);
+                });
+        mockMvc.perform(post("/api/v1/conversations/{id}/ask", conversationId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("question", question))))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                        "$.sources[0].excerpt").value(evidence))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                        "$.contextSources[0].type").value("CURRENT_CONVERSATION"));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/v1/conversations/{id}/messages", conversationId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                        "$[2].evidence.sources[0].excerpt").value(evidence))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                        "$[2].evidence.contextSources[0].type").value("CURRENT_CONVERSATION"));
+        String otherToken = registerAndGetAccessToken("travel-context-other@example.com");
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                        "/api/v1/conversations/{id}/messages", conversationId)
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isNotFound());
+        ragStub.verify();
+    }
+
+    @Test
     void mixedRequestRetrievesDocumentsAndPersistsEvidenceForReload() throws Exception {
         String token = registerAndGetAccessToken("mixed-context@example.com");
         String conversationId = createConversation(token, "Hikari");

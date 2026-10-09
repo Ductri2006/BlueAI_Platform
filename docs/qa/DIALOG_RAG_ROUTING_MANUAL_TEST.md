@@ -28,6 +28,8 @@
 | DR-14 | Widget hybrid: câu DR-02 / DR-05 | RAG chỉ dùng tài liệu allowlist của bản phát hành; không lộ tài liệu private, context hoặc trace quản trị. |
 | DR-15 | Widget: retry cùng requestId, hai visitor khác nhau | Không sinh thêm lượt LLM khi retry; không chia sẻ lịch sử giữa visitor. |
 | DR-16 | Chat / preview: tài liệu không tồn tại hoặc thiếu thông tin | Nói rõ thiếu nguồn; không biến demo thành chính sách thật. |
+| DR-17 | Chỉ RAG: ghi nhận khách đi Pháp và Đức 7 ngày; hỏi “Vậy nếu khách dùng máy lock thì sao? Nhắc lại hành trình và số ngày của khách trước khi tư vấn nhé.” | Nhớ đúng Pháp/Đức/7 ngày và tra KB cho phần tương thích; có cả nguồn context và nguồn tài liệu. Không gán citation tài liệu cho dữ kiện khách. |
+| DR-18 | Cùng hội thoại: “Nhắc lại hành trình và số ngày của khách đã ghi nhận.” | Chỉ nhắc dữ kiện đã ghi nhận, không cần trích dẫn KB và không thêm chính sách/tư vấn mới. |
 
 ## Giới hạn cần ghi trong báo cáo
 
