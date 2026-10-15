@@ -112,8 +112,8 @@ class BotStudioIntegrationTest {
 
         mockMvc.perform(get("/api/v1/studio/bots/{botId}", botId)
                         .header("Authorization", "Bearer " + otherToken))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("BOT_NOT_FOUND"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bot.id").value(botId));
 
         JsonNode firstPreview = postJson(
                 "/api/v1/studio/bots/" + botId + "/preview",
@@ -640,7 +640,10 @@ class BotStudioIntegrationTest {
         JsonNode created = postJson("/api/v1/studio/bots", owner, "{\"name\":\"DEMO\",\"template\":\"SALES_DEMO\"}", 201);
         mockMvc.perform(get("/api/v1/studio/bots/" + created.path("bot").path("id").asText())
                         .header("Authorization", "Bearer " + other))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/studio/bots/" + created.path("bot").path("id").asText())
+                        .header("Authorization", "Bearer " + userToken))
+                .andExpect(status().isForbidden());
         postJson("/api/v1/studio/bots", owner, "{\"name\":\"Invalid\",\"template\":\"../private\"}", 400);
     }
 

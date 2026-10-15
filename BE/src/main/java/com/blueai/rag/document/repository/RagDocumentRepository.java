@@ -16,6 +16,39 @@ import java.util.Optional;
 
 public interface RagDocumentRepository extends JpaRepository<RagDocument, String> {
 
+    // Explicit workspace queries: keep the owner-only methods below unchanged
+    // because machine integrations and private-data checks also depend on them.
+    @Query("""
+            select document from RagDocument document
+            where (document.owner.id = :actorId or document.owner.role = com.blueai.auth.model.UserRole.ADMIN)
+              and document.deletedAt is null
+              and (:status is null or document.status = :status)
+            order by document.createdAt desc, document.id asc
+            """)
+    List<RagDocument> findAdminWorkspaceDocuments(@Param("actorId") String actorId,
+                                                @Param("status") DocumentStatus status);
+
+    @Query("""
+            select document from RagDocument document
+            where (document.owner.id = :actorId or document.owner.role = com.blueai.auth.model.UserRole.ADMIN)
+              and document.deletedAt is null
+              and (:status is null or document.status = :status)
+              and (:search = '' or lower(document.originalFilename) like lower(concat('%', :search, '%')) escape '\\')
+            """)
+    Page<RagDocument> searchAdminWorkspace(@Param("actorId") String actorId,
+                                           @Param("status") DocumentStatus status,
+                                           @Param("search") String search, Pageable pageable);
+
+    @Query("""
+            select document from RagDocument document
+            where document.id = :documentId
+              and (document.owner.id = :actorId or document.owner.role = com.blueai.auth.model.UserRole.ADMIN)
+              and (:includeDeleted = true or document.deletedAt is null)
+            """)
+    Optional<RagDocument> findAdminWorkspaceDocument(@Param("documentId") String documentId,
+                                                    @Param("actorId") String actorId,
+                                                    @Param("includeDeleted") boolean includeDeleted);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select document

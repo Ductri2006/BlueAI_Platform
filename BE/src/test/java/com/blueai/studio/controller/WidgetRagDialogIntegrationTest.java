@@ -235,7 +235,11 @@ class WidgetRagDialogIntegrationTest {
         assertThatThrownBy(() -> configure(configuration, false, false, List.of())).isInstanceOf(ApiException.class).hasMessageContaining("RAG hoặc Dialog");
         User other = users.saveAndFlush(new User(UUID.randomUUID() + "@example.test", "unused", "Other admin", UserRole.ADMIN));
         var foreign = document(other, "Other admin KB", "OTHER_OWNER");
-        assertThatThrownBy(() -> configure(configuration, true, true, List.of(foreign.getId())))
+        var shared = configure(configuration, true, true, List.of(foreign.getId()));
+        assertThat(shared.bot().widgetDocumentIds()).containsExactly(foreign.getId());
+        User privateOwner = users.saveAndFlush(new User(UUID.randomUUID() + "@example.test", "unused", "Private user", UserRole.USER));
+        var privateFile = document(privateOwner, "Private user KB", "PRIVATE_OTHER_USER");
+        assertThatThrownBy(() -> configure(shared, true, true, List.of(privateFile.getId())))
                 .isInstanceOf(ApiException.class).hasMessageContaining("thuộc tài khoản");
     }
 

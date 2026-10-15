@@ -53,6 +53,7 @@ import org.springframework.web.client.RestClientException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class RagChatService {
@@ -284,8 +285,7 @@ public class RagChatService {
     public String answerForWidget(BotSnapshot snapshot, String question, List<LlmChatMessage> history) {
         requireActiveUser(snapshot.ownerId());
         List<String> allowed = snapshot.publicDocumentIds().stream()
-                .filter(id -> documentRepository.findByIdAndOwner_Id(id, snapshot.ownerId())
-                        .filter(document -> document.getStatus() == DocumentStatus.READY).isPresent()).toList();
+                .filter(id -> findReadyKnowledgeDocument(snapshot.ownerId(), id).isPresent()).toList();
         CustomizationInput customization = (snapshot.customization() == null
                 ? CustomizationInput.defaults() : snapshot.customization()).withDefaults();
         if (allowed.isEmpty()) return customization.fallbackMessage();
@@ -293,8 +293,7 @@ public class RagChatService {
         List<RagSourceResponse> sources = new ArrayList<>();
         for (RetrievedChunk chunk : chunks) {
             if (!allowed.contains(chunk.documentId()) || chunk.chunkId() == null || chunk.content() == null) continue;
-            documentRepository.findByIdAndOwner_Id(chunk.documentId(), snapshot.ownerId())
-                    .filter(document -> document.getStatus() == DocumentStatus.READY)
+            findReadyKnowledgeDocument(snapshot.ownerId(), chunk.documentId())
                     .ifPresent(document -> sources.add(toSource(document, chunk)));
         }
         if (sources.isEmpty()) return customization.fallbackMessage();
@@ -347,11 +346,7 @@ public class RagChatService {
             if (chunk.documentId() == null || chunk.chunkId() == null || chunk.content() == null) {
                 continue;
             }
-            RagDocument ownedDocument = documentRepository.findByIdAndOwner_Id(chunk.documentId(), ownerId)
-                    .filter(document -> document.getStatus() == DocumentStatus.READY)
-                    .or(() -> documentRepository.findByIdAndOwner_RoleAndStatus(
-                            chunk.documentId(), UserRole.ADMIN, DocumentStatus.READY))
-                    .orElse(null);
+            RagDocument ownedDocument = findReadyKnowledgeDocument(ownerId, chunk.documentId()).orElse(null);
             if (ownedDocument != null) {
                 sources.add(toSource(ownedDocument, chunk));
             } else if (isAllowedSharedDemoChunk(chunk)) {
@@ -373,6 +368,13 @@ public class RagChatService {
         return properties.isAllowSharedDemoKnowledge()
                 && "SYNTHETIC_DEMO".equals(chunk.sourceType())
                 && "PENDING_OWNER_REVIEW".equals(chunk.approvalStatus());
+    }
+
+    private Optional<RagDocument> findReadyKnowledgeDocument(String ownerId, String documentId) {
+        return documentRepository.findByIdAndOwner_Id(documentId, ownerId)
+                .filter(document -> document.getStatus() == DocumentStatus.READY)
+                .or(() -> documentRepository.findByIdAndOwner_RoleAndStatus(
+                        documentId, UserRole.ADMIN, DocumentStatus.READY));
     }
 
     private RagSourceResponse toSource(RagDocument document, RetrievedChunk chunk) {
