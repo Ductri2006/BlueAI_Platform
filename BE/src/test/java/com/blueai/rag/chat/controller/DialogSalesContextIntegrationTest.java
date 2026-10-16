@@ -596,9 +596,14 @@ class DialogSalesContextIntegrationTest {
         JsonNode deniedConversation = postJson("/api/v1/studio/bots/" + fixture.botId() + "/preview", fixture.adminToken(),
                 previewRequest(SALES_QUESTION, otherId), 404);
         assertThat(deniedConversation.path("code").asText()).isEqualTo("CONVERSATION_NOT_FOUND");
-        JsonNode deniedBot = postJson("/api/v1/studio/bots/" + fixture.botId() + "/preview", otherToken,
-                previewRequest(SALES_QUESTION, otherId), 404);
-        assertThat(deniedBot.path("code").asText()).isEqualTo("BOT_NOT_FOUND");
+        // Admin-owned bots are shared; a preview still uses only the actor's
+        // authorized conversation, not the bot creator's private history.
+        JsonNode sharedBotPreview = postJson("/api/v1/studio/bots/" + fixture.botId() + "/preview", otherToken,
+                previewRequest(SALES_QUESTION, otherId), 200);
+        assertThat(sharedBotPreview.path("message").asText()).isEqualTo(MISSING_LOCATION);
+        JsonNode deniedPrivateContext = postJson("/api/v1/studio/bots/" + fixture.botId() + "/preview", otherToken,
+                previewRequest(SALES_QUESTION, fixture.conversationId()), 404);
+        assertThat(deniedPrivateContext.path("code").asText()).isEqualTo("CONVERSATION_NOT_FOUND");
         assertThat(messageRepository.countByConversation_Id(otherId)).isEqualTo(1);
         assertThat(conversationRepository.findById(otherId).orElseThrow().getDialogStateJson()).isNull();
         assertNoProviderRequests();

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -143,6 +144,52 @@ class WidgetRagDialogIntegrationTest {
         retrieval.verify();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "chào bạn , nếu tôi du lịch châu Âu thì có các gói esim nào và tốc độ ra sao ?",
+            "du lịch Nhật Bản thì gói esim nào là tối ưu, dung lượng nhiều và tốc độ cao?",
+            "esim có sài được cho máy lock không ?"
+    })
+    void hybridWidgetRoutesBusinessQuestionsToOnlyApprovedPublicKnowledge(String question) {
+        var session = session(configure(create(), true, true, List.of(publicDocument.getId())));
+        message(session, "xin chào", "greeting");
+        expectRetrieval(true);
+        assertThat(message(session, question, "business").result().message()).startsWith("RAG:");
+        assertThat(prompt.get().getFirst().content()).contains("PUBLIC_RETURN_POLICY").doesNotContain("PRIVATE_SALARY_SECRET");
+        verify(completion, times(1)).complete(anyList());
+        retrieval.verify();
+    }
+
+    @Test
+    void hybridWidgetLetsNewKnowledgeQuestionLeavePendingDemoSlots() {
+        var session = session(configure(create(), true, true, List.of(publicDocument.getId())));
+        assertThat(message(session, "giờ hoạt động", "pending").result().message()).contains("Hà Nội");
+        expectRetrieval(true);
+        assertThat(message(session, "Máy lock có dùng được eSIM không?", "switch").result().message()).startsWith("RAG:");
+        verify(completion, times(1)).complete(anyList());
+        retrieval.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "chào bạn , nếu tôi du lịch châu Âu thì có các gói esim nào và tốc độ ra sao ?",
+            "esim có sài được cho máy lock không ?"
+    })
+    void previewAndAuthenticatedChatShareTheBusinessQuestionRoutingFix(String question) {
+        var configuration = configure(create(), true, true, List.of(publicDocument.getId()));
+        expectRetrieval(false);
+        expectRetrieval(false);
+        assertThat(studio.preview(owner.getId(), configuration.bot().id(), new PreviewRequest(question, null)).message()).startsWith("RAG:");
+        studio.publish(owner.getId(), configuration.bot().id());
+        studio.activate(owner.getId(), configuration.bot().id());
+        var conversation = conversations.saveAndFlush(new Conversation(owner, "Hybrid knowledge routing"));
+        var answer = rag.ask(owner.getId(), conversation.getId(), new AskQuestionRequest(question));
+        assertThat(answer.assistantMessage().content()).startsWith("RAG:");
+        assertThat(answer.sources()).isNotEmpty();
+        verify(completion, times(2)).complete(anyList());
+        retrieval.verify();
+    }
+
     @Test
     void dialogOnlyNeverCallsProvidersIncludingUnmatchedQuestions() {
         var session = session(configure(create(), true, false, List.of(publicDocument.getId())));
@@ -188,7 +235,11 @@ class WidgetRagDialogIntegrationTest {
         assertThatThrownBy(() -> configure(configuration, false, false, List.of())).isInstanceOf(ApiException.class).hasMessageContaining("RAG hoặc Dialog");
         User other = users.saveAndFlush(new User(UUID.randomUUID() + "@example.test", "unused", "Other admin", UserRole.ADMIN));
         var foreign = document(other, "Other admin KB", "OTHER_OWNER");
-        assertThatThrownBy(() -> configure(configuration, true, true, List.of(foreign.getId())))
+        var shared = configure(configuration, true, true, List.of(foreign.getId()));
+        assertThat(shared.bot().widgetDocumentIds()).containsExactly(foreign.getId());
+        User privateOwner = users.saveAndFlush(new User(UUID.randomUUID() + "@example.test", "unused", "Private user", UserRole.USER));
+        var privateFile = document(privateOwner, "Private user KB", "PRIVATE_OTHER_USER");
+        assertThatThrownBy(() -> configure(shared, true, true, List.of(privateFile.getId())))
                 .isInstanceOf(ApiException.class).hasMessageContaining("thuộc tài khoản");
     }
 

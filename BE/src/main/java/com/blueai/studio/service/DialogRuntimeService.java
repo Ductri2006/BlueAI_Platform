@@ -101,6 +101,15 @@ public class DialogRuntimeService {
                 ? Map.of(current.pendingEntity(), suggested)
                 : extractEntities(snapshot.entities(), normalizedMessage);
         String classifiedIntent = confirmed ? current.pendingIntent() : classifyIntent(snapshot.intents(), normalizedMessage);
+        if (!Boolean.FALSE.equals(snapshot.blueAiCoreEnabled()) && classifiedIntent == null
+                && DialogMessagePolicy.isIndependentRequest(message, normalizedMessage, !recognizedEntities.isEmpty())) {
+            // A new knowledge question leaves the operational Dialog, including
+            // pending confirmations. History remains in the conversation; stale
+            // slot values must not authorize a later action or contaminate RAG.
+            return new RuntimeResponse("", null, Map.of(), null, emptyContext(), true)
+                    .withTrace(new DialogTrace("CORE", "Câu hỏi mới không khớp kịch bản; chuyển sang RAG, không giữ dữ kiện tác vụ cũ.",
+                            List.of(), Map.of(), null));
+        }
         boolean continuingPendingSlot = current.pendingEntity() != null
                 && (classifiedIntent == null || classifiedIntent.equalsIgnoreCase(current.pendingIntent()));
         // A completed turn must not donate its entities to a fresh request.
@@ -454,7 +463,12 @@ public class DialogRuntimeService {
         double bestScore = 0;
         for (IntentInput intent : intents) {
             for (String example : intent.examples()) {
-                double score = similarity(normalizedMessage, normalize(example));
+                String normalizedExample = normalize(example);
+                // 'chào bạn' inside a product question is an introduction, not
+                // the question's intent. Do not let its phrase-match score win.
+                if (DialogMessagePolicy.isGreetingOnly(normalizedExample)
+                        && !DialogMessagePolicy.isGreetingOnly(normalizedMessage)) continue;
+                double score = similarity(normalizedMessage, normalizedExample);
                 if (score > bestScore) {
                     bestScore = score;
                     bestIntent = intent.name();

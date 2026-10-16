@@ -2,6 +2,7 @@ package com.blueai.rag.document.service;
 
 import com.blueai.auth.exception.ApiException;
 import com.blueai.auth.model.User;
+import com.blueai.auth.model.UserRole;
 import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.UserRepository;
 import com.blueai.rag.document.dto.DocumentUploadResponse;
@@ -111,7 +112,10 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public List<DocumentResponse> listDocuments(String ownerId, DocumentStatus status) {
-        List<RagDocument> documents = status == null
+        User actor = requireActiveUser(ownerId);
+        List<RagDocument> documents = actor.getRole() == UserRole.ADMIN
+                ? documentRepository.findAdminWorkspaceDocuments(ownerId, status)
+                : status == null
                 ? documentRepository.findByOwner_IdOrderByCreatedAtDesc(ownerId)
                 : documentRepository.findByOwner_IdAndStatusOrderByCreatedAtDesc(ownerId, status);
         return documents.stream().map(DocumentResponse::from).toList();
@@ -127,11 +131,15 @@ public class DocumentService {
     ) {
         validatePage(page, size);
         String normalizedSearch = search == null ? "" : search.trim();
-        Page<RagDocument> result = documentRepository.searchActive(
+        User actor = requireActiveUser(ownerId);
+        var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by("id")));
+        Page<RagDocument> result = actor.getRole() == UserRole.ADMIN
+                ? documentRepository.searchAdminWorkspace(ownerId, status, escapeLike(normalizedSearch), pageable)
+                : documentRepository.searchActive(
                 ownerId,
                 status,
                 escapeLike(normalizedSearch),
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by("id")))
+                pageable
         );
         return new DocumentPageResponse(
                 result.getContent().stream().map(DocumentResponse::from).toList(),
@@ -146,8 +154,7 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public DocumentResponse getDocument(String ownerId, String documentId) {
-        RagDocument document = documentRepository.findByIdAndOwner_Id(documentId, ownerId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document was not found."));
+        RagDocument document = requireAccessibleDocument(ownerId, documentId, false);
         return DocumentResponse.from(document);
     }
 
@@ -268,9 +275,27 @@ public class DocumentService {
 
     @Transactional
     public void softDelete(String ownerId, String documentId) {
-        RagDocument document = documentRepository.findByIdAndOwnerIncludingDeleted(documentId, ownerId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document was not found."));
+        RagDocument document = requireAccessibleDocument(ownerId, documentId, true);
         document.softDelete();
+    }
+
+    private User requireActiveUser(String actorId) {
+        User actor = userRepository.findById(actorId)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "USER_NOT_FOUND", "User no longer exists."));
+        if (actor.getStatus() != UserStatus.ACTIVE) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "USER_DISABLED", "User account is disabled.");
+        }
+        return actor;
+    }
+
+    private RagDocument requireAccessibleDocument(String actorId, String documentId, boolean includeDeleted) {
+        User actor = requireActiveUser(actorId);
+        var document = actor.getRole() == UserRole.ADMIN
+                ? documentRepository.findAdminWorkspaceDocument(documentId, actorId, includeDeleted)
+                : includeDeleted ? documentRepository.findByIdAndOwnerIncludingDeleted(documentId, actorId)
+                : documentRepository.findByIdAndOwner_Id(documentId, actorId);
+        return document.orElseThrow(() -> new ApiException(
+                HttpStatus.NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document was not found."));
     }
 
     @Transactional

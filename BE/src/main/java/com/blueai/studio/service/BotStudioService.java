@@ -94,7 +94,10 @@ public class BotStudioService {
 
     @Transactional(readOnly = true)
     public List<BotSummaryResponse> list(String ownerId) {
-        return botRepository.findByOwner_IdOrderByUpdatedAtDesc(ownerId).stream().map(this::summary).toList();
+        User actor = requireActiveUser(ownerId);
+        var bots = actor.getRole() == UserRole.ADMIN ? botRepository.findAdminWorkspaceBots(ownerId)
+                : botRepository.findByOwner_IdOrderByUpdatedAtDesc(ownerId);
+        return bots.stream().map(this::summary).toList();
     }
 
     @Transactional
@@ -128,7 +131,7 @@ public class BotStudioService {
 
     @Transactional
     public BotConfigurationResponse save(String ownerId, String botId, SaveConfigurationRequest request) {
-        Bot bot = requireOwnedBot(ownerId, botId);
+        Bot bot = requireEditableBot(ownerId, botId);
         if (bot.getDraftRevision() != request.expectedRevision()) {
             throw new ApiException(
                     HttpStatus.CONFLICT,
@@ -190,7 +193,7 @@ public class BotStudioService {
 
     @Transactional
     public PublishResponse publish(String ownerId, String botId) {
-        Bot bot = requireOwnedBot(ownerId, botId);
+        Bot bot = requireEditableBot(ownerId, botId);
         BotSnapshot snapshot = snapshot(bot);
         validateRuntimeOptions(snapshot.isDialogEnabled(), !Boolean.FALSE.equals(snapshot.blueAiCoreEnabled()));
         validatePublicDocuments(ownerId, snapshot.publicDocumentIds());
@@ -212,12 +215,7 @@ public class BotStudioService {
         if (owner.getRole() != UserRole.ADMIN) {
             throw new ApiException(HttpStatus.FORBIDDEN, "STUDIO_ADMIN_REQUIRED", "Chỉ Admin mới có thể áp dụng cấu hình cho Hỏi BlueAI.");
         }
-        Bot bot = requireOwnedBot(ownerId, botId);
-        if (bot.getStatus() != com.blueai.studio.model.BotStatus.PUBLISHED
-                || bot.getPublishedReleaseId() == null) {
-            throw new ApiException(HttpStatus.CONFLICT, "BOT_NOT_PUBLISHED", "Chỉ cấu hình đã phát hành mới có thể dùng cho Hỏi BlueAI.");
-        }
-        activateBot(bot);
+        Bot bot = activateBot(ownerId, botId);
         return configuration(bot);
     }
 
@@ -330,8 +328,18 @@ public class BotStudioService {
     }
 
     Bot requireOwnedBot(String ownerId, String botId) {
-        return botRepository.findByIdAndOwner_Id(botId, ownerId)
+        User actor = requireActiveUser(ownerId);
+        var bot = actor.getRole() == UserRole.ADMIN ? botRepository.findAdminWorkspaceBot(botId, ownerId)
+                : botRepository.findByIdAndOwner_Id(botId, ownerId);
+        return bot
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "BOT_NOT_FOUND", "Không tìm thấy chatbot."));
+    }
+
+    private Bot requireEditableBot(String ownerId, String botId) {
+        User actor = requireActiveUser(ownerId);
+        var bot = actor.getRole() == UserRole.ADMIN ? botRepository.findAdminWorkspaceBotForUpdate(botId, ownerId)
+                : botRepository.findByIdAndOwner_Id(botId, ownerId);
+        return bot.orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "BOT_NOT_FOUND", "Không tìm thấy chatbot."));
     }
 
     private User requireActiveUser(String ownerId) {
@@ -545,11 +553,15 @@ public class BotStudioService {
     }
 
     private void validatePublicDocuments(String ownerId, List<String> ids) {
+        User actor = requireActiveUser(ownerId);
         for (String id : ids) {
-            if (documentRepository.findByIdAndOwner_Id(id, ownerId)
-                    .filter(document -> document.getStatus() == DocumentStatus.READY).isEmpty()) {
+            var document = actor.getRole() == UserRole.ADMIN
+                    ? documentRepository.findAdminWorkspaceDocument(id, ownerId, false)
+                    : documentRepository.findByIdAndOwner_Id(id, ownerId);
+            if (document
+                    .filter(item -> item.getStatus() == DocumentStatus.READY).isEmpty()) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "WIDGET_DOCUMENT_UNAVAILABLE",
-                        "Chỉ được công khai tài liệu READY thuộc tài khoản quản trị bot.");
+                        "Chỉ được công khai tài liệu READY trong kho quản trị dùng chung hoặc thuộc tài khoản quản trị bot.");
             }
         }
     }
@@ -588,11 +600,21 @@ public class BotStudioService {
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    private void activateBot(Bot selected) {
-        botRepository.findAllByOrderByUpdatedAtDesc().forEach(bot -> {
+    private Bot activateBot(String actorId, String botId) {
+        // Lock before loading the selected row: loading it first can retain a
+        // stale row version when another admin changes the active bot.
+        List<Bot> locked = botRepository.findAllForActivation();
+        Bot selected = locked.stream().filter(bot -> bot.getId().equals(botId))
+                .filter(bot -> bot.getOwner().getRole() == UserRole.ADMIN || bot.getOwner().getId().equals(actorId))
+                .findFirst().orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "BOT_NOT_FOUND", "Không tìm thấy chatbot."));
+        if (selected.getStatus() != com.blueai.studio.model.BotStatus.PUBLISHED || selected.getPublishedReleaseId() == null) {
+            throw new ApiException(HttpStatus.CONFLICT, "BOT_NOT_PUBLISHED", "Chỉ cấu hình đã phát hành mới có thể dùng cho Hỏi BlueAI.");
+        }
+        locked.forEach(bot -> {
             if (!bot.getId().equals(selected.getId())) bot.deactivate();
         });
         selected.activate();
+        return selected;
     }
 
     private void invalid(String message) {

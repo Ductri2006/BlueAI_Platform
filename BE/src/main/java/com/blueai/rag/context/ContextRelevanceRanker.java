@@ -44,7 +44,14 @@ public class ContextRelevanceRanker {
     private static final Set<String> DOCUMENT_INTENT_MARKERS = Set.of(
             "knowledge base", "kho tri thuc", "tai lieu", "dan nguon", "chinh sach",
             "quy trinh", "huong dan", "cach", "xu ly", "hoan tien", "dieu kien",
-            "apn", "data roaming", "bao hanh", "bang gia", "chiet khau", "so sanh"
+            "apn", "data roaming", "bao hanh", "bang gia", "chiet khau", "so sanh",
+            // Advice and a new follow-up question need evidence even when the
+            // same message also asks us to recall facts. Product/device names
+            // alone are not markers: recalling a recorded eSIM or lock status
+            // must remain possible without unrelated document retrieval.
+            "tu van", "de xuat", "khuyen nghi", "nen chon", "nen dung", "thi sao",
+            "co dung duoc", "co ho tro", "recommend", "advise", "advice",
+            "how to", "troubleshoot", "compare"
     );
 
     public double score(String query, String candidate) {

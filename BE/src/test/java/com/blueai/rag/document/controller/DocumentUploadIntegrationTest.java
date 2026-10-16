@@ -170,8 +170,8 @@ class DocumentUploadIntegrationTest {
 
         mockMvc.perform(get("/api/v1/documents/{documentId}", documentId)
                         .header("Authorization", "Bearer " + otherUserToken))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("DOCUMENT_NOT_FOUND"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(documentId));
     }
 
     @Test
@@ -189,7 +189,7 @@ class DocumentUploadIntegrationTest {
                         .param("size", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
-                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.totalItems").value(2))
                 .andExpect(jsonPath("$.items[0].originalFilename").value("100% plan.txt"));
     }
 
@@ -209,8 +209,8 @@ class DocumentUploadIntegrationTest {
                         .param("size", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
-                .andExpect(jsonPath("$.totalItems").value(2))
-                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.totalItems").value(3))
+                .andExpect(jsonPath("$.totalPages").value(3))
                 .andExpect(jsonPath("$.hasNext").value(true));
         mockMvc.perform(get("/api/v1/documents/search")
                         .header("Authorization", "Bearer " + ownerToken)
@@ -220,7 +220,7 @@ class DocumentUploadIntegrationTest {
                         .param("size", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items.length()").value(1))
-                .andExpect(jsonPath("$.totalItems").value(2))
+                .andExpect(jsonPath("$.totalItems").value(3))
                 .andExpect(jsonPath("$.hasPrevious").value(true));
         assertThat(objectMapper.readTree(first).get("id").asText())
                 .isNotEqualTo(objectMapper.readTree(second).get("id").asText());
