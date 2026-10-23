@@ -205,6 +205,15 @@ export interface StudioCustomization {
   responseProfile?: string;
 }
 
+export interface StudioApiKeySettings {
+  requestsPerMinute: number;
+  defaultRequestsPerMinute: number;
+  published: boolean;
+  apiKey?: string;
+  publishedRequestsPerMinute?: number;
+  releaseId?: string;
+}
+
 export interface StudioIntent {
   name: string;
   description: string;
@@ -587,6 +596,16 @@ export class BlueAiApi {
       `/api/v1/studio/bots/${encodeURIComponent(botId)}/publish`,
       { method: 'POST' },
     );
+  }
+
+  async getStudioApiKey(botId: string): Promise<StudioApiKeySettings> {
+    return this.authorizedRequest<StudioApiKeySettings>(`/api/v1/studio/bots/${encodeURIComponent(botId)}/api-key`, { method: 'GET' });
+  }
+
+  async saveStudioApiKeySettings(botId: string, requestsPerMinute: number): Promise<StudioApiKeySettings> {
+    return this.authorizedRequest<StudioApiKeySettings>(`/api/v1/studio/bots/${encodeURIComponent(botId)}/api-key-settings`, {
+      method: 'PUT', body: JSON.stringify({ requestsPerMinute }),
+    });
   }
 
   async activateStudioBot(botId: string): Promise<StudioBotConfiguration> {

@@ -1,11 +1,102 @@
 openapi: 3.1.0
 info:
   title: BlueAI Workflow AI Task API
-  version: 1.0.0
-  description: Machine API for bounded CLASSIFY, EXTRACT, and RAG_ANSWER workflow nodes.
+  version: 1.2.0
+  description: Simple published-bot API keys with per-key quotas, plus advanced company-bound CLASSIFY, EXTRACT, RAG_ANSWER and BOT_CHAT integration APIs.
 servers:
   - url: /
 paths:
+  /api/v1/studio/bots/{botId}/api-key:
+    get:
+      summary: Read the bot owner's copyable API key and draft/published rate limits
+      security: [{ adminBearer: [] }]
+      parameters:
+        - in: path
+          name: botId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Owner-only settings; apiKey appears after first publication. Cache-Control no-store.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublishedKeySettings' }
+        '401': { description: Administrator JWT is required }
+        '403': { description: Only the active administrator that owns the bot may copy its key }
+  /api/v1/studio/bots/{botId}/api-key-settings:
+    put:
+      summary: Save draft quota; publish the bot to apply it to the same API key
+      security: [{ adminBearer: [] }]
+      parameters:
+        - in: path
+          name: botId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requestsPerMinute]
+              properties:
+                requestsPerMinute: { type: integer, minimum: 1, maximum: 1000, default: 30 }
+      responses:
+        '200':
+          description: Updated draft; published quota remains unchanged until publication
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublishedKeySettings' }
+        '400': { description: Invalid rate limit }
+        '401': { description: Administrator JWT is required }
+        '403': { description: Only the bot owner may edit its key settings }
+  /api/v1/ai/tasks/chat:
+    post:
+      summary: Send a customer message using the API key copied from BlueAI Custom
+      description: Key selects the published bot. History is isolated by key/userId/conversationId/channel. Each authenticated request consumes one per-key quota slot, including malformed requests and replays. This endpoint returns a direct bot reply, not a task ledger envelope.
+      security: [{ publishedBotApiKey: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [userId, message]
+              properties:
+                userId: { $ref: '#/components/schemas/ExternalIdentifier' }
+                message: { type: string, minLength: 1, maxLength: 2000 }
+                conversationId: { $ref: '#/components/schemas/ExternalIdentifier' }
+                messageId: { $ref: '#/components/schemas/ExternalIdentifier' }
+                channel: { type: string, minLength: 1, maxLength: 40, default: api }
+      responses:
+        '200':
+          description: Published dialog/Core reply, with supplied identifiers
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [answer, fallback, userId, conversationId, messageId, botId, sessionId, releaseId]
+                properties:
+                  answer: { type: string }
+                  fallback: { type: boolean }
+                  userId: { type: string }
+                  conversationId: { type: string }
+                  messageId: { type: string }
+                  botId: { type: string, format: uuid }
+                  sessionId: { type: string, format: uuid }
+                  releaseId: { type: string, format: uuid }
+        '400': { description: Invalid body or identifiers }
+        '401': { description: Key is invalid or its owner is inactive }
+        '403': { description: A published bot API key is required }
+        '409': { description: Message id conflict or another turn is in progress }
+        '429':
+          description: Per-key request quota or runtime session turn limit exceeded
+          headers:
+            Retry-After: { schema: { type: integer, minimum: 1, maximum: 60 } }
+        '502': { description: Runtime retrieval or model provider failed }
+        '503': { description: Runtime configuration unavailable }
   /api/v1/admin/integration-clients:
     post:
       summary: Provision an integration client (active administrator JWT)
@@ -24,10 +115,16 @@ paths:
                 capabilities:
                   type: array
                   minItems: 1
-                  maxItems: 3
+                  maxItems: 4
                   uniqueItems: true
-                  items: { type: string, enum: [CLASSIFY, EXTRACT, RAG_ANSWER] }
+                  items: { type: string, enum: [CLASSIFY, EXTRACT, RAG_ANSWER, BOT_CHAT] }
                 documentIds:
+                  type: array
+                  maxItems: 100
+                  uniqueItems: true
+                  items: { type: string, format: uuid }
+                externalBinding: { $ref: '#/components/schemas/ExternalBinding' }
+                botIds:
                   type: array
                   maxItems: 100
                   uniqueItems: true
@@ -102,6 +199,7 @@ paths:
                           items: { type: string, minLength: 1, maxLength: 80 }
                     history: { $ref: '#/components/schemas/History' }
                     metadata: { $ref: '#/components/schemas/Metadata' }
+                    externalContext: { $ref: '#/components/schemas/ExternalContext' }
                 - type: object
                   additionalProperties: false
                   required: [capability, input, configuration]
@@ -127,6 +225,7 @@ paths:
                               required: { type: boolean }
                     history: { $ref: '#/components/schemas/History' }
                     metadata: { $ref: '#/components/schemas/Metadata' }
+                    externalContext: { $ref: '#/components/schemas/ExternalContext' }
                 - type: object
                   additionalProperties: false
                   required: [capability, input, configuration]
@@ -146,6 +245,7 @@ paths:
                           items: { type: string, format: uuid }
                     history: { $ref: '#/components/schemas/History' }
                     metadata: { $ref: '#/components/schemas/Metadata' }
+                    externalContext: { $ref: '#/components/schemas/ExternalContext' }
       responses:
         '200':
           description: Final task envelope; provider/validation errors are persisted as status FAILED with HTTP 200
@@ -161,7 +261,7 @@ paths:
               schema: { $ref: '#/components/schemas/ProcessingResponse' }
         '400': { description: Invalid request/configuration, malformed JSON, or missing idempotency key }
         '401': { description: Invalid integration credential }
-        '403': { description: Capability or document grant denied }
+        '403': { description: Capability/document grant denied, external binding missing, or external company mismatch }
         '409': { description: Idempotency key reused with a different request }
         '410': { description: Evidence access changed after task completion }
         '413': { description: Request exceeds 64 KiB }
@@ -170,6 +270,83 @@ paths:
           headers:
             Retry-After: { schema: { type: integer, example: 60 } }
         '503': { description: Task result could not be durably finalized; poll using the same idempotency key }
+  /api/v1/ai/tasks/bots/{botId}/sessions:
+    post:
+      summary: Create or replay a company/customer-bound session for a granted published bot
+      description: Requires BOT_CHAT, botIds grant, externalBinding and grants for every document in the published snapshot. The runtime credential is never returned.
+      security: [{ integrationBearer: [] }]
+      parameters:
+        - in: path
+          name: botId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [externalContext]
+              properties:
+                externalContext: { $ref: '#/components/schemas/ExternalContext' }
+      responses:
+        '201':
+          description: Created or replayed session; welcome, releaseId, revision, expiresAt and externalContext; no accessToken
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BotSessionResponse' }
+        '400': { description: Invalid context or idempotency key }
+        '401': { description: Invalid machine credential; human JWTs are rejected }
+        '403': { description: Company, capability, bot or document access denied }
+        '409': { description: Creation key reused with a different bot or context }
+        '410': { description: Saved session expired; create a new session with a new creation key }
+        '429': { description: Runtime session creation rate limit }
+  /api/v1/ai/tasks/bot-sessions/{sessionId}/messages:
+    post:
+      summary: Run a published dialog/Core turn in an integration-owned session
+      description: externalContext.messageId identifies the logical turn; retry the exact same context and text. Other identity fields must match the session. Runtime session rate/turn/expiry limits apply.
+      security: [{ integrationBearer: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [externalContext, input]
+              properties:
+                externalContext: { $ref: '#/components/schemas/ExternalContext' }
+                input:
+                  type: object
+                  additionalProperties: false
+                  required: [text]
+                  properties:
+                    text: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        '200':
+          description: Dialog/Core reply with externalContext; this is a runtime reply, not an AI task ledger envelope
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BotMessageResponse' }
+        '400': { description: Invalid context or message }
+        '401': { description: Invalid or revoked machine credential }
+        '403': { description: Identity mismatch or revoked company/bot/document access }
+        '404': { description: Session not found for this integration client }
+        '409': { description: Message id reused with different text or another session turn is in progress }
+        '410': { description: Session expired or session encryption key changed; start a new session }
+        '429': { description: Runtime rate, duplicate or session turn limit }
+        '502': { description: Runtime retrieval or model provider failed }
+        '503': { description: Runtime configuration/provider unavailable }
   /api/v1/ai/tasks/{id}:
     get:
       summary: Get task status/result for the authenticated integration client
@@ -194,6 +371,11 @@ paths:
         '410': { description: Evidence access revoked after task completion }
 components:
   securitySchemes:
+    publishedBotApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Copy from Custom after bot publication; scoped exclusively to POST /api/v1/ai/tasks/chat.
     integrationBearer:
       type: http
       scheme: bearer
@@ -203,6 +385,67 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    PublishedKeySettings:
+      type: object
+      required: [requestsPerMinute, defaultRequestsPerMinute, published]
+      properties:
+        requestsPerMinute: { type: integer, minimum: 1, maximum: 1000 }
+        defaultRequestsPerMinute: { type: integer, minimum: 1, maximum: 1000 }
+        published: { type: boolean }
+        apiKey: { type: string, description: Returned only to active admins for a shared admin workspace bot; never log or cache }
+        publishedRequestsPerMinute: { type: integer, minimum: 1, maximum: 1000 }
+        releaseId: { type: string, format: uuid }
+    ExternalIdentifier:
+      type: string
+      minLength: 1
+      maxLength: 128
+      description: Opaque, case-sensitive ID. No surrounding whitespace or control characters; BIGINT IDs must be JSON strings.
+    ExternalBinding:
+      type: object
+      additionalProperties: false
+      required: [system, companyId]
+      properties:
+        system: { type: string, minLength: 1, maxLength: 40, example: CEP }
+        companyId: { $ref: '#/components/schemas/ExternalIdentifier' }
+    ExternalContext:
+      type: object
+      additionalProperties: false
+      required: [system, companyId, userId, channel, channelId, conversationId, messageId]
+      description: Mandatory for company-bound credentials. userId is CEP contactId, not the operator login. Company/system must match the administrator-provisioned binding. These fields never become model instructions or account claims.
+      properties:
+        system: { type: string, minLength: 1, maxLength: 40, example: CEP }
+        companyId: { $ref: '#/components/schemas/ExternalIdentifier' }
+        userId: { $ref: '#/components/schemas/ExternalIdentifier' }
+        channel: { type: string, minLength: 1, maxLength: 40, example: zalo }
+        channelId: { $ref: '#/components/schemas/ExternalIdentifier' }
+        conversationId: { $ref: '#/components/schemas/ExternalIdentifier' }
+        messageId: { $ref: '#/components/schemas/ExternalIdentifier' }
+    BotOutput:
+      type: object
+      required: [message, fallback]
+      properties:
+        message: { type: string }
+        fallback: { type: boolean }
+    BotSessionResponse:
+      type: object
+      required: [sessionId, releaseId, revision, welcome, expiresAt, externalContext]
+      properties:
+        sessionId: { type: string, format: uuid }
+        releaseId: { type: string, format: uuid }
+        revision: { type: integer }
+        welcome: { $ref: '#/components/schemas/BotOutput' }
+        expiresAt: { type: string, format: date-time }
+        externalContext: { $ref: '#/components/schemas/ExternalContext' }
+    BotMessageResponse:
+      type: object
+      required: [sessionId, requestId, releaseId, revision, result, externalContext]
+      properties:
+        sessionId: { type: string, format: uuid }
+        requestId: { type: string, description: Server-derived digest of externalContext }
+        releaseId: { type: string, format: uuid }
+        revision: { type: integer }
+        result: { $ref: '#/components/schemas/BotOutput' }
+        externalContext: { $ref: '#/components/schemas/ExternalContext' }
     Input:
       type: object
       additionalProperties: false
@@ -234,6 +477,7 @@ components:
         properties:
           status: { const: PROCESSING }
       properties:
+        externalContext: { $ref: '#/components/schemas/ExternalContext' }
         taskId: { type: string, format: uuid }
         status: { type: string, enum: [COMPLETED, NEEDS_REVIEW, NO_MATCH, FAILED] }
         capability: { type: string, enum: [CLASSIFY, EXTRACT, RAG_ANSWER] }
@@ -247,6 +491,7 @@ components:
       type: object
       required: [taskId, status]
       properties:
+        externalContext: { $ref: '#/components/schemas/ExternalContext' }
         taskId: { type: string, format: uuid }
         status: { const: PROCESSING }
         capability: { type: string, enum: [CLASSIFY, EXTRACT, RAG_ANSWER] }

@@ -1,0 +1,118 @@
+{
+  "atUtc": "2026-10-22T02:40:32.796200+00:00",
+  "model": "gemini-3.5-flash-lite",
+  "maximumRequests": 6,
+  "attempts": [
+    {
+      "number": 1,
+      "status": 200,
+      "elapsedMs": 1797,
+      "usage": {
+        "promptTokenCount": 6,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 7,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "hasContent": true
+    },
+    {
+      "number": 2,
+      "status": 200,
+      "elapsedMs": 1015,
+      "usage": {
+        "promptTokenCount": 6,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 7,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "hasContent": true
+    },
+    {
+      "number": 3,
+      "status": 200,
+      "elapsedMs": 969,
+      "usage": {
+        "promptTokenCount": 6,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 7,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "hasContent": true
+    },
+    {
+      "number": 4,
+      "status": 200,
+      "elapsedMs": 1000,
+      "usage": {
+        "promptTokenCount": 6,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 7,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "hasContent": true
+    },
+    {
+      "number": 5,
+      "status": 200,
+      "elapsedMs": 1062,
+      "usage": {
+        "promptTokenCount": 6,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 7,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "hasContent": true
+    },
+    {
+      "number": 6,
+      "status": 200,
+      "elapsedMs": 1125,
+      "usage": {
+        "promptTokenCount": 6,
+        "candidatesTokenCount": 1,
+        "totalTokenCount": 7,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6
+          }
+        ],
+        "serviceTier": "standard"
+      },
+      "hasContent": true
+    }
+  ],
+  "quotaExhausted": false,
+  "successfulRequests": 6,
+  "note": "No 429 observed does not establish the project quota. Gemini quotas apply per project and model."
+}

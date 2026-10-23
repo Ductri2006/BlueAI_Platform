@@ -5,6 +5,11 @@
 This deployment serves one Bluecom enterprise workspace. Documents uploaded by
 admins and bots created by admins are managed jointly by active admins. The
 original creator remains recorded; no rows or files are reassigned or copied.
+Published bot API keys in Custom/Integration are shared too: every active admin
+can read/copy the existing key and edit its draft quota for an admin workspace
+bot. Republishing keeps the same credential and applies the shared quota. Key
+authentication/owner lifecycle and customer-session isolation are unchanged;
+machine integration credentials with explicit grants retain their own scope.
 Private user-owned documents, legacy private bots, conversations and memories
 remain isolated. Owner-only repository methods used by machine integrations
 must not be broadened to implement administrative sharing.
@@ -50,10 +55,16 @@ Do not publish private files or delete production documents for these tests.
 | SA-15 | Attempt to select another user's private, pending or deleted document | Reject it; do not expose its content in widget answers. |
 | SA-16 | As B, ask a KB question grounded in A's shared document | Answer includes that document's citation when retrieval finds it. |
 | SA-17 | A attempts to read B's private conversation | Not found; shared KB does not mean shared chat history. |
+| SA-18 | A publishes a bot; B opens its Custom/Integration tab | Both can copy the exact same existing bot API key; reads use Cache-Control: no-store. |
+| SA-19 | B changes draft quota; A reloads, then B republishes | A sees the draft, the published quota changes only after publish, and the key/creator remain unchanged. |
+| SA-20 | A/B each create a conversation, then try listing/reading/asking/deleting the other's | Each sees only their own conversations; access to the other's returns 404. |
+| SA-21 | A regular user, disabled/deleted admin or anonymous caller attempts to read/edit a key | Denied; private legacy user bots are not exposed through shared key management. |
 
 ## Operational boundaries
 
 - Reload the web page after deployment to refresh the account's cached list.
+- Existing documents/bots/key rows become visible through the shared queries;
+  no data-copy migration or key rotation is needed for this change.
 - A shared READY document is not automatically approved for public release.
   Widget document selection remains explicit; CSV labels are not row-level ACLs.
 - Removing an admin or changing roles may affect role-based workspace membership;

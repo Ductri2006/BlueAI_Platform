@@ -48,7 +48,13 @@ class FlywayMigrationIntegrationTest {
             "ai_integration_document_grants",
             "ai_task_ledger",
             "ai_task_evidence",
-            "gemini_usage_events"
+            "gemini_usage_events",
+            "ai_task_external_context",
+            "ai_integration_bot_grants",
+            "ai_integration_bot_sessions",
+            "studio_bot_api_settings",
+            "studio_bot_api_keys",
+            "studio_bot_api_sessions"
     );
 
     @Autowired
@@ -59,7 +65,7 @@ class FlywayMigrationIntegrationTest {
 
     @Test
     void appliesFullMigrationChainAndLeavesExpectedSchemaForHibernateValidation() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("10");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("13");
         flyway.validate();
 
         Set<String> usageColumns = jdbcTemplate.queryForList(

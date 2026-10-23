@@ -142,6 +142,17 @@ public class AiTaskRepository {
                 clientId);
     }
 
+    public void saveExternalContext(String taskId, String contextJson) {
+        jdbc.update("insert into ai_task_external_context(task_id,context_json) values(?,?)",
+                taskId, contextJson);
+    }
+
+    public List<String> findExternalContext(String taskId, String clientId) {
+        return jdbc.queryForList(
+                "select c.context_json from ai_task_external_context c join ai_task_ledger t on t.id=c.task_id"
+                        + " where t.id=? and t.client_id=?", String.class, taskId, clientId);
+    }
+
     public List<Map<String, Object>> findExpiredPageAfter(
             Instant cutoff, Instant expiresAt, Instant sameExpiresAt, String id) {
         return jdbc.queryForList(

@@ -2,6 +2,7 @@ package com.blueai.ai.task.service;
 
 import com.blueai.ai.task.config.AiTaskProperties;
 import com.blueai.ai.task.dto.AiTaskRequestValidator;
+import com.blueai.ai.task.dto.ExternalChatContext;
 import com.blueai.ai.task.exception.AiTaskException;
 import com.blueai.ai.task.model.AiClientPrincipal;
 import com.blueai.ai.task.provider.AiCompletionProvider;
@@ -66,7 +67,7 @@ public class AiTaskService {
                     "INVALID_IDEMPOTENCY_KEY", "Idempotency-Key must contain 1..128 characters.");
         }
         AiTaskRequestValidator.requireKeys(
-                body, Set.of("capability", "input", "configuration", "history", "metadata"));
+                body, Set.of("capability", "input", "configuration", "history", "metadata", "externalContext"));
         Parsed parsed = parse(body);
         String digest = sha(canonical(body));
         String id = UUID.randomUUID().toString();
@@ -78,6 +79,7 @@ public class AiTaskService {
                     tx.execute(
                             status -> {
                                 assertActiveClient(client);
+                                requireExternalBinding(client, parsed.externalContext);
                                 recovery.expireLockedClient(client.clientId());
                                 List<Map<String, Object>> existing =
                                         findExistingTask(client.clientId(), key);
@@ -86,7 +88,7 @@ public class AiTaskService {
                             });
         }
         if (claim == null) throw finalizeFailed();
-        if (!"NEW".equals(claim.status)) return claimResponse(claim);
+        if (!"NEW".equals(claim.status)) return withExternalContext(client, claimResponse(claim));
 
         Map<String, Object> result;
         Instant deadline = claim.deadline;
@@ -117,7 +119,7 @@ public class AiTaskService {
         } catch (Exception exception) {
             throw finalizeFailed();
         }
-        return ResponseEntity.ok(result);
+        return withExternalContext(client, ResponseEntity.ok(result));
     }
 
     private Claim claimTask(
@@ -133,6 +135,7 @@ public class AiTaskService {
         }
         assertActiveOwner(client);
         assertActiveClient(client);
+        requireExternalBinding(client, parsed.externalContext);
         recovery.expireLockedClient(client.clientId());
         List<Map<String, Object>> existing = findExistingTask(client.clientId(), key);
         if (!existing.isEmpty()) return existingClaim(existing.getFirst(), digest, client);
@@ -182,7 +185,48 @@ public class AiTaskService {
                 parsed.capability,
                 now,
                 now.plus(budget).plus(AiTaskRecoveryService.FINALIZATION_GRACE));
+        if (!parsed.externalContext.isEmpty()) {
+            ledger.saveExternalContext(id, serializeResult(new LinkedHashMap<>(parsed.externalContext)));
+        }
         return new Claim(id, "NEW", null, deadline);
+    }
+
+    private void requireExternalBinding(AiClientPrincipal client, Map<String, String> context) {
+        Map<String, Object> binding = clients.externalBinding(client.clientId());
+        Object system = binding.get("external_system");
+        if (system == null) {
+            if (!context.isEmpty()) throw new AiTaskException(HttpStatus.FORBIDDEN,
+                    "EXTERNAL_BINDING_REQUIRED", "This credential has no external company binding.");
+            return;
+        }
+        if (context.isEmpty()) throw AiTaskRequestValidator.bad("EXTERNAL_CONTEXT_REQUIRED",
+                "An external-company credential requires externalContext on every task.");
+        if (!system.equals(context.get("system"))
+                || !Objects.equals(binding.get("external_company_id"), context.get("companyId"))) {
+            throw new AiTaskException(HttpStatus.FORBIDDEN, "EXTERNAL_COMPANY_MISMATCH",
+                    "External context does not match the company assigned to this credential.");
+        }
+    }
+
+    private ResponseEntity<?> withExternalContext(AiClientPrincipal client, ResponseEntity<?> response) {
+        if (!(response.getBody() instanceof Map<?, ?> body)) return response;
+        Map<String, Object> copy = new LinkedHashMap<>();
+        body.forEach((key, value) -> copy.put((String) key, value));
+        return ResponseEntity.status(response.getStatusCode()).headers(response.getHeaders())
+                .body(withExternalContext(client, copy));
+    }
+
+    private Map<String, Object> withExternalContext(AiClientPrincipal client, Map<String, Object> body) {
+        if (!(body.get("taskId") instanceof String taskId)) return body;
+        List<String> saved = ledger.findExternalContext(taskId, client.clientId());
+        if (saved.isEmpty()) return body;
+        try {
+            Map<String, Object> copy = new LinkedHashMap<>(body);
+            copy.put("externalContext", mapper.readTree(saved.getFirst()));
+            return copy;
+        } catch (Exception exception) {
+            throw finalizeFailed();
+        }
     }
 
     private List<Map<String, Object>> findExistingTask(String clientId, String key) {
@@ -329,7 +373,7 @@ public class AiTaskService {
                     HttpStatus.NOT_FOUND, "AI_TASK_NOT_FOUND", "Task was not found.");
         var row = rows.getFirst();
         if ("PROCESSING".equals(row.get("status")))
-            return Map.of(
+            return withExternalContext(client, Map.of(
                     "taskId",
                     id,
                     "status",
@@ -337,7 +381,7 @@ public class AiTaskService {
                     "capability",
                     row.get("capability"),
                     "createdAt",
-                    row.get("created_at"));
+                    row.get("created_at")));
         try {
             Map<String, Object> value =
                     mapper.readValue((String) row.get("response_json"), Map.class);
@@ -348,7 +392,7 @@ public class AiTaskService {
                         "AI_TASK_EVIDENCE_REVOKED",
                         "Evidence access changed after task completion; saved answer is no longer"
                             + " available.");
-            return value;
+            return withExternalContext(client, value);
         } catch (AiTaskException e) {
             throw e;
         } catch (Exception e) {
@@ -727,7 +771,8 @@ public class AiTaskService {
                     cap.equals("CLASSIFY")
                             ? "CLASSIFY requires allowedLabels."
                             : "EXTRACT requires fields.");
-        return new Parsed(cap, text, history, labels, fields, docs);
+        return new Parsed(cap, text, history, labels, fields, docs,
+                ExternalChatContext.parse(b.path("externalContext")));
     }
 
     private void assertActiveOwner(AiClientPrincipal c) {
@@ -903,5 +948,6 @@ public class AiTaskService {
             List<Map<String, String>> history,
             List<String> labels,
             List<Field> fields,
-            Set<String> documentIds) {}
+            Set<String> documentIds,
+            Map<String, String> externalContext) {}
 }

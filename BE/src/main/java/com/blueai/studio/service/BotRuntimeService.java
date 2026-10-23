@@ -81,7 +81,16 @@ public class BotRuntimeService {
 
     @Transactional
     public CreateWidgetSessionResponse createSession(String publicKey, String clientAddress) {
-        rateLimiter.check(
+        return createSessionInternal(publicKey, clientAddress, true);
+    }
+
+    @Transactional
+    public CreateWidgetSessionResponse createIntegrationSession(String publicKey) {
+        return createSessionInternal(publicKey, "integration", false);
+    }
+
+    private CreateWidgetSessionResponse createSessionInternal(String publicKey, String clientAddress, boolean widget) {
+        if (widget) rateLimiter.check(
                 "session:" + rateLimiter.clientKey(clientAddress),
                 protectionProperties.getMaxSessionCreationsPerWindow(),
                 protectionProperties.getRateLimitWindow(),
@@ -119,6 +128,16 @@ public class BotRuntimeService {
             RuntimeMessageRequest request,
             String clientAddress
     ) {
+        return messageInternal(sessionId, accessToken, request, clientAddress, true);
+    }
+
+    @Transactional
+    public RuntimeMessageResponse integrationMessage(String sessionId, String accessToken, RuntimeMessageRequest request) {
+        return messageInternal(sessionId, accessToken, request, "integration", false);
+    }
+
+    private RuntimeMessageResponse messageInternal(String sessionId, String accessToken,
+            RuntimeMessageRequest request, String clientAddress, boolean widget) {
         BotSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SESSION_NOT_FOUND", "Không tìm thấy phiên chatbot."));
         requireValidToken(session, accessToken);
@@ -150,13 +169,13 @@ public class BotRuntimeService {
             return readJson(existingTurn.getResponseJson(), RuntimeMessageResponse.class);
         }
 
-        rateLimiter.check(
+        if (widget) rateLimiter.check(
                 "message-client:" + rateLimiter.clientKey(clientAddress),
                 protectionProperties.getMaxMessagesPerWindowPerClient(),
                 protectionProperties.getRateLimitWindow(),
                 "Quá nhiều tin nhắn widget từ địa chỉ này. Hãy thử lại sau."
         );
-        rateLimiter.check(
+        if (widget) rateLimiter.check(
                 "message-session:" + sessionId,
                 protectionProperties.getMaxMessagesPerWindowPerSession(),
                 protectionProperties.getRateLimitWindow(),
@@ -187,6 +206,7 @@ public class BotRuntimeService {
             );
             return readJson(raceCompleted.getResponseJson(), RuntimeMessageResponse.class);
         }
+        if (widget) {
         WidgetConversationContextStore.DuplicateResult duplicate = contextStore.recordDuplicateAttempt(sessionId, digest);
         if (duplicate.isDuplicate()) {
             if (duplicate.repeatCount() > protectionProperties.getDuplicateReplayLimit()) {
@@ -214,6 +234,7 @@ public class BotRuntimeService {
             // entry has expired without treating the replay as a new AI turn.
             turnRepository.saveAndFlush(new BotTurn(session, request.requestId(), digest, writeJson(replayed)));
             return replayed;
+        }
         }
 
         if (session.getTurnCount() >= protectionProperties.getMaxMessagesPerSession()) {

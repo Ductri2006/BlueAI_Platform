@@ -29,7 +29,7 @@ public class IntegrationClientRepository {
 
     public List<Map<String, Object>> listOwned(String ownerId, int size, long offset) {
         return jdbc.queryForList(
-                "select id,name,active,created_at,revoked_at from ai_integration_clients where"
+                "select id,name,active,created_at,revoked_at,external_system,external_company_id from ai_integration_clients where"
                     + " owner_id=? order by created_at desc limit ? offset ?",
                 ownerId,
                 size,
@@ -41,6 +41,21 @@ public class IntegrationClientRepository {
                 "insert into ai_integration_document_grants(client_id,document_id) values(?,?)",
                 clientId,
                 documentId);
+    }
+
+    public void bindExternalCompany(String clientId, Map<String, String> binding) {
+        jdbc.update("update ai_integration_clients set external_system=?,external_company_id=? where id=?",
+                binding.get("system"), binding.get("companyId"), clientId);
+    }
+
+    public void grantBot(String clientId, String botId) {
+        jdbc.update("insert into ai_integration_bot_grants(client_id,bot_id) values(?,?)", clientId, botId);
+    }
+
+    public Map<String, Object> externalBinding(String clientId) {
+        return jdbc.queryForMap(
+                "select external_system,external_company_id from ai_integration_clients where id=? for update",
+                clientId);
     }
 
     public int grantCapability(String clientId, String capability) {

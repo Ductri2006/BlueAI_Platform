@@ -72,9 +72,9 @@ class MySqlLegacyMigrationIntegrationTest {
             }
         }
         Flyway latest = configuration(url, username, password).load();
-        assertThat(latest.migrate().migrationsExecuted).isEqualTo(10 - version);
+        assertThat(latest.migrate().migrationsExecuted).isEqualTo(13 - version);
         latest.validate();
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("10");
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("13");
         assertThat(latest.info().pending()).isEmpty();
         assertThat(latest.migrate().migrationsExecuted).isZero();
         Map<String, Integer> newChecksums = Arrays.stream(latest.info().applied())
