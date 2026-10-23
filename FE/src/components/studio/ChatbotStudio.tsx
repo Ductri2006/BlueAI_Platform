@@ -23,6 +23,8 @@ import { DialogNodeNameField } from './DialogNodeNameField';
 import { DialogContextPolicy, DialogValidationNotice } from './DialogContextPolicy';
 import { StudioDiscardDialog, useStudioConfirmation } from './StudioDiscardDialog';
 import { StudioTemplateSelector, type StudioCreationTemplate } from './StudioTemplateSelector';
+import { ApiKeyPanel } from './ApiKeyPanel';
+import { validApiRateLimit } from './apiKeySettings';
 import {
   compactDraftEntries,
   mergeEntityImports,
@@ -62,6 +64,8 @@ export const ChatbotStudio: React.FC = () => {
   const [newBotName, setNewBotName] = React.useState('Trợ lý BlueAI');
   const [newBotTemplate, setNewBotTemplate] = React.useState<StudioCreationTemplate>('STARTER');
   const [error, setError] = React.useState('');
+  const [apiRateDrafts, setApiRateDrafts] = React.useState<Record<string, number>>({});
+  const [apiSettingsVersion, setApiSettingsVersion] = React.useState(0);
   const studioRef = React.useRef<HTMLElement>(null);
   const draftGuard = React.useRef({ dirty: false, busy: false });
   const discard = useStudioConfirmation();
@@ -84,6 +88,8 @@ export const ChatbotStudio: React.FC = () => {
       const result = await blueAiApi.getStudioBot(botId);
       if (!isCurrentRequest()) return;
       setConfiguration(copyConfiguration(result));
+      setApiRateDrafts(current => { const copy = { ...current }; delete copy[botId]; return copy; });
+      setApiSettingsVersion(current => current + 1);
       setIsPreviewOpen(false);
       draftGuard.current.dirty = false;
       setIsDirty(false);
@@ -165,6 +171,11 @@ export const ChatbotStudio: React.FC = () => {
 
   const save = async (announce = true): Promise<StudioBotConfiguration | undefined> => {
     if (!configuration || draftGuard.current.busy) return undefined;
+    const apiRate = apiRateDrafts[configuration.bot.id];
+    if (apiRate !== undefined && !validApiRateLimit(apiRate)) {
+      setError('Giới hạn API phải là số nguyên từ 1 đến 1.000 request/phút.');
+      return undefined;
+    }
     const intents = configuration.intents.map(intent => ({
       ...intent,
       examples: compactDraftEntries(intent.examples),
@@ -207,6 +218,7 @@ export const ChatbotStudio: React.FC = () => {
     setIsSaving(true);
     setError('');
     try {
+      if (apiRate !== undefined) await blueAiApi.saveStudioApiKeySettings(configuration.bot.id, apiRate);
       const saved = await blueAiApi.saveStudioBotConfiguration(configuration.bot.id, {
         expectedRevision: configuration.bot.draftRevision,
         name: configuration.bot.name,
@@ -223,6 +235,8 @@ export const ChatbotStudio: React.FC = () => {
         dialogNodes: configuration.dialogNodes,
       });
       setConfiguration(copyConfiguration(saved));
+      setApiRateDrafts(current => { const copy = { ...current }; delete copy[saved.bot.id]; return copy; });
+      setApiSettingsVersion(current => current + 1);
       setBots(current => current.map(bot => bot.id === saved.bot.id ? saved.bot : bot));
       draftGuard.current.dirty = false;
       setIsDirty(false);
@@ -359,6 +373,7 @@ export const ChatbotStudio: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto p-4 sm:p-6">
         <fieldset disabled={isBusy} className="min-w-0">
+        {(activeTab === 'blueai' || activeTab === 'integrate') && <div className="mx-auto mb-5 max-w-4xl"><ApiKeyPanel key={`${configuration.bot.id}:${configuration.bot.publishedReleaseId || 'draft'}:${apiSettingsVersion}`} botId={configuration.bot.id} releaseId={configuration.bot.publishedReleaseId} limitOverride={apiRateDrafts[configuration.bot.id]} onLimitChange={limit => { setApiRateDrafts(current => ({ ...current, [configuration.bot.id]: limit })); draftGuard.current.dirty = true; setIsDirty(true); }} /></div>}
         {activeTab === 'blueai' && <BlueAiCorePanel configuration={configuration} onChange={bot => updateConfiguration(current => ({ ...current, bot }))} onCustomizationChange={customization => updateConfiguration(current => ({ ...current, customization }))} />}
         {activeTab === 'intents' && <IntentsEditor key={configuration.bot.id} intents={configuration.intents} onChange={intents => updateConfiguration(current => ({ ...current, intents }))} />}
         {activeTab === 'entities' && <EntitiesEditor key={configuration.bot.id} entities={configuration.entities} onChange={entities => updateConfiguration(current => ({ ...current, entities }))} />}

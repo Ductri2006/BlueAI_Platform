@@ -1,6 +1,7 @@
 package com.blueai.studio.service;
 
 import com.blueai.auth.exception.ApiException;
+import com.blueai.ai.task.service.PublishedBotApiService;
 import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserRole;
 import com.blueai.auth.model.UserStatus;
@@ -65,6 +66,7 @@ public class BotStudioService {
     private final RagChatService ragChatService;
     private final ObjectMapper objectMapper;
     private final RagDocumentRepository documentRepository;
+    private final PublishedBotApiService publishedApi;
 
     public BotStudioService(
             UserRepository userRepository,
@@ -77,7 +79,8 @@ public class BotStudioService {
             DialogRuntimeService runtimeService,
             RagChatService ragChatService,
             ObjectMapper objectMapper,
-            RagDocumentRepository documentRepository
+            RagDocumentRepository documentRepository,
+            PublishedBotApiService publishedApi
     ) {
         this.userRepository = userRepository;
         this.botRepository = botRepository;
@@ -90,6 +93,7 @@ public class BotStudioService {
         this.ragChatService = ragChatService;
         this.objectMapper = objectMapper;
         this.documentRepository = documentRepository;
+        this.publishedApi = publishedApi;
     }
 
     @Transactional(readOnly = true)
@@ -206,6 +210,7 @@ public class BotStudioService {
                 )));
         bot.publish(release.getId());
         botRepository.saveAndFlush(bot);
+        publishedApi.publish(bot, release);
         return new PublishResponse(release.getId(), release.getRevision(), bot.getPublicKey(), release.getCreatedAt());
     }
 

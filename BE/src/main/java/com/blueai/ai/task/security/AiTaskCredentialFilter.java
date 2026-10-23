@@ -21,9 +21,11 @@ import java.util.List;
 @Component
 public class AiTaskCredentialFilter extends OncePerRequestFilter {
     private final IntegrationClientRepository clients;
+    private final PublishedApiAccess publishedApi;
 
-    public AiTaskCredentialFilter(IntegrationClientRepository clients) {
+    public AiTaskCredentialFilter(IntegrationClientRepository clients, PublishedApiAccess publishedApi) {
         this.clients = clients;
+        this.publishedApi = publishedApi;
     }
 
     @Override
@@ -46,6 +48,27 @@ public class AiTaskCredentialFilter extends OncePerRequestFilter {
         String hash = HexFormat.of().formatHex(CredentialHasher.sha256(token));
         List<AiClientPrincipal> clients = this.clients.findByCredentialHash(hash);
         if (clients.isEmpty()) {
+            var keys = publishedApi.authenticate(hash);
+            if (!keys.isEmpty()) {
+                if (!request.getRequestURI().equals(request.getContextPath()+"/api/v1/ai/tasks/chat")) {
+                    response.setStatus(403);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\":{\"code\":\"API_KEY_SCOPE_DENIED\",\"message\":\"Use this key with the published bot chat endpoint.\"}}");
+                    return;
+                }
+                int retry = publishedApi.consume(keys.getFirst().keyId());
+                if (retry > 0) {
+                    response.setStatus(429);
+                    response.setHeader("Retry-After", Integer.toString(retry));
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\":{\"code\":\"API_KEY_RATE_LIMITED\",\"message\":\"API key request limit exceeded.\"}}");
+                    return;
+                }
+                SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                        keys.getFirst(), null, List.of(new SimpleGrantedAuthority("ROLE_BOT_API"))));
+                chain.doFilter(request, response);
+                return;
+            }
             unauthorized(response);
             return;
         }

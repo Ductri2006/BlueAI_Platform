@@ -1,5 +1,9 @@
 # Workflow AI task API (MVP)
 
+## CEP integration extension (21 October 2026)
+
+See [CEP_INTEGRATION.md](CEP_INTEGRATION.md) for company-bound credentials, external customer/conversation/message identity, and the separate `BOT_CHAT` session endpoints. Existing unbound task clients remain compatible. Company-bound task clients must send the documented `externalContext` on every submission. Bot sessions execute the published Studio dialog/Core runtime; they do not use the stateless task ledger or its polling envelope. The OpenAPI contract includes both APIs.
+
 BlueAI exposes stateless `CLASSIFY`, `EXTRACT`, and `RAG_ANSWER` operations for workflow nodes. It does not own workflow branching, channel identity, delivery, or cross-run memory. A workflow runner sends bounded caller-supplied history on each invocation; history is limited to eight user/assistant messages and 4,000 total characters.
 
 ## Provisioning and credentials

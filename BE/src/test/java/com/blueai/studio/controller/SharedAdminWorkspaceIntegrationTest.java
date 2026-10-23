@@ -84,7 +84,8 @@ class SharedAdminWorkspaceIntegrationTest {
             assertThat(url.startsWith("jdbc:h2:mem:") || url.matches(
                     "jdbc:mysql://[^/]+/blueai_shared_admin_test(?:\\?.*)?")).isTrue();
         }
-        for (String table : List.of("studio_bot_turns", "studio_bot_sessions", "studio_bot_releases",
+        for (String table : List.of("studio_bot_api_sessions", "studio_bot_api_keys", "studio_bot_api_settings",
+                "studio_bot_turns", "studio_bot_sessions", "studio_bot_releases",
                 "studio_bot_dialog_nodes", "studio_bot_entity_synonyms", "studio_bot_entity_values",
                 "studio_bot_entities", "studio_bot_intent_examples", "studio_bot_intents", "studio_bots",
                 "rag_conversation_links", "rag_user_memories", "rag_conversation_summaries",
@@ -288,6 +289,46 @@ class SharedAdminWorkspaceIntegrationTest {
         call(get("/api/v1/conversations/" + conversation + "/messages"), a, null, 404);
         call(get("/api/v1/conversations/" + conversation + "/messages"), b, null, 200);
         provider.verify();
+    }
+
+    @Test
+    void realAdminLoginsSharePublishedKeyButKeepPersonalConversationsPrivate() throws Exception {
+        String a = login("keys-admin-a@test.example", UserRole.ADMIN);
+        String b = login("keys-admin-b@test.example", UserRole.ADMIN);
+        String regular = login("keys-regular@test.example", UserRole.USER);
+        JsonNode configuration = create(a, "Admin shared key");
+        String botId = configuration.path("bot").path("id").asText();
+        String path = "/api/v1/studio/bots/" + botId;
+        call(post(path + "/publish"), a, Map.of(), 200);
+        JsonNode original = call(get(path + "/api-key"), a, null, 200);
+        JsonNode shared = call(get(path + "/api-key"), b, null, 200);
+        assertThat(shared.path("apiKey")).isEqualTo(original.path("apiKey"));
+        call(put(path + "/api-key-settings"), b, Map.of("requestsPerMinute", 8), 200);
+        assertThat(call(get(path + "/api-key"), a, null, 200).path("requestsPerMinute").asInt()).isEqualTo(8);
+        call(post(path + "/publish"), b, Map.of(), 200);
+        for (String token : List.of(a, b)) {
+            JsonNode current = call(get(path + "/api-key"), token, null, 200);
+            assertThat(current.path("apiKey")).isEqualTo(original.path("apiKey"));
+            assertThat(current.path("publishedRequestsPerMinute").asInt()).isEqualTo(8);
+        }
+        call(get(path + "/api-key"), regular, null, 403);
+        call(put(path + "/api-key-settings"), regular, Map.of("requestsPerMinute", 10), 403);
+        call(get(path + "/api-key"), null, null, 401);
+        assertThat(jdbc.queryForObject("select count(*) from studio_bot_api_keys where bot_id=?", Integer.class, botId)).isEqualTo(1);
+
+        String ownA = call(post("/api/v1/conversations"), a, Map.of("title", "Admin A private"), 201).path("id").asText();
+        String ownB = call(post("/api/v1/conversations"), b, Map.of("title", "Admin B private"), 201).path("id").asText();
+        for (String token : List.of(a, b)) {
+            String own = token.equals(a) ? ownA : ownB;
+            String other = token.equals(a) ? ownB : ownA;
+            JsonNode list = call(get("/api/v1/conversations"), token, null, 200);
+            assertThat(list.toString()).contains(own).doesNotContain(other);
+            call(get("/api/v1/conversations/" + own + "/messages"), token, null, 200);
+            call(get("/api/v1/conversations/" + other), token, null, 404);
+            call(get("/api/v1/conversations/" + other + "/messages"), token, null, 404);
+            call(post("/api/v1/conversations/" + other + "/ask"), token, Map.of("question", "Read private chat"), 404);
+            call(delete("/api/v1/conversations/" + other), token, null, 404);
+        }
     }
 
     private String login(String email, UserRole role) throws Exception {

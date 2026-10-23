@@ -2,6 +2,8 @@ package com.blueai.ai.task.exception;
 
 import com.blueai.ai.task.controller.AiTaskController;
 import com.blueai.ai.task.controller.IntegrationClientController;
+import com.blueai.ai.task.controller.IntegrationBotController;
+import com.blueai.ai.task.controller.PublishedBotApiController;
 
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -15,7 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.Map;
 import java.util.UUID;
 
-@RestControllerAdvice(assignableTypes = {AiTaskController.class, IntegrationClientController.class})
+@RestControllerAdvice(assignableTypes = {AiTaskController.class, IntegrationClientController.class, IntegrationBotController.class, PublishedBotApiController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class AiTaskExceptionHandler {
     @ExceptionHandler(AiTaskException.class)

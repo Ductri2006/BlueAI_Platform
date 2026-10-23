@@ -1,0 +1,65 @@
+{
+  "atUtc": "2026-10-22T02:46:33.520026+00:00",
+  "isolation": "H2 memory + separate FAISS + real Gemini",
+  "publishedLimit": 2,
+  "attempts": [
+    {
+      "number": 1,
+      "status": 200,
+      "answer": "Cửa hàng thử nghiệm mở cửa từ 08:00 đến 22:00 hàng ngày [S1]."
+    },
+    {
+      "number": 2,
+      "status": 200,
+      "answer": "Cửa hàng thử nghiệm mở cửa từ 08:00 đến 22:00 mỗi ngày [S1]."
+    },
+    {
+      "number": 3,
+      "status": 429,
+      "errorCode": "API_KEY_RATE_LIMITED",
+      "retryAfter": "55"
+    },
+    {
+      "number": 4,
+      "status": 429,
+      "errorCode": "API_KEY_RATE_LIMITED",
+      "retryAfter": "55"
+    },
+    {
+      "number": 5,
+      "status": 200,
+      "answer": "Cửa hàng thử nghiệm mở cửa từ 08:00 đến 22:00 hàng ngày [S1]."
+    },
+    {
+      "number": 6,
+      "status": 429,
+      "errorCode": "API_KEY_RATE_LIMITED",
+      "retryAfter": "53"
+    },
+    {
+      "number": 7,
+      "status": 200,
+      "answer": "Cửa hàng thử nghiệm mở cửa từ 08:00 đến 22:00 mỗi ngày [S1]."
+    }
+  ],
+  "checks": {
+    "blockedBeforeGemini": true,
+    "draftDoesNotChangePublishedQuota": true,
+    "republishAppliesQuotaAndKeepsKey": true,
+    "blockedDoesNotIncreaseTokenUsage": true,
+    "windowResets": true
+  },
+  "usageAfterTwo": {
+    "requests": 2,
+    "promptTokens": 1552,
+    "completionTokens": 54,
+    "totalTokens": 1606
+  },
+  "usageFinal": {
+    "requests": 4,
+    "promptTokens": 3104,
+    "completionTokens": 108,
+    "totalTokens": 3212
+  },
+  "result": "PASS"
+}
