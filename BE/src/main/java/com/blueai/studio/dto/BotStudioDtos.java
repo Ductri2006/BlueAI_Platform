@@ -301,8 +301,14 @@ public final class BotStudioDtos {
             String message,
             boolean fallback
     ) {
+        public PublicRuntimeOutput {
+            // Also applies when an older cached turn is deserialized for a retry.
+            message = com.blueai.rag.chat.service.AnswerPresentation.text(message);
+        }
+
         public static PublicRuntimeOutput from(RuntimeResponse response) {
-            return new PublicRuntimeOutput(response.message(), response.fallback());
+            return new PublicRuntimeOutput(com.blueai.rag.chat.service.AnswerPresentation.text(
+                    response.message(), response.sources()), response.fallback());
         }
     }
 

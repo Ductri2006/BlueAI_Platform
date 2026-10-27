@@ -3,21 +3,24 @@ import { ChatMessage } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { GroundedStatusBadge } from './GroundedStatusBadge';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
-import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles, Info, Layers, GitFork } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, Check, User, Sparkles, Layers } from 'lucide-react';
+import { presentAssistantAnswer } from '../../lib/answerPresentation';
 
 interface MessageItemProps {
   message: ChatMessage;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
-  const { openEvidence, showToast, openHITLModal, sendMessage } = useAppStore();
+  const { showToast, sendMessage } = useAppStore();
   const [copied, setCopied] = React.useState(false);
   const [feedback, setFeedback] = React.useState<'up' | 'down' | null>(null);
 
   const isUser = message.sender === 'user';
+  const visibleContent = isUser ? message.content
+    : presentAssistantAnswer(message.content, (message.citations || []).map(source => source.title));
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(message.content);
+    navigator.clipboard.writeText(visibleContent);
     setCopied(true);
     showToast('Đã sao chép nội dung tin nhắn', 'info');
     setTimeout(() => setCopied(false), 2000);
@@ -59,57 +62,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
           </span>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">• {message.timestamp}</span>
           
-          {message.confidence && (
+          {(message.confidence === 'context_confirmation' || message.confidence === 'danger') && (
             <GroundedStatusBadge 
               confidence={message.confidence} 
-              sourcesCount={message.citations?.length || message.contextSources?.length || 1}
             />
           )}
         </div>
 
         {/* Content Body with Rich Markdown & Tables */}
         <div className="text-slate-800 dark:text-slate-200">
-          <RichMarkdownRenderer content={message.content} citations={message.citations} />
+          <RichMarkdownRenderer content={visibleContent} />
         </div>
-
-        {message.confidence === 'dialog' && (
-          <div className="flex items-start gap-2 p-3 rounded-xl bg-cobalt-50/50 dark:bg-cobalt-950/20 border border-cobalt-200/60 dark:border-cobalt-900/60 text-[12.5px] text-slate-600 dark:text-slate-300">
-            <GitFork className="w-3.5 h-3.5 mt-0.5 shrink-0 text-cobalt-500" />
-            <span>Nội dung theo kịch bản do quản trị viên cấu hình, không phải trích dẫn tài liệu KB.</span>
-          </div>
-        )}
-
-        {/* Out-of-scope notice applies to Core, not configured Dialog replies. */}
-        {message.confidence === 'ungrounded' && (
-          <div className="flex items-start gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 text-[12.5px] text-slate-600 dark:text-slate-300">
-            <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400 dark:text-slate-500" />
-            <span>
-              Câu trả lời này không dựa trên tài liệu nào trong kho tri thức nội bộ. Nếu bạn cần câu trả lời có
-              căn cứ, hãy đề nghị admin tải tài liệu liên quan lên mục <strong className="font-semibold">Tài liệu &amp; Tri thức RAG</strong>.
-            </span>
-          </div>
-        )}
-
-        {/* Citations list pills */}
-        {message.citations && message.citations.length > 0 && (
-          <div className="pt-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Nguồn tham chiếu:
-              </span>
-              {message.citations.map((citation, idx) => (
-                <button
-                  key={citation.id}
-                  onClick={() => openEvidence(citation)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-slate-100 hover:bg-cobalt-50 text-slate-700 hover:text-cobalt-700 dark:bg-slate-800 dark:hover:bg-cobalt-950/60 dark:text-slate-300 dark:hover:text-cobalt-300 border border-slate-200 dark:border-slate-700 transition-colors"
-                >
-                  <BookOpen className="w-3 h-3 text-cobalt-600 dark:text-cobalt-400" />
-                  <span className="font-medium truncate max-w-[200px]">[{idx + 1}] {citation.title}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {message.contextSources && message.contextSources.length > 0 && (
           <div className="pt-1">

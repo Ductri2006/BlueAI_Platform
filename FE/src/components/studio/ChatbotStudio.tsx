@@ -1026,7 +1026,7 @@ function BlueAiCorePanel({ configuration, onChange, onCustomizationChange }: { c
       <h2 className="text-sm font-black">Chính sách trả lời</h2>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <label><span className={labelClass}>Mức chủ động / hỏi lại</span><select value={customization.proactivity || 'ask_when_needed'} onChange={event => updateCustomization({ proactivity: event.target.value })} className={inputClass}><option value="low">Ít chủ động</option><option value="ask_when_needed">Hỏi lại khi cần</option><option value="proactive">Chủ động gợi ý</option></select></label>
-        <label><span className={labelClass}>Dẫn nguồn</span><select value={customization.citationPolicy || 'always_when_available'} onChange={event => updateCustomization({ citationPolicy: event.target.value })} className={inputClass}><option value="always_when_available">Luôn dẫn nguồn khi có</option><option value="when_factual">Dẫn nguồn cho thông tin thực tế</option></select></label>
+        <div><span className={labelClass}>Nguồn tài liệu</span><p className="text-sm text-slate-500">Chỉ dùng nội bộ để kiểm chứng. Khách hàng không thấy tên tài liệu, đoạn trích hay liên kết nguồn trong câu trả lời.</p></div>
         <label><span className={labelClass}>Khi không có nguồn</span><select value={customization.noSourcePolicy || 'say_not_found'} onChange={event => updateCustomization({ noSourcePolicy: event.target.value })} className={inputClass}><option value="say_not_found">Nói rõ chưa tìm thấy</option><option value="ask_clarification">Hỏi lại để làm rõ</option><option value="escalate">Chuyển hỗ trợ</option></select></label>
         <label>
           <span className={labelClass}>Định hướng phản hồi (tùy chọn)</span>

@@ -121,6 +121,21 @@ class WidgetRagDialogIntegrationTest {
     }
 
     @Test
+    void customerWidgetAndPublishedApiOutputHideAttributionWhileStillUsingApprovedKnowledge() {
+        var session = session(configure(create(), false, true, List.of(publicDocument.getId())));
+        expectRetrieval(true);
+        when(completion.complete(anyList())).thenAnswer(invocation -> {
+            prompt.set(List.copyOf(invocation.getArgument(0)));
+            return "Đổi trả trong 7 ngày [S1]. Public FAQ";
+        });
+        var reply = message(session, "Điều kiện đổi trả?", "source-privacy");
+        assertThat(reply.result().message()).isEqualTo("Đổi trả trong 7 ngày. tài liệu nội bộ");
+        assertThat(prompt.get().getFirst().content()).contains("PUBLIC_RETURN_POLICY")
+                .doesNotContain("PRIVATE_SALARY_SECRET", "Public FAQ", "public-1");
+        retrieval.verify();
+    }
+
+    @Test
     void hybridTemplateUsesDialogFirstAndRagForUnmatchedQuestionsWithOnlyPublicKnowledge() {
         var configuration = configure(create(), true, true, List.of(publicDocument.getId()));
         assertThat(configuration.bot().dialogEnabled()).isTrue();

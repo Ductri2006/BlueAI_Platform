@@ -3,6 +3,7 @@ package com.blueai.rag.conversation.controller;
 import com.blueai.rag.conversation.dto.ConversationMessageResponse;
 import com.blueai.rag.conversation.dto.CreateUserMessageRequest;
 import com.blueai.rag.conversation.service.ConversationMessageService;
+import com.blueai.rag.chat.service.AnswerPresentation;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -45,6 +46,7 @@ public class ConversationMessageController {
             @PathVariable String conversationId,
             @RequestParam(defaultValue = "50") int limit
     ) {
-        return messageService.listRecentMessages(jwt.getSubject(), conversationId, limit);
+        return messageService.listRecentMessages(jwt.getSubject(), conversationId, limit).stream()
+                .map(AnswerPresentation::message).toList();
     }
 }

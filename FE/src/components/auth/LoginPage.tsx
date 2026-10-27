@@ -67,21 +67,21 @@ export function LoginPage() {
           <div className="max-w-xl">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1.5 text-xs font-semibold text-sky-200">
               <Bot className="h-3.5 w-3.5" />
-              Trợ lý AI có dẫn nguồn
+              Trợ lý AI cho doanh nghiệp
             </div>
             <h1 className="text-4xl font-black leading-tight tracking-[-0.035em] xl:text-5xl">
               Hỏi dữ liệu doanh nghiệp.
               <span className="block bg-gradient-to-r from-sky-300 to-blue-400 bg-clip-text text-transparent">Nhận câu trả lời có căn cứ.</span>
             </h1>
             <p className="mt-5 max-w-lg text-base leading-7 text-slate-300">
-              Một không gian an toàn để trò chuyện với kho tri thức RAG, kiểm tra nguồn trích dẫn và quản lý tài liệu theo tài khoản của bạn.
+              Một không gian an toàn để tra cứu thông tin sản phẩm, dịch vụ và chính sách, hỗ trợ công việc mỗi ngày.
             </p>
 
             <div className="mt-9 grid gap-4 sm:grid-cols-3">
               {[
                 { icon: FileSearch, title: 'RAG có nguồn', text: 'Truy xuất đúng tài liệu' },
                 { icon: ShieldCheck, title: 'Phân quyền', text: 'Dữ liệu theo tài khoản' },
-                { icon: CheckCircle2, title: 'Minh bạch', text: 'Kiểm tra từng trích dẫn' },
+                { icon: CheckCircle2, title: 'Có căn cứ', text: 'Trả lời từ thông tin được cung cấp' },
               ].map(({ icon: Icon, title, text }) => (
                 <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur-sm">
                   <Icon className="mb-3 h-5 w-5 text-sky-300" />

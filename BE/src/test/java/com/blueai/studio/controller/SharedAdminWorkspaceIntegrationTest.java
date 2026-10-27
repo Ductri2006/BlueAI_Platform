@@ -284,8 +284,10 @@ class SharedAdminWorkspaceIntegrationTest {
                 });
         JsonNode answer = call(post("/api/v1/conversations/" + conversation + "/ask"), b,
                 Map.of("question", "Điều kiện tương thích eSIM là gì?"), 200);
-        assertThat(answer.path("sources").size()).isEqualTo(1);
-        assertThat(answer.path("sources").get(0).path("documentId").asText()).isEqualTo(shared.getId());
+        assertThat(answer.path("sources")).isEmpty();
+        assertThat(answer.path("assistantMessage").path("evidence").path("sources")).isEmpty();
+        assertThat(answer.path("assistantMessage").path("content").asText())
+                .isEqualTo("Đây là câu trả lời fixture từ nguồn được phép.");
         call(get("/api/v1/conversations/" + conversation + "/messages"), a, null, 404);
         call(get("/api/v1/conversations/" + conversation + "/messages"), b, null, 200);
         provider.verify();

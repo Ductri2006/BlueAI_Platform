@@ -490,7 +490,8 @@ class DialogSalesContextIntegrationTest {
         });
 
         JsonNode answer = ask(fixture.userToken(), fixture.conversationId(), KB_QUESTION);
-        assertThat(answer.path("assistantMessage").path("content").asText()).isEqualTo(PROVIDER_FIXTURE_ANSWER);
+        assertThat(answer.path("assistantMessage").path("content").asText()).isEqualTo(
+                com.blueai.rag.chat.service.AnswerPresentation.text(PROVIDER_FIXTURE_ANSWER));
         assertKnowledgeSource(answer, documentId, "USER_DOCUMENT");
         assertKnowledgeSource(messages(fixture.userToken(), fixture.conversationId()).get(1).path("evidence"),
                 documentId, "USER_DOCUMENT");
@@ -1029,6 +1030,17 @@ class DialogSalesContextIntegrationTest {
 
     private void assertKnowledgeSource(JsonNode result, String documentId, String sourceType) {
         assertThat(result.path("sources").isArray()).isTrue();
+        if (result.has("assistantMessage") || result.has("origin")) {
+            assertThat(result.path("sources")).isEmpty();
+            assertThat(messageRepository.findAll().stream()
+                    .filter(message -> message.getEvidence() != null)
+                    .flatMap(message -> message.getEvidence().sources().stream()))
+                    .anySatisfy(source -> {
+                        assertThat(source.documentId()).isEqualTo(documentId);
+                        assertThat(source.excerpt()).isEqualTo(KB_EXCERPT);
+                    });
+            return;
+        }
         assertThat(result.path("sources").size()).isEqualTo(1);
         JsonNode source = result.path("sources").get(0);
         assertThat(source.path("documentId").asText()).isEqualTo(documentId);

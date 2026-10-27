@@ -1,4 +1,5 @@
 import type { ChatMessage, Citation } from '../types';
+import { presentAssistantAnswer } from '../lib/answerPresentation';
 
 const DEFAULT_API_BASE_URL = '';
 const TOKEN_STORAGE_KEY = 'blueai.accessToken';
@@ -793,7 +794,7 @@ export function conversationMessageToChatMessage(message: ConversationMessageRes
   return {
     id: message.id,
     sender: message.role === 'USER' ? 'user' : 'assistant',
-    content: message.role === 'USER' ? message.content : normalizeAssistantContent(message.content),
+    content: message.role === 'USER' ? message.content : presentAssistantAnswer(normalizeAssistantContent(message.content)),
     timestamp: Number.isNaN(createdAt.getTime()) ? '' : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     // Legacy messages did not persist evidence. Never invent provenance for them.
   };
@@ -809,7 +810,8 @@ export function ragAnswerToChatMessage(response: RagAnswerResponse): ChatMessage
   return {
     id: response.assistantMessage.id,
     sender: 'assistant',
-    content: normalizeAssistantContent(response.assistantMessage.content),
+    content: presentAssistantAnswer(normalizeAssistantContent(response.assistantMessage.content),
+      (response.sources || []).map(source => source.filename)),
     timestamp: Number.isNaN(createdAt.getTime())
       ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

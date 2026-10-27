@@ -56,8 +56,9 @@ describe('server-produced Dialog answer origin', () => {
 
   it('renders a scripted answer without an out-of-KB warning', () => {
     const html = renderToStaticMarkup(<MessageItem message={ragAnswerToChatMessage(response('DIALOG'))} />);
-    expect(html).toContain('Theo kịch bản Dialog');
-    expect(html).toContain('không phải trích dẫn tài liệu KB');
+    expect(html).toContain('Chi nhánh HCM mở cửa lúc 08:00.');
+    expect(html).not.toContain('Theo kịch bản Dialog');
+    expect(html).not.toContain('trích dẫn tài liệu KB');
     expect(html).not.toContain('Ngoài phạm vi kho tri thức nội bộ');
     expect(html).not.toContain('hãy đề nghị admin tải tài liệu');
   });
@@ -69,9 +70,9 @@ describe('server-produced Dialog answer origin', () => {
     expect(html).not.toContain('Context đã dùng:');
   });
 
-  it('keeps the out-of-KB explanation for genuinely ungrounded Core answers', () => {
+  it('does not expose knowledge-base implementation details for Core answers', () => {
     const html = renderToStaticMarkup(<MessageItem message={ragAnswerToChatMessage(response('CORE'))} />);
-    expect(html).toContain('Ngoài phạm vi kho tri thức nội bộ');
+    expect(html).not.toContain('Ngoài phạm vi kho tri thức nội bộ');
     expect(html).not.toContain('Theo kịch bản Dialog');
   });
 });

@@ -312,11 +312,8 @@ class RagChatConfiguredIntegrationTest {
                         .content("{\"question\":\"Điều kiện hoàn tiền là gì?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.assistantMessage.content")
-                        .value("Khách hàng được hoàn tiền trong 7 ngày. [S1]"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].documentId")
-                        .value(documentId))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].sourceType")
-                        .value("USER_DOCUMENT"));
+                        .value("Khách hàng được hoàn tiền trong 7 ngày."))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources").isEmpty());
 
         ragStub.verify();
     }
@@ -415,9 +412,8 @@ class RagChatConfiguredIntegrationTest {
                         .content("{\"question\":\"Nội dung đang áp dụng là gì?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.assistantMessage.content")
-                        .value("Nội dung release đang áp dụng. [S1]"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].documentId")
-                        .value(documentId));
+                        .value("Nội dung release đang áp dụng."))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources").isEmpty());
 
         ragStub.verify();
     }
@@ -465,7 +461,8 @@ class RagChatConfiguredIntegrationTest {
                 .andExpect(method(POST))
                 .andExpect(header("Authorization", "Bearer configured-test-key"))
                 .andExpect(jsonPath("$.model").value("configured-test-model"))
-                .andExpect(jsonPath("$.messages[0].content").value(org.hamcrest.Matchers.containsString("refund-policy.pdf")))
+                .andExpect(jsonPath("$.messages[0].content").value(org.hamcrest.Matchers.containsString("Mã QR chưa quét đủ điều kiện xem xét hoàn tiền.")))
+                .andExpect(jsonPath("$.messages[0].content").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("refund-policy.pdf"))))
                 .andRespond(withSuccess("""
                         {"model":"gemini-test","choices":[{"message":{"role":"assistant","content":"Mã QR chưa quét có thể được xem xét hoàn tiền. [S1]"}}],
                          "usage":{"prompt_tokens":140,"completion_tokens":32,"total_tokens":190}}
@@ -477,11 +474,28 @@ class RagChatConfiguredIntegrationTest {
                         .content("{\"question\":\"Điều kiện hoàn tiền là gì?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.assistantMessage.content")
-                        .value("Mã QR chưa quét có thể được xem xét hoàn tiền. [S1]"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].documentId").value(documentId))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].filename").value("refund-policy.pdf"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].chunkId").value("chunk-refund-1"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].score").value(0.94));
+                        .value("Mã QR chưa quét có thể được xem xét hoàn tiền."))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources").isEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.assistantMessage.evidence.sources").isEmpty());
+
+        // The browser cannot inspect evidence; the server retains it for grounding and audit.
+        assertThat(messageRepository.findAll().stream()
+                .filter(message -> message.getEvidence() != null)
+                .flatMap(message -> message.getEvidence().sources().stream()).toList())
+                .anySatisfy(source -> {
+                    assertThat(source.documentId()).isEqualTo(documentId);
+                    assertThat(source.filename()).isEqualTo("refund-policy.pdf");
+                    assertThat(source.chunkId()).isEqualTo("chunk-refund-1");
+                    assertThat(source.score()).isEqualTo(0.94);
+                });
+        mockMvc.perform(get("/api/v1/conversations/{conversationId}/messages", conversationId)
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[1].content")
+                        .value("Mã QR chưa quét có thể được xem xét hoàn tiền."))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$[1].evidence.sources").isEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().string(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("refund-policy.pdf"))));
 
         ragStub.verify();
         org.junit.jupiter.api.Assertions.assertEquals(2, messageRepository.count());
@@ -525,9 +539,8 @@ class RagChatConfiguredIntegrationTest {
                         .content("{\"question\":\"Khi nào cần gửi báo giá?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.assistantMessage.content")
-                        .value("Ưu tiên gửi báo giá trước thứ Sáu. [S1]"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].documentId")
-                        .value(documentId));
+                        .value("Ưu tiên gửi báo giá trước thứ Sáu."))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources").isEmpty());
 
         ragStub.verify();
         assertThat(messageRepository.count()).isEqualTo(2);
@@ -543,7 +556,7 @@ class RagChatConfiguredIntegrationTest {
                         {"matches":[{"documentId":"POLICY-DEMO","chunkId":"REC-1","content":"Nội dung minh hoạ.","score":0.8,"filename":"Demo policy","sourceType":"SYNTHETIC_DEMO","approvalStatus":"PENDING_OWNER_REVIEW"}]}
                         """, MediaType.APPLICATION_JSON));
         ragStub.expect(once(), requestTo("http://rag-stub.test/v1/chat/completions"))
-                .andExpect(jsonPath("$.messages[0].content").value(org.hamcrest.Matchers.containsString("Demo policy")))
+                .andExpect(jsonPath("$.messages[0].content").value(org.hamcrest.Matchers.containsString("SYNTHETIC_DEMO / PENDING_OWNER_REVIEW")))
                 .andRespond(withSuccess("""
                         {"choices":[{"message":{"role":"assistant","content":"Đây là dữ liệu mẫu, chưa được phê duyệt."}}]}
                         """, MediaType.APPLICATION_JSON));
@@ -553,8 +566,7 @@ class RagChatConfiguredIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"question\":\"Cho tôi ví dụ chính sách\"}"))
                 .andExpect(status().isOk())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].sourceType").value("SYNTHETIC_DEMO"))
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].approvalStatus").value("PENDING_OWNER_REVIEW"));
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources").isEmpty());
 
         ragStub.verify();
     }

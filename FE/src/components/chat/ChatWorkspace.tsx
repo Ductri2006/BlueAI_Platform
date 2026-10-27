@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { MessageItem } from './MessageItem';
 import { Composer } from './Composer';
 import { ConversationContextPanel } from './ConversationContextPanel';
+import { presentAssistantAnswer } from '../../lib/answerPresentation';
 import { 
   Sparkles, Shield, Wifi, Download,
   Trash2, ArrowRight, Layers, FileText, Pin, 
@@ -69,8 +70,11 @@ export const ChatWorkspace: React.FC = () => {
       showToast('Chưa có tin nhắn để xuất tệp', 'warning');
       return;
     }
-    const mdContent = `# ${currentSession.title}\n\n` +
-      messages.map(m => `### ${m.sender === 'user' ? 'Người dùng' : 'BlueAI'} (${m.timestamp})\n\n${m.content}\n\n---\n`).join('\n');
+    const mdContent = `# ${currentSession.title}\n\n` + messages.map(message => {
+      const content = message.sender === 'user' ? message.content
+        : presentAssistantAnswer(message.content, (message.citations || []).map(source => source.title));
+      return `### ${message.sender === 'user' ? 'Người dùng' : 'BlueAI'} (${message.timestamp})\n\n${content}\n\n---\n`;
+    }).join('\n');
     
     const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -205,14 +209,14 @@ export const ChatWorkspace: React.FC = () => {
                 {/* Status Pill */}
                 <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/80 dark:bg-[#0C1527]/90 border border-slate-200/80 dark:border-slate-700/80 text-cobalt-700 dark:text-cyan-300 text-xs font-bold shadow-subtle backdrop-blur-md">
                   <Sparkles className="w-3.5 h-3.5 text-cyan-500 animate-pulse" />
-                  <span>Chat RAG có dẫn nguồn</span>
+                  <span>Trợ lý BlueAI</span>
                 </div>
 
                 <h1 className="text-[1.65rem] sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-[-0.025em] leading-tight text-balance">
                   Chào bạn, tôi có thể hỗ trợ gì cho ca làm việc hôm nay?
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-xl mx-auto leading-relaxed">
-                  BlueAI đối chiếu câu hỏi với kho tài liệu RAG. Dữ liệu giao dịch chỉ được sử dụng khi có connector nghiệp vụ cung cấp kết quả thật.
+                  BlueAI hỗ trợ tra cứu thông tin sản phẩm, dịch vụ và chính sách để bạn tư vấn chính xác hơn.
                 </p>
               </div>
 

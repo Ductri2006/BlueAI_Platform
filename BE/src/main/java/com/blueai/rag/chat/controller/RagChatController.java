@@ -3,6 +3,7 @@ package com.blueai.rag.chat.controller;
 import com.blueai.rag.chat.dto.AskQuestionRequest;
 import com.blueai.rag.chat.dto.RagAnswerResponse;
 import com.blueai.rag.chat.service.RagChatService;
+import com.blueai.rag.chat.service.AnswerPresentation;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -28,6 +29,6 @@ public class RagChatController {
             @PathVariable String conversationId,
             @Valid @RequestBody AskQuestionRequest request
     ) {
-        return ragChatService.ask(jwt.getSubject(), conversationId, request);
+        return AnswerPresentation.answer(ragChatService.ask(jwt.getSubject(), conversationId, request));
     }
 }

@@ -136,7 +136,7 @@ class RagChatConversationContextIntegrationTest {
                         .content(objectMapper.writeValueAsString(java.util.Map.of("question", question))))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
-                        "$.sources[0].excerpt").value(evidence))
+                        "$.sources").isEmpty())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
                         "$.contextSources[0].type").value("CURRENT_CONVERSATION"));
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
@@ -144,7 +144,7 @@ class RagChatConversationContextIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
-                        "$[2].evidence.sources[0].excerpt").value(evidence))
+                        "$[2].evidence.sources").isEmpty())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
                         "$[2].evidence.contextSources[0].type").value("CURRENT_CONVERSATION"));
         String otherToken = registerAndGetAccessToken("travel-context-other@example.com");
@@ -185,7 +185,7 @@ class RagChatConversationContextIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
-                        "$[2].evidence.sources[0].excerpt").value("Bật Data Roaming."))
+                        "$[2].evidence.sources").isEmpty())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
                         "$[2].evidence.contextSources[0].type").value("CURRENT_CONVERSATION"));
         String otherToken = registerAndGetAccessToken("mixed-other@example.com");
