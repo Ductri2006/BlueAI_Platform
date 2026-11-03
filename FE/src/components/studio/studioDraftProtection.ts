@@ -19,7 +19,7 @@ export function isStudioExitControl(control: Element): boolean {
   if (control.getAttribute('aria-label') === 'Đăng xuất') return true;
   // Current app changes workspace through these SidebarRail controls rather than a router.
   return Boolean(control.closest('aside[aria-label="Thanh điều hướng chính"]'))
-    && ['Hỏi BlueAI', 'Tài liệu & Tri thức RAG', 'Token Gemini', 'Quản trị Hệ thống'].includes(control.getAttribute('title') || '');
+    && ['Hỏi BlueAI', 'Tài liệu & Tri thức RAG', 'Token Gemini', 'Chi phí API', 'Quản trị Hệ thống'].includes(control.getAttribute('title') || '');
 }
 
 export function installStudioExitProtection(root: () => HTMLElement | null, guard: StudioDraftGuard, onBusy: () => void,

@@ -301,6 +301,10 @@ public final class BotStudioDtos {
             String message,
             boolean fallback
     ) {
+        public PublicRuntimeOutput {
+            message = PublicAnswerText.withoutSources(message);
+        }
+
         public static PublicRuntimeOutput from(RuntimeResponse response) {
             return new PublicRuntimeOutput(response.message(), response.fallback());
         }
