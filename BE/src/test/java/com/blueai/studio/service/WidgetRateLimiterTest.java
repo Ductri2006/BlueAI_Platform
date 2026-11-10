@@ -14,6 +14,37 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class WidgetRateLimiterTest {
 
     @Test
+    void readingQuotaNeverConsumesOrExtendsTheWindow() {
+        var limiter = new WidgetRateLimiter(null, new WidgetProtectionProperties(),
+                new WidgetProtectionMetrics(new SimpleMeterRegistry()));
+        assertThat(limiter.snapshot("rag-user:qa", 2, Duration.ofMinutes(1)).remaining()).isEqualTo(2);
+        assertThat(limiter.trackedWindowCount()).isZero();
+        limiter.check("rag-user:qa", 2, Duration.ofMinutes(1), "slow down");
+        var before = limiter.snapshot("rag-user:qa", 2, Duration.ofMinutes(1));
+        for (int index = 0; index < 5; index++) {
+            var after = limiter.snapshot("rag-user:qa", 2, Duration.ofMinutes(1));
+            assertThat(after.remaining()).isEqualTo(1);
+            assertThat(after.resetsAt()).isEqualTo(before.resetsAt());
+        }
+        limiter.check("rag-user:qa", 2, Duration.ofMinutes(1), "slow down");
+        assertThat(limiter.snapshot("rag-user:qa", 2, Duration.ofMinutes(1)).remaining()).isZero();
+        assertThatThrownBy(() -> limiter.check("rag-user:qa", 2, Duration.ofMinutes(1), "slow down"))
+                .isInstanceOf(ApiException.class).satisfies(error ->
+                        assertThat(((ApiException) error).getRetryAfterSeconds()).isBetween(1L, 60L));
+    }
+
+    @Test
+    void quotaRestoresAfterExpirationAndIsIndependentPerAccount() throws Exception {
+        var limiter = new WidgetRateLimiter(null, new WidgetProtectionProperties(),
+                new WidgetProtectionMetrics(new SimpleMeterRegistry()));
+        limiter.check("rag-user:a", 1, Duration.ofMillis(20), "slow down");
+        assertThat(limiter.snapshot("rag-user:b", 1, Duration.ofMinutes(1)).remaining()).isEqualTo(1);
+        Thread.sleep(35);
+        assertThat(limiter.snapshot("rag-user:a", 1, Duration.ofMillis(20)).remaining()).isEqualTo(1);
+        limiter.check("rag-user:a", 1, Duration.ofMillis(20), "slow down");
+    }
+
+    @Test
     void rejectsRequestsAfterTheConfiguredWindowLimit() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         WidgetRateLimiter limiter = new WidgetRateLimiter(
@@ -78,7 +109,7 @@ class WidgetRateLimiterTest {
         org.mockito.Mockito.when(redis.execute(org.mockito.ArgumentMatchers.any(org.springframework.data.redis.core.script.RedisScript.class),
                         org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.<Object>any()))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("secret-fixture"))
-                .thenReturn(null).thenReturn(1L).thenReturn(2L);
+                .thenReturn(null).thenReturn(java.util.List.of(1L, 60000L)).thenReturn(java.util.List.of(2L, 59000L));
         var limiter = new WidgetRateLimiter(provider, properties, new WidgetProtectionMetrics(new SimpleMeterRegistry()));
         for (int attempt = 0; attempt < 2; attempt++) {
             assertThatThrownBy(() -> limiter.check("message-session:fixture", 1, Duration.ofMinutes(1), "slow down"))

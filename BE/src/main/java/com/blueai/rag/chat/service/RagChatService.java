@@ -168,7 +168,6 @@ public class RagChatService {
     @Transactional(readOnly = true)
     public RuntimeResponse previewWithSnapshot(String ownerId, BotSnapshot snapshot, PreviewRequest request) {
         requireActiveUser(ownerId);
-        checkUserQuota(ownerId);
         Conversation selected = request.conversationId() == null || request.conversationId().isBlank()
                 ? null : findOwnedConversation(ownerId, request.conversationId());
         ResolvedConversationContext base = selected == null
@@ -209,9 +208,14 @@ public class RagChatService {
         }
     }
 
-    private void checkUserQuota(String ownerId) {
+    public void checkUserQuota(String ownerId) {
         rateLimiter.check("rag-user:" + rateLimiter.clientKey(ownerId), requestsPerUserPerMinute,
                 Duration.ofMinutes(1), "Too many conversation requests. Try again later.", "RAG_RATE_LIMITED");
+    }
+
+    public WidgetRateLimiter.QuotaStatus quota(String ownerId) {
+        requireActiveUser(ownerId);
+        return rateLimiter.snapshot("rag-user:" + rateLimiter.clientKey(ownerId), requestsPerUserPerMinute, Duration.ofMinutes(1));
     }
 
     private String contextLookupQuestion(String question, PreviewContext context) {

@@ -71,9 +71,11 @@ public class SecurityConfig {
                         // the app security boundary. The deployment network must still
                         // restrict exposure of the app port; all other actuator data is
                         // operationally sensitive.
+                        .requestMatchers("/api/v1/auth/me", "/api/v1/auth/password/change", "/api/v1/auth/browser/password/change")
+                        .hasAnyRole("ADMIN", "USER", "PASSWORD_CHANGE")
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/admin/**", "/api/v1/documents/**", "/api/v1/system/**", "/api/v1/studio/**").hasRole("ADMIN")
-                        .anyRequest().authenticated()
+                        .anyRequest().hasAnyRole("ADMIN", "USER")
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
@@ -133,7 +135,10 @@ public class SecurityConfig {
                     || user.isDeleted() || tokenVersion == null
                     || tokenVersion.longValue() != user.getAuthVersion()
                     || jwt.getClaimAsString("sessionId") == null
-                    || !java.util.Objects.equals(user.getActiveSessionId(), jwt.getClaimAsString("sessionId"))) {
+                    || !java.util.Objects.equals(user.getActiveSessionId(), jwt.getClaimAsString("sessionId"))
+                    || user.isPasswordChangeRequired() != Boolean.TRUE.equals(jwt.getClaim("passwordChangeRequired"))
+                    || (user.isPasswordChangeRequired() && (user.getTemporaryPasswordExpiresAt() == null
+                    || !user.getTemporaryPasswordExpiresAt().isAfter(java.time.Instant.now())))) {
                 return OAuth2TokenValidatorResult.failure(new OAuth2Error(
                         "invalid_token",
                         "The account is disabled or the access token has been revoked.",
@@ -157,7 +162,7 @@ public class SecurityConfig {
         applicationConfiguration.setAllowedOrigins(properties.getAllowedOrigins());
         applicationConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         applicationConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-ID", "X-BlueAI-Browser"));
-        applicationConfiguration.setExposedHeaders(List.of("X-Request-ID"));
+        applicationConfiguration.setExposedHeaders(List.of("X-Request-ID", "Retry-After"));
         applicationConfiguration.setAllowCredentials(true);
         applicationConfiguration.setMaxAge(3600L);
 

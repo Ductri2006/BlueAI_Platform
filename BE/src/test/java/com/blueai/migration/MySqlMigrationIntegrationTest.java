@@ -116,8 +116,8 @@ class MySqlMigrationIntegrationTest {
                         "idempotency_key_type", "VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"))
                 .cleanDisabled(true)
                 .load();
-        assertThat(latest.migrate().migrationsExecuted).isEqualTo(7);
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("13");
+        assertThat(latest.migrate().migrationsExecuted).isEqualTo(8);
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("14");
         latest.validate();
         assertThat(latest.info().pending()).isEmpty();
         assertThat(latest.migrate().migrationsExecuted).isZero();
@@ -146,11 +146,14 @@ class MySqlMigrationIntegrationTest {
                     assertThat(result.getTimestamp("created_at")).isEqualTo(result.getTimestamp("expires_at"));
                 }
             }
-            try (var users = statement.executeQuery("SELECT id,auth_version,active_session_id FROM app_users")) {
+            try (var users = statement.executeQuery("SELECT id,auth_version,active_session_id,password_change_required,temporary_password_expires_at,temporary_password_consumed_at FROM app_users")) {
                 assertThat(users.next()).isTrue();
                 assertThat(users.getString("id")).isEqualTo(userId);
                 assertThat(users.getLong("auth_version")).isZero();
                 assertThat(users.getString("active_session_id")).isNull();
+                assertThat(users.getBoolean("password_change_required")).isFalse();
+                assertThat(users.getTimestamp("temporary_password_expires_at")).isNull();
+                assertThat(users.getTimestamp("temporary_password_consumed_at")).isNull();
                 assertThat(users.next()).isFalse();
             }
             String usageId = UUID.randomUUID().toString();

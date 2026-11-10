@@ -37,16 +37,20 @@ public class WidgetRateLimiter {
     private static final int MAX_LOCAL_WINDOWS = 10_000;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(WidgetRateLimiter.class);
-    private static final DefaultRedisScript<Long> INCREMENT_WITH_TTL = new DefaultRedisScript<>(
+    private static final DefaultRedisScript<List> INCREMENT_WITH_TTL = new DefaultRedisScript<>(
             """
                     local count = redis.call('INCR', KEYS[1])
                     if count == 1 then
                         redis.call('PEXPIRE', KEYS[1], ARGV[1])
                     end
-                    return count
+                    return {count, redis.call('PTTL', KEYS[1])}
                     """,
-            Long.class
+            List.class
     );
+    private static final DefaultRedisScript<List> READ_WITH_TTL = new DefaultRedisScript<>(
+            "local count = tonumber(redis.call('GET', KEYS[1]) or '0'); "
+                    + "local ttl = redis.call('PTTL', KEYS[1]); "
+                    + "if ttl <= 0 then return {0, 0} end; return {count, ttl}", List.class);
 
     private final Map<String, Window> localWindows = new ConcurrentHashMap<>();
     private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
@@ -72,11 +76,33 @@ public class WidgetRateLimiter {
         if (maxRequests < 1 || window.isNegative() || window.isZero()) {
             throw new IllegalArgumentException("Widget rate-limit configuration must be positive.");
         }
-        long count = increment(key, window);
-        if (count > maxRequests) {
+        Window current = increment(key, window);
+        if (current.count() > maxRequests) {
             protectionMetrics.record(WidgetProtectionMetrics.Event.RATE_LIMITED, scopeFor(key));
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, errorCode, message);
+            long retryAfter = Math.max(1, (Duration.between(Instant.now(), current.expiresAt()).toMillis() + 999) / 1000);
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, errorCode, message, retryAfter);
         }
+    }
+
+    public record QuotaStatus(int limit, long remaining, int windowSeconds, Instant resetsAt, long resetAfterSeconds) { }
+
+    /** Reading quota never creates a counter or extends its expiration. */
+    public QuotaStatus snapshot(String key, int limit, Duration window) {
+        Window current;
+        if (properties.isRedisEnabled()) {
+            current = redisWindow(READ_WITH_TTL, key, window);
+        } else {
+            current = localWindows.get(key);
+            if (current != null && !current.expiresAt().isAfter(Instant.now())) {
+                localWindows.remove(key, current);
+                current = null;
+            }
+        }
+        long count = current == null ? 0 : current.count();
+        long resetAfter = current == null || count == 0 ? 0
+                : Math.max(0, (Duration.between(Instant.now(), current.expiresAt()).toMillis() + 999) / 1000);
+        return new QuotaStatus(limit, Math.max(0, limit - count), (int) window.toSeconds(),
+                current == null || count == 0 ? null : current.expiresAt(), resetAfter);
     }
 
     /**
@@ -93,30 +119,31 @@ public class WidgetRateLimiter {
         return localWindows.size();
     }
 
-    private long increment(String key, Duration window) {
+    private Window increment(String key, Duration window) {
         if (properties.isRedisEnabled()) {
-            StringRedisTemplate redis = redisTemplateProvider == null ? null : redisTemplateProvider.getIfAvailable();
-            if (redis != null) {
-                try {
-                    Long result = redis.execute(
-                            INCREMENT_WITH_TTL,
-                            List.of(redisKey("rate:" + key)),
-                            Long.toString(window.toMillis())
-                    );
-                    if (result != null) {
-                        redisFailureLogged.set(false);
-                        return result;
-                    }
-                } catch (DataAccessException exception) {
-                    logRedisFallback(exception);
-                }
-            }
-            throw protectionUnavailable();
+            return redisWindow(INCREMENT_WITH_TTL, key, window);
         }
         return incrementLocal(key, window);
     }
 
-    private synchronized long incrementLocal(String key, Duration window) {
+    private Window redisWindow(DefaultRedisScript<List> script, String key, Duration window) {
+        StringRedisTemplate redis = redisTemplateProvider == null ? null : redisTemplateProvider.getIfAvailable();
+        if (redis != null) {
+            try {
+                List<?> result = redis.execute(script, List.of(redisKey("rate:" + key)), Long.toString(window.toMillis()));
+                if (result != null && result.size() == 2 && result.get(0) instanceof Number count
+                        && result.get(1) instanceof Number ttl && ttl.longValue() >= 0) {
+                    redisFailureLogged.set(false);
+                    return new Window(Instant.now().plusMillis(ttl.longValue()), count.longValue());
+                }
+            } catch (DataAccessException exception) {
+                logRedisFallback(exception);
+            }
+        }
+        throw protectionUnavailable();
+    }
+
+    private synchronized Window incrementLocal(String key, Duration window) {
         Instant now = Instant.now();
         if (!localWindows.containsKey(key) && localWindows.size() >= MAX_LOCAL_WINDOWS) {
             localWindows.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
@@ -131,12 +158,12 @@ public class WidgetRateLimiter {
             return new Window(current.expiresAt(), current.count() + 1);
         });
 
-        return updated.count();
+        return updated;
     }
 
     private ApiException protectionUnavailable() {
         return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "WIDGET_PROTECTION_UNAVAILABLE",
-                "Widget protection is temporarily unavailable. Please try again later.");
+                "Request protection is temporarily unavailable. Please try again later.");
     }
 
     private String redisKey(String suffix) {

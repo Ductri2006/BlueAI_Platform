@@ -52,6 +52,15 @@ public class User {
     @Column(name = "active_session_id", length = 36)
     private String activeSessionId;
 
+    @Column(name = "password_change_required", nullable = false)
+    private boolean passwordChangeRequired;
+
+    @Column(name = "temporary_password_expires_at")
+    private Instant temporaryPasswordExpiresAt;
+
+    @Column(name = "temporary_password_consumed_at")
+    private Instant temporaryPasswordConsumedAt;
+
     public String getActiveSessionId() { return activeSessionId; }
 
     public void replaceSession(String sessionId) { this.activeSessionId = sessionId; }
@@ -82,7 +91,24 @@ public class User {
     public void changePassword(String passwordHash) {
         this.passwordHash = passwordHash;
         this.authVersion++;
+        this.passwordChangeRequired = false;
+        this.temporaryPasswordExpiresAt = null;
+        this.temporaryPasswordConsumedAt = null;
     }
+
+    public void requirePasswordChange(Instant expiresAt) {
+        this.passwordChangeRequired = true;
+        this.temporaryPasswordExpiresAt = expiresAt;
+        this.temporaryPasswordConsumedAt = null;
+    }
+
+    public void consumeTemporaryPassword(Instant now) {
+        this.temporaryPasswordConsumedAt = now;
+    }
+
+    public boolean isPasswordChangeRequired() { return passwordChangeRequired; }
+    public Instant getTemporaryPasswordExpiresAt() { return temporaryPasswordExpiresAt; }
+    public Instant getTemporaryPasswordConsumedAt() { return temporaryPasswordConsumedAt; }
 
     public void softDelete(Instant when) {
         this.deletedAt = when;

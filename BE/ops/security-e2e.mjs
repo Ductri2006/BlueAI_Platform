@@ -83,7 +83,6 @@ assert([403, 404].includes(publicWorkerRoute.response.status), `public worker ro
 const removedSelfService = [
   ['/api/v1/auth/password-reset/request', { email: `retired-reset-${Date.now()}@staging.invalid` }],
   ['/api/v1/auth/password-reset/confirm', { token: 'invalid-retired-reset-token', newPassword: 'Unused-E2e-Password-123!' }],
-  ['/api/v1/auth/password/change', {}],
 ];
 for (const [path, body] of removedSelfService) {
   const result = await request(path, { method: 'POST', headers: bearer(tokenA, { 'content-type': 'application/json' }), body: JSON.stringify(body) });
@@ -119,7 +118,7 @@ if (process.env.RUN_ACCOUNT_MUTATION_E2E === 'true') {
     assert(throwawayMe.body.email.toLowerCase() === throwawayEmail, 'admin-issued throwaway identity mismatch');
 
     const passwordPath = `/api/v1/admin/users/${encodeURIComponent(throwawayId)}/password`;
-    const passwordBody = JSON.stringify({ newPassword });
+    const passwordBody = JSON.stringify({ currentPassword: process.env.ADMIN_PASSWORD });
     const deniedReset = await request(passwordPath, {
       method: 'POST', headers: bearer(tokenA, { 'content-type': 'application/json' }), body: passwordBody,
     });
@@ -130,8 +129,9 @@ if (process.env.RUN_ACCOUNT_MUTATION_E2E === 'true') {
     const adminReset = await request(passwordPath, {
       method: 'POST', headers: bearer(adminToken, { 'content-type': 'application/json' }), body: passwordBody,
     });
-    status(adminReset, 204, 'ADMIN set throwaway password');
-    assert(adminReset.text === '' && adminReset.body === null, 'ADMIN password set response must not expose a password or token');
+    status(adminReset, 200, 'ADMIN reset throwaway temporary password');
+    assert(typeof adminReset.body?.temporaryPassword === 'string', 'Temporary password response missing');
+    assert(adminReset.response.headers.get('cache-control') === 'no-store', 'Temporary credential must not be cached');
     assert(!adminReset.response.headers.has('set-cookie'), 'ADMIN password set response must not set a cookie');
 
     const oldAccess = await request('/api/v1/auth/me', { headers: bearer(throwawayToken) });
@@ -143,6 +143,14 @@ if (process.env.RUN_ACCOUNT_MUTATION_E2E === 'true') {
     status(oldRefresh, 401, 'old refresh token revoked after ADMIN password set'); json(oldRefresh, 'old refresh token revoked');
     assert(!oldRefresh.body.accessToken && !oldRefresh.body.refreshToken, 'old refresh token returned new credentials');
     await expectLoginFailure(throwawayEmail, initialPassword, 'old password rejected after ADMIN password set');
+    const restrictedToken = await login(throwawayEmail, adminReset.body.temporaryPassword, 'temporary password login');
+    const restrictedBusiness = await request('/api/v1/conversations', { headers: bearer(restrictedToken) });
+    status(restrictedBusiness, 403, 'temporary session cannot read conversations');
+    const changedPassword = await request('/api/v1/auth/password/change', {
+      method: 'POST', headers: bearer(restrictedToken, { 'content-type': 'application/json' }),
+      body: JSON.stringify({ newPassword }),
+    });
+    status(changedPassword, 204, 'temporary session sets personal password');
     const newToken = await login(throwawayEmail, newPassword, 'new admin-issued password login');
     const newMe = await request('/api/v1/auth/me', { headers: bearer(newToken) });
     status(newMe, 200, 'new access JWT after ADMIN password set'); json(newMe, 'new access JWT after ADMIN password set');
@@ -223,8 +231,8 @@ console.log(JSON.stringify({
     'token/header assertions',
     widgetKey ? 'allowed/denied CORS preflight' : 'CORS skipped (WIDGET_PUBLIC_KEY not set)',
     'public worker route edge boundary 403/404 (no worker secret sent)',
-    'self-service password reset/change endpoints disabled (403/404)',
-    process.env.RUN_ACCOUNT_MUTATION_E2E === 'true' ? 'ADMIN password set, USER 403, old JWT/refresh/password revoked, new login, and soft-delete checks' : 'admin account mutation checks skipped (RUN_ACCOUNT_MUTATION_E2E != true)',
+    'public email password-reset endpoints disabled (403/404)',
+    process.env.RUN_ACCOUNT_MUTATION_E2E === 'true' ? 'ADMIN temporary reset, restricted session, personal password change, session revocation, and USER soft-delete checks' : 'admin account mutation checks skipped (RUN_ACCOUNT_MUTATION_E2E != true)',
   ],
   target: baseUrl,
 }));

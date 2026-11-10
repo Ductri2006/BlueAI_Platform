@@ -40,6 +40,13 @@ jobs:
     name: MySQL 8.4 migration and session concurrency gates
     runs-on: ubuntu-latest
     services:
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=5s --health-retries=20
       mysql:
         image: mysql:8.4
         env:
@@ -65,6 +72,7 @@ jobs:
           --health-cmd="mysqladmin ping -h localhost -uroot -pci-disposable-root-password"
           --health-interval=5s --health-timeout=5s --health-retries=30
     env:
+      BLUEAI_QA_REDIS_PORT: '6379'
       MYSQL_MIGRATION_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_migration_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
       MYSQL_MIGRATION_TEST_USERNAME: migration_test
       MYSQL_MIGRATION_TEST_PASSWORD: ci-disposable-migration-password
@@ -89,7 +97,7 @@ jobs:
         run: |
           docker exec "$MYSQL_CONTAINER_ID" mysql --protocol=TCP -h127.0.0.1 -uroot -pci-disposable-root-password -e "CREATE DATABASE blueai_legacy_v1_test; CREATE DATABASE blueai_legacy_v3_test; GRANT ALL ON blueai_legacy_v1_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v3_test.* TO 'migration_test'@'%';"
       - run: mvn -B -Dtest=MySqlMigrationIntegrationTest,MySqlLegacyMigrationIntegrationTest test
-      - run: mvn -B -Dtest=AuthMySqlConcurrencyIntegrationTest,SingleLoginMySqlIntegrationTest,AuthAdminMutationMySqlIntegrationTest,AiTaskMySqlRecoveryIntegrationTest,AiTaskMySqlAuthorizationIntegrationTest test
+      - run: mvn -B -Dtest=AuthMySqlConcurrencyIntegrationTest,SingleLoginMySqlIntegrationTest,AuthAdminMutationMySqlIntegrationTest,AiTaskMySqlRecoveryIntegrationTest,AiTaskMySqlAuthorizationIntegrationTest,MySqlPasswordRecoveryIntegrationTest,WidgetRateLimiterRedisIntegrationTest test
 
   flyway-engine-upgrade:
     name: Flyway 11.7.2 to 11.20.3 on MySQL 8.4

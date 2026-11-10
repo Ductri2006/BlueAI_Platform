@@ -3,7 +3,9 @@ package com.blueai.auth.controller;
 import com.blueai.auth.dto.CreateManagedUserRequest;
 import com.blueai.auth.dto.AuthAuditLogResponse;
 import com.blueai.auth.dto.PageResponse;
-import com.blueai.auth.dto.AdminSetPasswordRequest;
+import com.blueai.auth.dto.TemporaryPasswordRequest;
+import com.blueai.auth.dto.TemporaryPasswordResponse;
+import org.springframework.http.CacheControl;
 import com.blueai.auth.dto.PurgeAuthRecordsRequest;
 import com.blueai.auth.dto.PurgeAuthRecordsResponse;
 import com.blueai.auth.dto.UpdateUserStatusRequest;
@@ -84,13 +86,13 @@ public class AdminUserController {
     }
 
     @PostMapping("/users/{userId}/password")
-    ResponseEntity<Void> setPassword(
+    ResponseEntity<TemporaryPasswordResponse> setPassword(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable String userId,
-            @Valid @RequestBody AdminSetPasswordRequest request
+            @Valid @RequestBody TemporaryPasswordRequest request
     ) {
-        adminUserService.setPassword(jwt.getSubject(), userId, request.newPassword());
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(adminUserService.resetTemporaryPassword(jwt.getSubject(), userId, request.currentPassword()));
     }
 
     @DeleteMapping("/users/{userId}")

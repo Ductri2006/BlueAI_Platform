@@ -100,7 +100,7 @@ class AuthSecurityIntegrationTest {
     }
 
     @Test
-    void authenticatedUsersCannotChangeTheirOwnPassword() throws Exception {
+    void authenticatedUsersCanChangeTheirOwnPasswordAndMustLoginAgain() throws Exception {
         save("owner@example.test", "Owner", UserRole.USER);
         JsonNode login = login("owner@example.test", "StrongPassword123!");
 
@@ -108,8 +108,8 @@ class AuthSecurityIntegrationTest {
                         .header("Authorization", "Bearer " + login.get("accessToken").asText())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentPassword\":\"StrongPassword123!\",\"newPassword\":\"NewStrongPassword123!\"}"))
-                .andExpect(status().isNotFound());
-        login("owner@example.test", "StrongPassword123!");
+                .andExpect(status().isNoContent());
+        login("owner@example.test", "NewStrongPassword123!");
     }
 
     @Test

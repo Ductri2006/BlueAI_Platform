@@ -27,6 +27,11 @@ public class WidgetProtectionMetrics {
         ).increment();
     }
 
+    public double blockedRequests() {
+        return meterRegistry.find(METRIC_NAME).tag("event", Event.RATE_LIMITED.tagValue())
+                .counters().stream().mapToDouble(io.micrometer.core.instrument.Counter::count).sum();
+    }
+
     public enum Event {
         RATE_LIMITED("rate_limited"),
         REDIS_FALLBACK("redis_fallback"),
