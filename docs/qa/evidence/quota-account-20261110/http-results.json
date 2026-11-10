@@ -1,0 +1,172 @@
+{
+  "testedAt": "2026-11-10T09:34:29.715Z",
+  "environment": "isolated local QA",
+  "baseUrl": "http://127.0.0.1:19305",
+  "checkCount": 40,
+  "checks": [
+    {
+      "name": "QA administrator authenticated",
+      "result": "PASS"
+    },
+    {
+      "name": "Anonymous quota is denied",
+      "result": "PASS"
+    },
+    {
+      "name": "Quota reads preserve remaining balance",
+      "result": "PASS"
+    },
+    {
+      "name": "Quota response disables caching",
+      "result": "PASS"
+    },
+    {
+      "name": "User cannot inspect admin quota overview",
+      "result": "PASS"
+    },
+    {
+      "name": "User cannot delete another account",
+      "result": "PASS"
+    },
+    {
+      "name": "Normal password change requires current password",
+      "result": "PASS"
+    },
+    {
+      "name": "Normal password change succeeds",
+      "result": "PASS"
+    },
+    {
+      "name": "Own password change revokes old access token",
+      "result": "PASS"
+    },
+    {
+      "name": "Own password change revokes old refresh token",
+      "result": "PASS"
+    },
+    {
+      "name": "Old password no longer authenticates",
+      "result": "PASS"
+    },
+    {
+      "name": "New password restores normal login",
+      "result": "PASS"
+    },
+    {
+      "name": "Reset rejects incorrect administrator password",
+      "result": "PASS"
+    },
+    {
+      "name": "Reset rejects administrator targets",
+      "result": "PASS"
+    },
+    {
+      "name": "Reset issues generated credential",
+      "result": "PASS"
+    },
+    {
+      "name": "Temporary response disables caching",
+      "result": "PASS"
+    },
+    {
+      "name": "Temporary credential contains 144 random bits",
+      "result": "PASS"
+    },
+    {
+      "name": "Temporary credential expires after 15 minutes",
+      "result": "PASS"
+    },
+    {
+      "name": "Reset revokes previous user session",
+      "result": "PASS"
+    },
+    {
+      "name": "Reset revokes previous refresh token",
+      "result": "PASS"
+    },
+    {
+      "name": "Temporary login requires password change",
+      "result": "PASS"
+    },
+    {
+      "name": "Temporary password is single use",
+      "result": "PASS"
+    },
+    {
+      "name": "Restricted session cannot read quota",
+      "result": "PASS"
+    },
+    {
+      "name": "Restricted session cannot read conversations",
+      "result": "PASS"
+    },
+    {
+      "name": "Restricted session can read own recovery state",
+      "result": "PASS"
+    },
+    {
+      "name": "Browser password change requires trusted origin guard",
+      "result": "PASS"
+    },
+    {
+      "name": "Guarded browser route completes recovery",
+      "result": "PASS"
+    },
+    {
+      "name": "Browser password completion clears refresh cookie",
+      "result": "PASS"
+    },
+    {
+      "name": "Completed recovery revokes restricted token",
+      "result": "PASS"
+    },
+    {
+      "name": "New personal password restores ordinary session",
+      "result": "PASS"
+    },
+    {
+      "name": "Recovered user can access quota",
+      "result": "PASS"
+    },
+    {
+      "name": "Each reset generates a distinct credential",
+      "result": "PASS"
+    },
+    {
+      "name": "Second reset invalidates recovered user session",
+      "result": "PASS"
+    },
+    {
+      "name": "Administrator deletion is denied",
+      "result": "PASS"
+    },
+    {
+      "name": "Self deletion is denied",
+      "result": "PASS"
+    },
+    {
+      "name": "User is soft deleted successfully",
+      "result": "PASS"
+    },
+    {
+      "name": "Deleted user cannot use old session",
+      "result": "PASS"
+    },
+    {
+      "name": "Deleted user cannot sign in",
+      "result": "PASS"
+    },
+    {
+      "name": "Two-tab browser session refreshed repeatedly",
+      "result": "PASS"
+    },
+    {
+      "name": "Two-tab browser session has no refresh-token reuse",
+      "result": "PASS"
+    }
+  ],
+  "multiTabRefresh": {
+    "successfulRefreshes": 13,
+    "reuseEvents": 0
+  }
+}

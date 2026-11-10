@@ -1,0 +1,20 @@
+{
+  "httpChecks": 40,
+  "frontend": {
+    "tests": 149,
+    "files": 19,
+    "build": "PASS"
+  },
+  "backend": {
+    "errors": 0,
+    "suites": 70,
+    "tests": 556,
+    "skipped": 0,
+    "failures": 0
+  },
+  "flyway": "11.7.2 V6 to 11.20.3 V14",
+  "documentDeletionHttpChecks": 8,
+  "checkedAt": "2026-11-10T15:28:59.5177561Z",
+  "environment": "isolated local QA",
+  "productionComposeConfiguration": "PASS"
+}

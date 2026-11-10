@@ -1,0 +1,38 @@
+{
+  "environment": "isolated local QA",
+  "checkedAt": "2026-11-10T15:17:08.955Z",
+  "checks": [
+    {
+      "name": "Anonymous deletion is denied",
+      "result": "PASS"
+    },
+    {
+      "name": "User deletion is denied",
+      "result": "PASS"
+    },
+    {
+      "name": "Another admin sees only the retained document",
+      "result": "PASS"
+    },
+    {
+      "name": "Deleted document details are hidden",
+      "result": "PASS"
+    },
+    {
+      "name": "Deleted document is absent from search",
+      "result": "PASS"
+    },
+    {
+      "name": "Repeated deletion is idempotent",
+      "result": "PASS"
+    },
+    {
+      "name": "Deleted document is excluded from worker claims",
+      "result": "PASS"
+    },
+    {
+      "name": "QA worker result marks retained document ready",
+      "result": "PASS"
+    }
+  ]
+}
