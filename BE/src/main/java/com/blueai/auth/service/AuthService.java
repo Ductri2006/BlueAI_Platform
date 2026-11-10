@@ -11,8 +11,10 @@ import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.RefreshTokenRepository;
 import com.blueai.auth.repository.UserRepository;
+import com.blueai.studio.service.WidgetRateLimiter;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -48,6 +50,8 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final AuthAuditLogService auditLogService;
     private final EntityManager entityManager;
+    private final WidgetRateLimiter rateLimiter;
+    private final int loginAttemptsPerMinute;
 
     public AuthService(
             UserRepository userRepository,
@@ -56,7 +60,9 @@ public class AuthService {
             JwtEncoder jwtEncoder,
             JwtProperties jwtProperties,
             AuthAuditLogService auditLogService,
-            EntityManager entityManager
+            EntityManager entityManager,
+            WidgetRateLimiter rateLimiter,
+            @Value("${app.auth.login-attempts-per-minute:20}") int loginAttemptsPerMinute
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -65,6 +71,8 @@ public class AuthService {
         this.jwtProperties = jwtProperties;
         this.auditLogService = auditLogService;
         this.entityManager = entityManager;
+        this.rateLimiter = rateLimiter;
+        this.loginAttemptsPerMinute = loginAttemptsPerMinute;
     }
 
     @Transactional
@@ -85,6 +93,8 @@ public class AuthService {
     @Transactional(noRollbackFor = ApiException.class)
     public AuthResponse login(LoginRequest request) {
         String email = normalizeEmail(request.email());
+        rateLimiter.check("login-account:" + rateLimiter.clientKey(email), loginAttemptsPerMinute,
+                Duration.ofMinutes(1), "Too many login attempts. Try again later.", "AUTH_RATE_LIMITED");
         if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
             throw invalidCredentials();
         }
@@ -139,6 +149,10 @@ public class AuthService {
 
         if (current.getRevokedAt() != null) {
             refreshTokenRepository.revokeFamily(current.getUser().getId(), current.getFamilyId(), now);
+            if (current.getFamilyId().equals(user.getActiveSessionId())) {
+                user.replaceSession(null);
+                userRepository.saveAndFlush(user);
+            }
             auditLogService.recordInTransaction("REFRESH_TOKEN_REUSE", "FAILURE", current.getUser().getId(), current.getUser().getId());
             throw new ApiException(
                     HttpStatus.UNAUTHORIZED,

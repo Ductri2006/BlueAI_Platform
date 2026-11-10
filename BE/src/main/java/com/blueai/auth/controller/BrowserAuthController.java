@@ -42,7 +42,7 @@ public class BrowserAuthController {
         this.authService = authService;
         this.corsProperties = corsProperties;
         this.jwtProperties = jwtProperties;
-        this.secureCookie = environment.acceptsProfiles(Profiles.of("prod"));
+        this.secureCookie = environment.acceptsProfiles(Profiles.of("prod", "production"));
     }
 
     @PostMapping("/login")

@@ -76,6 +76,10 @@ class AuthFlowIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("REFRESH_TOKEN_REUSED"));
 
+        mockMvc.perform(get("/api/v1/auth/me")
+                        .header("Authorization", "Bearer " + refreshed.get("accessToken").asText()))
+                .andExpect(status().isUnauthorized());
+
         mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
