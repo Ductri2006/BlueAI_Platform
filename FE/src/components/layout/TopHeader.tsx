@@ -1,11 +1,14 @@
 import React from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuth } from '../../auth/AuthContext';
-import { Moon, Sun, Shield, LogOut, UserRound } from 'lucide-react';
+import { Moon, Sun, Shield, LogOut, UserRound, KeyRound } from 'lucide-react';
+import { Modal } from '../ui/Modal';
+import { PasswordChangeForm } from '../auth/PasswordChangeForm';
 
 export const TopHeader: React.FC = () => {
   const { isDarkMode, toggleDarkMode } = useAppStore();
   const { user, logout } = useAuth();
+  const [changingPassword, setChangingPassword] = React.useState(false);
 
   return (
     <header className="h-14 border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-[#0B1528]/90 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between shrink-0 z-20 transition-colors">
@@ -28,6 +31,9 @@ export const TopHeader: React.FC = () => {
 
       {/* Right: server-issued role, theme and session controls */}
       <div className="flex items-center gap-2.5 shrink-0">
+        <button type="button" onClick={() => setChangingPassword(true)} aria-label="Đổi mật khẩu" title="Đổi mật khẩu"
+          className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"><KeyRound className="h-4 w-4" /></button>
+        {changingPassword && <Modal title="Đổi mật khẩu" onClose={() => setChangingPassword(false)}><PasswordChangeForm /></Modal>}
         <div className="hidden sm:flex items-center gap-1.5 bg-cobalt-50/80 dark:bg-cobalt-950/70 border border-cobalt-200/80 dark:border-cobalt-800 rounded-xl px-2.5 py-1.5 text-xs font-bold text-cobalt-700 dark:text-cobalt-300">
           <Shield className="w-3.5 h-3.5" />
           {user?.role === 'ADMIN' ? 'Quản trị viên' : 'Người dùng'}

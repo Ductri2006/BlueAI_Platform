@@ -6,6 +6,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { AccountActionDialog } from './AccountActionDialog';
+import { QuotaOverviewPanel } from './QuotaOverviewPanel';
 
 export const AdminDashboard: React.FC = () => {
   const { user: currentUser } = useAuth();
@@ -14,6 +16,7 @@ export const AdminDashboard: React.FC = () => {
   const [users, setUsers] = useState<UserResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [accountAction, setAccountAction] = useState<{ user: UserResponse; action: 'reset' | 'delete' }>();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -116,7 +119,7 @@ export const AdminDashboard: React.FC = () => {
           <form onSubmit={createUser} className="mt-5 space-y-3">
             <label className="block"><span className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Họ và tên</span><input required maxLength={100} value={fullName} onChange={event => setFullName(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="Nguyễn Minh Anh" /></label>
             <label className="block"><span className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Email đăng nhập</span><input required type="email" maxLength={190} value={email} onChange={event => setEmail(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="user@company.vn" /></label>
-            <label className="block"><span className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Mật khẩu tạm thời</span><input required type="password" minLength={8} maxLength={72} value={password} onChange={event => setPassword(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="Tối thiểu 8 ký tự" /></label>
+            <label className="block"><span className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Mật khẩu ban đầu</span><input required type="password" minLength={8} maxLength={72} value={password} onChange={event => setPassword(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" placeholder="Tối thiểu 8 ký tự" /></label>
             <label className="block"><span className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300">Quyền</span><select value={role} onChange={event => setRole(event.target.value as 'USER' | 'ADMIN')} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-900"><option value="USER">USER — sử dụng chat RAG</option><option value="ADMIN">ADMIN — quản trị và nguồn RAG</option></select></label>
             <Button type="submit" variant="primary" className="w-full" disabled={creating}><Plus className="mr-1.5 h-4 w-4" />{creating ? 'Đang tạo...' : 'Cấp tài khoản'}</Button>
           </form>
@@ -133,7 +136,13 @@ export const AdminDashboard: React.FC = () => {
                     <td className="p-4"><p className="font-semibold">{managedUser.fullName}</p><p className="text-xs text-slate-500">{managedUser.email}</p></td>
                     <td className="p-4"><Badge variant={managedUser.role === 'ADMIN' ? 'inferred' : 'subtle'} size="sm">{managedUser.role}</Badge></td>
                     <td className="p-4"><Badge variant={managedUser.status === 'ACTIVE' ? 'confirmed' : 'danger'} size="sm">{managedUser.status}</Badge></td>
-                    <td className="p-4 text-right"><Button variant="outline" size="sm" disabled={managedUser.id === currentUser?.id} onClick={() => void toggleUserStatus(managedUser)}>{managedUser.status === 'ACTIVE' ? 'Vô hiệu hóa' : 'Kích hoạt'}</Button></td>
+                    <td className="p-4"><div className="flex flex-wrap justify-end gap-2">
+                      <Button variant="outline" size="sm" disabled={managedUser.id === currentUser?.id} onClick={() => void toggleUserStatus(managedUser)}>{managedUser.status === 'ACTIVE' ? 'Vô hiệu hóa' : 'Kích hoạt'}</Button>
+                      {managedUser.role === 'USER' && <>
+                        <Button variant="outline" size="sm" disabled={managedUser.status !== 'ACTIVE'} onClick={() => setAccountAction({ user: managedUser, action: 'reset' })}>Reset mật khẩu</Button>
+                        <Button variant="outline" size="sm" onClick={() => setAccountAction({ user: managedUser, action: 'delete' })}>Xóa User</Button>
+                      </>}
+                    </div></td>
                   </tr>
                 ))}
               </tbody>
@@ -143,6 +152,12 @@ export const AdminDashboard: React.FC = () => {
         </Card>
       </div>
 
+      {accountAction && <AccountActionDialog key={`${accountAction.user.id}-${accountAction.action}`} {...accountAction}
+        onClose={() => setAccountAction(undefined)} onDeleted={deleted => {
+          setUsers(previous => previous.filter(user => user.id !== deleted.id));
+          showToast('Đã xóa mềm tài khoản User và thu hồi phiên.', 'success');
+        }} />}
+      <QuotaOverviewPanel />
       <div className="grid lg:grid-cols-2 gap-6">
         <Card className="p-5 space-y-4">
           <h2 className="font-bold flex items-center gap-2"><Database className="w-4 h-4" />Document pipeline</h2>

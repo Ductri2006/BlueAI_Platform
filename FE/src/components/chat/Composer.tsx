@@ -7,6 +7,8 @@ import {
 import { Button } from '../ui/Button';
 import { SlashCommandMenu, SlashCommand } from './SlashCommandMenu';
 import { VoiceInputModal } from './VoiceInputModal';
+import { useChatQuota } from './useChatQuota';
+import { QuotaIndicator } from './QuotaIndicator';
 
 interface ComposerProps {
   placeholder?: string;
@@ -20,6 +22,7 @@ export const Composer: React.FC<ComposerProps> = ({
   onClearContext
 }) => {
   const { sendMessage, streamStatus } = useAppStore();
+  const quota = useChatQuota();
   const [text, setText] = useState('');
   const [slashFilter, setSlashFilter] = useState('');
   const [isSlashOpen, setIsSlashOpen] = useState(false);
@@ -52,10 +55,12 @@ export const Composer: React.FC<ComposerProps> = ({
     setText(cmd.promptText);
   };
 
-  const handleSend = () => {
-    if (!text.trim() || isStreaming) return;
-    sendMessage(text);
-    setText('');
+  const handleSend = async () => {
+    if (!text.trim() || isStreaming || quota.blocked) return;
+    const submitted = text;
+    const accepted = await sendMessage(submitted);
+    if (accepted === false) return;
+    setText(current => current === submitted ? '' : current);
     setIsSlashOpen(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -65,12 +70,13 @@ export const Composer: React.FC<ComposerProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
   };
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-2 relative">
+      <QuotaIndicator {...quota} refresh={() => void quota.refresh()} />
       <VoiceInputModal
         isOpen={isVoiceOpen}
         onClose={() => setIsVoiceOpen(false)}
@@ -134,8 +140,8 @@ export const Composer: React.FC<ComposerProps> = ({
             <Button
               size="icon"
               variant="primary"
-              onClick={handleSend}
-              disabled={!text.trim() || isStreaming}
+              onClick={() => void handleSend()}
+              disabled={!text.trim() || isStreaming || quota.blocked}
               className="h-8 w-8 rounded-xl shadow-sm"
               aria-label={isStreaming ? 'Đang xử lý câu hỏi' : 'Gửi câu hỏi'}
             >

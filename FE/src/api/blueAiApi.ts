@@ -22,6 +22,29 @@ export interface UserResponse {
   role: 'ADMIN' | 'USER';
   status: 'ACTIVE' | 'DISABLED';
   createdAt: string;
+  passwordChangeRequired?: boolean;
+}
+
+export interface ChatQuota {
+  limit: number;
+  remaining: number;
+  windowSeconds: number;
+  resetsAt: string | null;
+  resetAfterSeconds?: number;
+}
+
+export interface QuotaOverview {
+  chat: ChatQuota;
+  loginAttemptsPerMinute: number;
+  defaultApiRequestsPerMinute: number;
+  widgetMessagesPerWindowPerClient: number;
+  widgetWindowSeconds: number;
+  blockedRequestsOnThisInstance: number;
+}
+
+export interface TemporaryPassword {
+  temporaryPassword: string;
+  expiresAt: string;
 }
 
 export interface AuthResponse {
@@ -345,6 +368,7 @@ export class BlueAiApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly code: string,
+    public readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = 'BlueAiApiError';
@@ -375,7 +399,12 @@ async function readApiError(response: Response): Promise<BlueAiApiError> {
 
   const code = body?.code || body?.error?.code || `HTTP_${response.status}`;
   const message = body?.message || body?.error?.message || 'BlueAI API returned an unexpected error.';
-  return new BlueAiApiError(message, response.status, code);
+  const retryHeader = response.headers.get('Retry-After');
+  const numericRetry = retryHeader === null ? NaN : Number(retryHeader);
+  const retryAfter = Number.isFinite(numericRetry) ? numericRetry
+    : retryHeader ? Math.ceil((Date.parse(retryHeader) - Date.now()) / 1000) : NaN;
+  return new BlueAiApiError(message, response.status, code,
+    Number.isFinite(retryAfter) ? Math.max(1, retryAfter) : undefined);
 }
 
 export class BlueAiApi {
@@ -388,6 +417,7 @@ export class BlueAiApi {
   private browserSessionAvailable = true;
   private sessionVersion = 0;
   private readonly sessionClearedListeners = new Set<() => void>();
+  private readonly quotaChangedListeners = new Set<(retryAfterSeconds?: number) => void>();
 
   constructor(private readonly options: BlueAiApiOptions = {}) {
     this.baseUrl = withoutTrailingSlash(options.baseUrl ?? DEFAULT_API_BASE_URL);
@@ -405,6 +435,25 @@ export class BlueAiApi {
   onSessionCleared(listener: () => void): () => void {
     this.sessionClearedListeners.add(listener);
     return () => { this.sessionClearedListeners.delete(listener); };
+  }
+
+  onQuotaChanged(listener: (retryAfterSeconds?: number) => void): () => void {
+    this.quotaChangedListeners.add(listener);
+    return () => { this.quotaChangedListeners.delete(listener); };
+  }
+
+  async getChatQuota(): Promise<ChatQuota> {
+    return this.authorizedRequest<ChatQuota>('/api/v1/auth/quota', { method: 'GET' });
+  }
+
+  async getQuotaOverview(): Promise<QuotaOverview> {
+    return this.authorizedRequest<QuotaOverview>('/api/v1/admin/quotas', { method: 'GET' });
+  }
+
+  async changeMyPassword(newPassword: string, currentPassword?: string): Promise<void> {
+    return this.authorizedRequest<void>(this.authPath('password/change'), {
+      method: 'POST', body: JSON.stringify({ currentPassword, newPassword }),
+    });
   }
 
   async login(credentials: LoginCredentials): Promise<UserResponse> {
@@ -529,6 +578,10 @@ export class BlueAiApi {
 
   async listDocuments(): Promise<DocumentResponse[]> {
     return this.authorizedRequest<DocumentResponse[]>('/api/v1/documents', { method: 'GET' });
+  }
+
+  async deleteDocument(documentId: string): Promise<void> {
+    return this.authorizedRequest<void>(`/api/v1/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' });
   }
 
   async uploadDocument(file: File): Promise<DocumentResponse> {
@@ -668,6 +721,16 @@ export class BlueAiApi {
     });
   }
 
+  async resetManagedUserPassword(userId: string, currentPassword: string): Promise<TemporaryPassword> {
+    return this.authorizedRequest<TemporaryPassword>(`/api/v1/admin/users/${encodeURIComponent(userId)}/password`, {
+      method: 'POST', body: JSON.stringify({ currentPassword }),
+    });
+  }
+
+  async deleteManagedUser(userId: string): Promise<UserResponse> {
+    return this.authorizedRequest<UserResponse>(`/api/v1/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+  }
+
   async askQuestion(conversationId: string, question: string): Promise<RagAnswerResponse> {
     return this.authorizedRequest<RagAnswerResponse>(
       `/api/v1/conversations/${encodeURIComponent(conversationId)}/ask`,
@@ -739,7 +802,7 @@ export class BlueAiApi {
     return Boolean(this.refreshToken || (this.browserSession && this.browserSessionAvailable));
   }
 
-  private authPath(action: 'login' | 'refresh' | 'logout'): string {
+  private authPath(action: 'login' | 'refresh' | 'logout' | 'password/change'): string {
     return `/api/v1/auth/${this.browserSession ? 'browser/' : ''}${action}`;
   }
 
@@ -752,12 +815,22 @@ export class BlueAiApi {
     const cookieAuth = this.browserSession && path.startsWith('/api/v1/auth/browser/');
     if (cookieAuth) headers.set('X-BlueAI-Browser', '1');
 
-    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+    const send = () => this.fetchImpl(`${this.baseUrl}${path}`, {
       ...init,
       headers,
       credentials: cookieAuth ? 'include' : 'omit',
     });
-    if (!response.ok) throw await readApiError(response);
+    // Serialize cookie rotation across tabs so both cannot consume the same refresh token.
+    const response = cookieAuth && typeof navigator !== 'undefined' && navigator.locks
+      ? await navigator.locks.request('blueai-browser-session', send)
+      : await send();
+    const chatRequest = init.method === 'POST' && /\/(ask|preview)$/.test(path);
+    if (!response.ok) {
+      const error = await readApiError(response);
+      if (chatRequest) this.quotaChangedListeners.forEach(listener => listener(error.status === 429 ? error.retryAfterSeconds : undefined));
+      throw error;
+    }
+    if (chatRequest) this.quotaChangedListeners.forEach(listener => listener());
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
   }

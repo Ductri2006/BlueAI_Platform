@@ -25,7 +25,7 @@ export interface AppState {
   updateSessionContextMode: (id: string, mode: ConversationContextMode) => void;
   streamStatus: AIStreamStatus;
   currentStreamActivity: string;
-  sendMessage: (text: string) => void;
+  sendMessage: (text: string) => Promise<boolean>;
   selectedCitation: Citation | null;
   isEvidenceOpen: boolean;
   openEvidence: (citation: Citation) => void;
@@ -168,12 +168,12 @@ export function useAppStore(): AppState {
 
   const sendMessage = async (text: string) => {
     const question = text.trim();
-    if (!question || ['searching', 'tool_calling', 'streaming'].includes(state.streamStatus)) return;
+    if (!question || ['searching', 'tool_calling', 'streaming'].includes(state.streamStatus)) return false;
     if (!state.activeSessionId) createNewSession();
 
     const sessionId = state.activeSessionId;
     const session = state.sessions.find(item => item.id === sessionId);
-    if (!session) return;
+    if (!session) return false;
     session.messages.push({
       id: `local-message-${crypto.randomUUID()}`,
       sender: 'user',
@@ -202,18 +202,23 @@ export function useAppStore(): AppState {
       state.streamStatus = 'complete';
       state.currentStreamActivity = '';
       notify();
+      return true;
     } catch (error) {
       const apiError = error instanceof BlueAiApiError ? error : new BlueAiApiError('Không thể kết nối BlueAI API.', 0, 'API_UNREACHABLE');
       state.sessions.find(item => item.id === sessionId)?.messages.push({
         id: `error-${crypto.randomUUID()}`,
         sender: 'system',
-        content: `Không thể nhận câu trả lời từ RAG API.\n\n**${apiError.code}**: ${apiError.message}`,
+        content: apiError.status === 429
+          ? `Đã đạt giới hạn gửi câu hỏi. Vui lòng chờ ${apiError.retryAfterSeconds || 60} giây rồi gửi lại.`
+          : `Không thể nhận câu trả lời từ RAG API.\n\n**${apiError.code}**: ${apiError.message}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         confidence: 'danger',
       });
       state.streamStatus = 'error';
       state.currentStreamActivity = '';
-      showToast('RAG API đang lỗi hoặc chưa được cấu hình.', 'warning');
+      showToast(apiError.status === 429 ? 'Đã đạt giới hạn gửi. Câu đang soạn được giữ lại để bạn thử sau.'
+        : 'RAG API đang lỗi hoặc chưa được cấu hình.', 'warning');
+      return false;
     }
   };
 
