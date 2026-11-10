@@ -1,6 +1,10 @@
 package com.blueai.auth.service;
 
 import com.blueai.auth.dto.CreateManagedUserRequest;
+import com.blueai.auth.dto.TemporaryPasswordResponse;
+import com.blueai.auth.model.UserRole;
+import com.blueai.studio.service.WidgetRateLimiter;
+import org.springframework.beans.factory.annotation.Value;
 import com.blueai.auth.dto.PageResponse;
 import com.blueai.auth.dto.UserResponse;
 import com.blueai.auth.exception.ApiException;
@@ -24,6 +28,9 @@ import java.util.List;
 import java.util.Locale;
 import java.time.Instant;
 import java.util.UUID;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Base64;
 
 @Service
 public class AdminUserService {
@@ -36,6 +43,9 @@ public class AdminUserService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EntityManager entityManager;
     private final AuthAuditLogService auditLogService;
+    private final WidgetRateLimiter rateLimiter;
+    private final Duration temporaryPasswordTtl;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     public AdminUserService(
             UserRepository userRepository,
@@ -43,7 +53,9 @@ public class AdminUserService {
             RefreshTokenRepository refreshTokenRepository,
             PasswordResetTokenRepository passwordResetTokenRepository,
             EntityManager entityManager,
-            AuthAuditLogService auditLogService
+            AuthAuditLogService auditLogService,
+            WidgetRateLimiter rateLimiter,
+            @Value("${app.auth.temporary-password-ttl:15m}") Duration temporaryPasswordTtl
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -51,6 +63,12 @@ public class AdminUserService {
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.entityManager = entityManager;
         this.auditLogService = auditLogService;
+        this.rateLimiter = rateLimiter;
+        if (temporaryPasswordTtl.isNegative() || temporaryPasswordTtl.isZero()
+                || temporaryPasswordTtl.compareTo(Duration.ofDays(1)) > 0) {
+            throw new IllegalArgumentException("Temporary password lifetime must be positive and at most one day.");
+        }
+        this.temporaryPasswordTtl = temporaryPasswordTtl;
     }
 
     @Transactional(readOnly = true)
@@ -134,6 +152,40 @@ public class AdminUserService {
         auditLogService.recordInTransaction("ADMIN_PASSWORD_SET", "SUCCESS", administratorId, userId);
     }
 
+    @Transactional
+    public TemporaryPasswordResponse resetTemporaryPassword(String administratorId, String userId, String currentPassword) {
+        rateLimiter.check("password-reset:" + rateLimiter.clientKey(administratorId), 5,
+                Duration.ofMinutes(1), "Too many password resets. Try again later.", "AUTH_RATE_LIMITED");
+        User administrator = lockUser(administratorId);
+        if (administrator == null || administrator.getRole() != UserRole.ADMIN || administrator.isDeleted()
+                || administrator.getStatus() != UserStatus.ACTIVE || administrator.isPasswordChangeRequired()) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "ADMIN_REQUIRED", "Tài khoản admin đang hoạt động là bắt buộc.");
+        }
+        if (currentPassword.getBytes(StandardCharsets.UTF_8).length > 72
+                || !passwordEncoder.matches(currentPassword, administrator.getPasswordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "CURRENT_PASSWORD_INVALID", "Mật khẩu admin chưa đúng.");
+        }
+        if (!isCanonicalUserId(userId)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_USER_ID", "User ID is invalid.");
+        }
+        User target = lockUser(userId);
+        if (target == null) throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User was not found.");
+        if (target.getRole() != UserRole.USER) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "USER_RESET_ONLY", "Chỉ được cấp mật khẩu tạm cho tài khoản User.");
+        }
+        byte[] random = new byte[18];
+        SECURE_RANDOM.nextBytes(random);
+        String temporaryPassword = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
+        setPassword(administratorId, userId, temporaryPassword);
+        // Token revocation clears the persistence context; reacquire the managed row.
+        target = lockUser(userId);
+        Instant expiresAt = Instant.now().plus(temporaryPasswordTtl);
+        target.requirePasswordChange(expiresAt);
+        target.replaceSession(null);
+        entityManager.flush();
+        return new TemporaryPasswordResponse(temporaryPassword, expiresAt);
+    }
+
     private boolean isCanonicalUserId(String userId) {
         if (userId == null || userId.length() != 36) {
             return false;
@@ -173,6 +225,9 @@ public class AdminUserService {
         }
         if (administratorId.equals(userId)) {
             throw new ApiException(HttpStatus.CONFLICT, "CANNOT_DELETE_SELF", "Administrators cannot delete their own account.");
+        }
+        if (user.getRole() != UserRole.USER) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "USER_DELETE_ONLY", "Chỉ được xóa tài khoản User.");
         }
         if (!user.isDeleted()) {
             user.softDelete(Instant.now());

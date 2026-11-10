@@ -292,6 +292,35 @@ class SharedAdminWorkspaceIntegrationTest {
     }
 
     @Test
+    void deletedSharedDocumentIsExcludedEvenWhenTheVectorStoreStillReturnsIt() throws Exception {
+        String owner = login("delete-kb-owner@test.example", UserRole.ADMIN);
+        String reader = login("delete-kb-reader@test.example", UserRole.ADMIN);
+        RagDocument removed = document("delete-kb-owner@test.example", "Deleted FAQ.txt", true);
+        RagDocument retained = document("delete-kb-owner@test.example", "Current FAQ.txt", true);
+        call(delete("/api/v1/documents/" + removed.getId()), reader, null, 204);
+        call(get("/api/v1/documents/" + removed.getId()), owner, null, 404);
+
+        String conversation = call(post("/api/v1/conversations"), reader,
+                Map.of("title", "Fresh chat after document deletion"), 201).path("id").asText();
+        String staleMatches = mapper.writeValueAsString(Map.of("matches", List.of(
+                Map.of("documentId", removed.getId(), "chunkId", "removed:1", "content", "DELETED_KB_CONTENT", "score", 0.99),
+                Map.of("documentId", retained.getId(), "chunkId", "retained:1", "content", "CURRENT_KB_CONTENT", "score", 0.9))));
+        provider.expect(once(), requestTo("http://shared-admin-stub.test/v1/retrieval/search"))
+                .andRespond(withSuccess(staleMatches, MediaType.APPLICATION_JSON));
+        provider.expect(once(), requestTo("http://shared-admin-stub.test/v1/chat/completions"))
+                .andRespond(request -> {
+                    jsonPath("$.messages[0].content", containsString("CURRENT_KB_CONTENT")).match(request);
+                    jsonPath("$.messages[0].content", not(containsString("DELETED_KB_CONTENT"))).match(request);
+                    return withSuccess(completion(), MediaType.APPLICATION_JSON).createResponse(request);
+                });
+        JsonNode answer = call(post("/api/v1/conversations/" + conversation + "/ask"), reader,
+                Map.of("question", "Điều kiện sử dụng eSIM hiện tại là gì?"), 200);
+        assertThat(answer.path("sources").size()).isEqualTo(1);
+        assertThat(answer.path("sources").get(0).path("documentId").asText()).isEqualTo(retained.getId());
+        provider.verify();
+    }
+
+    @Test
     void realAdminLoginsSharePublishedKeyButKeepPersonalConversationsPrivate() throws Exception {
         String a = login("keys-admin-a@test.example", UserRole.ADMIN);
         String b = login("keys-admin-b@test.example", UserRole.ADMIN);

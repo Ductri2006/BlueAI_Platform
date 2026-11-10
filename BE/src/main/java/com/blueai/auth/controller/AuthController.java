@@ -1,6 +1,7 @@
 package com.blueai.auth.controller;
 
 import com.blueai.auth.dto.AuthResponse;
+import com.blueai.auth.dto.ChangePasswordRequest;
 import com.blueai.auth.dto.LoginRequest;
 import com.blueai.auth.dto.LogoutRequest;
 import com.blueai.auth.dto.RefreshRequest;
@@ -44,6 +45,13 @@ public class AuthController {
     @GetMapping("/me")
     UserResponse me(@AuthenticationPrincipal Jwt jwt) {
         return authService.getCurrentUser(jwt.getSubject());
+    }
+
+    @PostMapping("/password/change")
+    ResponseEntity<Void> changePassword(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(jwt.getSubject(), jwt.getClaimAsString("sessionId"),
+                ((Number) jwt.getClaim("authVersion")).longValue(), request.currentPassword(), request.newPassword());
+        return ResponseEntity.noContent().cacheControl(org.springframework.http.CacheControl.noStore()).build();
     }
 
 }

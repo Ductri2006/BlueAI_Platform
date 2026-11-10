@@ -43,6 +43,7 @@ import com.blueai.studio.service.DialogContextBridge;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
+import com.blueai.studio.service.WidgetRateLimiter;
 import org.springframework.http.HttpStatus;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.io.UncheckedIOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -76,6 +78,8 @@ public class RagChatService {
     private final DialogRuntimeService dialogRuntimeService;
     private final ObjectMapper objectMapper;
     private final String workerApiKey;
+    private final WidgetRateLimiter rateLimiter;
+    private final int requestsPerUserPerMinute;
 
     public RagChatService(
             UserRepository userRepository,
@@ -91,7 +95,9 @@ public class RagChatService {
             BotReleaseRepository releaseRepository,
             DialogRuntimeService dialogRuntimeService,
             ObjectMapper objectMapper,
-            @Value("${app.worker.api-key}") String workerApiKey
+            @Value("${app.worker.api-key}") String workerApiKey,
+            WidgetRateLimiter rateLimiter,
+            @Value("${app.rag.requests-per-user-per-minute:30}") int requestsPerUserPerMinute
     ) {
         this.userRepository = userRepository;
         this.conversationRepository = conversationRepository;
@@ -107,11 +113,14 @@ public class RagChatService {
         this.dialogRuntimeService = dialogRuntimeService;
         this.objectMapper = objectMapper;
         this.workerApiKey = workerApiKey;
+        this.rateLimiter = rateLimiter;
+        this.requestsPerUserPerMinute = requestsPerUserPerMinute;
     }
 
     @Transactional
     public RagAnswerResponse ask(String ownerId, String conversationId, AskQuestionRequest request) {
         requireActiveUser(ownerId);
+        checkUserQuota(ownerId);
         Conversation conversation = findOwnedConversation(ownerId, conversationId);
         String question = request.question().trim();
         ActiveConfiguration activeConfiguration = loadActiveConfiguration();
@@ -197,6 +206,16 @@ public class RagChatService {
             return result.withTrace(new DialogTrace("CORE_UNAVAILABLE", "AI/RAG không khả dụng; đang trả lời dự phòng của kịch bản.",
                     List.of(), java.util.Map.of(), null));
         }
+    }
+
+    public void checkUserQuota(String ownerId) {
+        rateLimiter.check("rag-user:" + rateLimiter.clientKey(ownerId), requestsPerUserPerMinute,
+                Duration.ofMinutes(1), "Too many conversation requests. Try again later.", "RAG_RATE_LIMITED");
+    }
+
+    public WidgetRateLimiter.QuotaStatus quota(String ownerId) {
+        requireActiveUser(ownerId);
+        return rateLimiter.snapshot("rag-user:" + rateLimiter.clientKey(ownerId), requestsPerUserPerMinute, Duration.ofMinutes(1));
     }
 
     private String contextLookupQuestion(String question, PreviewContext context) {

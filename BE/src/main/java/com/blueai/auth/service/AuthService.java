@@ -11,8 +11,10 @@ import com.blueai.auth.model.User;
 import com.blueai.auth.model.UserStatus;
 import com.blueai.auth.repository.RefreshTokenRepository;
 import com.blueai.auth.repository.UserRepository;
+import com.blueai.studio.service.WidgetRateLimiter;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -48,6 +50,8 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final AuthAuditLogService auditLogService;
     private final EntityManager entityManager;
+    private final WidgetRateLimiter rateLimiter;
+    private final int loginAttemptsPerMinute;
 
     public AuthService(
             UserRepository userRepository,
@@ -56,7 +60,9 @@ public class AuthService {
             JwtEncoder jwtEncoder,
             JwtProperties jwtProperties,
             AuthAuditLogService auditLogService,
-            EntityManager entityManager
+            EntityManager entityManager,
+            WidgetRateLimiter rateLimiter,
+            @Value("${app.auth.login-attempts-per-minute:20}") int loginAttemptsPerMinute
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -65,6 +71,8 @@ public class AuthService {
         this.jwtProperties = jwtProperties;
         this.auditLogService = auditLogService;
         this.entityManager = entityManager;
+        this.rateLimiter = rateLimiter;
+        this.loginAttemptsPerMinute = loginAttemptsPerMinute;
     }
 
     @Transactional
@@ -85,6 +93,8 @@ public class AuthService {
     @Transactional(noRollbackFor = ApiException.class)
     public AuthResponse login(LoginRequest request) {
         String email = normalizeEmail(request.email());
+        rateLimiter.check("login-account:" + rateLimiter.clientKey(email), loginAttemptsPerMinute,
+                Duration.ofMinutes(1), "Too many login attempts. Try again later.", "AUTH_RATE_LIMITED");
         if (request.password().getBytes(StandardCharsets.UTF_8).length > 72) {
             throw invalidCredentials();
         }
@@ -108,12 +118,14 @@ public class AuthService {
             auditLogService.recordInTransaction("LOGIN", "FAILURE", null, user.getId());
             throw invalidCredentials();
         }
+        requireUsableTemporaryPassword(user);
         try {
             ensureActive(user);
         } catch (ApiException exception) {
             auditLogService.recordInTransaction("LOGIN", "FAILURE", null, user.getId());
             throw exception;
         }
+        if (user.isPasswordChangeRequired()) user.consumeTemporaryPassword(Instant.now());
         auditLogService.recordInTransaction("LOGIN", "SUCCESS", user.getId(), user.getId());
         return issueSession(user, UUID.randomUUID().toString());
     }
@@ -139,6 +151,10 @@ public class AuthService {
 
         if (current.getRevokedAt() != null) {
             refreshTokenRepository.revokeFamily(current.getUser().getId(), current.getFamilyId(), now);
+            if (current.getFamilyId().equals(user.getActiveSessionId())) {
+                user.replaceSession(null);
+                userRepository.saveAndFlush(user);
+            }
             auditLogService.recordInTransaction("REFRESH_TOKEN_REUSE", "FAILURE", current.getUser().getId(), current.getUser().getId());
             throw new ApiException(
                     HttpStatus.UNAUTHORIZED,
@@ -158,6 +174,7 @@ public class AuthService {
 
         try {
             ensureActive(user);
+            requirePasswordChangeNotExpired(user);
         } catch (ApiException exception) {
             auditLogService.recordInTransaction("REFRESH", "FAILURE", user.getId(), user.getId());
             throw exception;
@@ -216,6 +233,47 @@ public class AuthService {
         return UserResponse.from(user);
     }
 
+    @Transactional
+    public void changePassword(String userId, String sessionId, long authVersion, String currentPassword, String newPassword) {
+        rateLimiter.check("password-change:" + rateLimiter.clientKey(userId), 5,
+                Duration.ofMinutes(1), "Too many password change attempts. Try again later.", "AUTH_RATE_LIMITED");
+        validatePasswordLength(newPassword);
+        User user = entityManager.find(User.class, userId, LockModeType.PESSIMISTIC_WRITE);
+        if (user == null) throw invalidCredentials();
+        entityManager.refresh(user, LockModeType.PESSIMISTIC_WRITE);
+        ensureActive(user);
+        if (!java.util.Objects.equals(sessionId, user.getActiveSessionId()) || authVersion != user.getAuthVersion()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "SESSION_REPLACED", "Vui lòng đăng nhập lại.");
+        }
+        requirePasswordChangeNotExpired(user);
+        if (!user.isPasswordChangeRequired()
+                && (currentPassword == null || currentPassword.getBytes(StandardCharsets.UTF_8).length > 72
+                || !passwordEncoder.matches(currentPassword, user.getPasswordHash()))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "CURRENT_PASSWORD_INVALID", "Mật khẩu hiện tại chưa đúng.");
+        }
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "PASSWORD_UNCHANGED", "Mật khẩu mới phải khác mật khẩu đang dùng.");
+        }
+        user.changePassword(passwordEncoder.encode(newPassword));
+        user.replaceSession(null);
+        entityManager.flush();
+        refreshTokenRepository.revokeAllForUser(userId, Instant.now());
+        auditLogService.recordInTransaction("PASSWORD_CHANGED", "SUCCESS", userId, userId);
+    }
+
+    private void requireUsableTemporaryPassword(User user) {
+        requirePasswordChangeNotExpired(user);
+        if (user.isPasswordChangeRequired() && user.getTemporaryPasswordConsumedAt() != null) throw invalidCredentials();
+    }
+
+    private void requirePasswordChangeNotExpired(User user) {
+        if (user.isPasswordChangeRequired() && (user.getTemporaryPasswordExpiresAt() == null
+                || !user.getTemporaryPasswordExpiresAt().isAfter(Instant.now()))) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "TEMPORARY_PASSWORD_EXPIRED",
+                    "Mật khẩu tạm đã hết hạn. Vui lòng liên hệ admin để cấp lại.");
+        }
+    }
+
     private AuthResponse issueSession(User user, String familyId) {
         // The caller holds the user row lock (login) or owns the new row (register).
         // Revoke before issuing the new family, including sessions from older releases.
@@ -251,6 +309,9 @@ public class AuthService {
     private AccessToken createAccessToken(User user) {
         Instant issuedAt = Instant.now();
         Instant expiresAt = issuedAt.plus(jwtProperties.getAccessTokenTtl());
+        if (user.isPasswordChangeRequired() && user.getTemporaryPasswordExpiresAt().isBefore(expiresAt)) {
+            expiresAt = user.getTemporaryPasswordExpiresAt();
+        }
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(jwtProperties.getIssuer())
                 .audience(List.of(jwtProperties.getAudience()))
@@ -259,7 +320,8 @@ public class AuthService {
                 .subject(user.getId())
                 .id(UUID.randomUUID().toString())
                 .claim("email", user.getEmail())
-                .claim("roles", List.of(user.getRole().name()))
+                .claim("roles", List.of(user.isPasswordChangeRequired() ? "PASSWORD_CHANGE" : user.getRole().name()))
+                .claim("passwordChangeRequired", user.isPasswordChangeRequired())
                 .claim("authVersion", user.getAuthVersion())
                 .claim("sessionId", user.getActiveSessionId())
                 .claim("type", "access")

@@ -10,7 +10,8 @@ public record UserResponse(
         String fullName,
         String role,
         String status,
-        Instant createdAt
+        Instant createdAt,
+        boolean passwordChangeRequired
 ) {
     public static UserResponse from(User user) {
         return new UserResponse(
@@ -19,7 +20,8 @@ public record UserResponse(
                 user.getFullName(),
                 user.getRole().name(),
                 user.getStatus().name(),
-                user.getCreatedAt()
+                user.getCreatedAt(),
+                user.isPasswordChangeRequired()
         );
     }
 }

@@ -181,6 +181,7 @@ public class BotStudioService {
     @Transactional(readOnly = true)
     public RuntimeResponse preview(String ownerId, String botId, PreviewRequest request) {
         Bot bot = requireOwnedBot(ownerId, botId);
+        ragChatService.checkUserQuota(ownerId);
         BotSnapshot snapshot = snapshot(bot);
         if ((request.conversationId() != null && !request.conversationId().isBlank()) || !request.history().isEmpty()) {
             return ragChatService.previewWithSnapshot(ownerId, snapshot, request);

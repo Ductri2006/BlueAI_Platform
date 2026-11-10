@@ -5,6 +5,9 @@ import com.blueai.auth.config.JwtProperties;
 import com.blueai.auth.dto.AuthResponse;
 import com.blueai.auth.dto.BrowserAuthResponse;
 import com.blueai.auth.dto.LoginRequest;
+import com.blueai.auth.dto.ChangePasswordRequest;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import com.blueai.auth.exception.ApiException;
 import com.blueai.auth.service.AuthService;
 import jakarta.servlet.http.Cookie;
@@ -42,7 +45,7 @@ public class BrowserAuthController {
         this.authService = authService;
         this.corsProperties = corsProperties;
         this.jwtProperties = jwtProperties;
-        this.secureCookie = environment.acceptsProfiles(Profiles.of("prod"));
+        this.secureCookie = environment.acceptsProfiles(Profiles.of("prod", "production"));
     }
 
     @PostMapping("/login")
@@ -78,6 +81,16 @@ public class BrowserAuthController {
                 .header(HttpHeaders.SET_COOKIE, cookie("", Duration.ZERO).toString()).build();
     }
 
+    @PostMapping("/password/change")
+    ResponseEntity<Void> changePassword(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChangePasswordRequest body,
+                                        HttpServletRequest request) {
+        requireBrowserOrigin(request);
+        authService.changePassword(jwt.getSubject(), jwt.getClaimAsString("sessionId"),
+                ((Number) jwt.getClaim("authVersion")).longValue(), body.currentPassword(), body.newPassword());
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.SET_COOKIE, cookie("", Duration.ZERO).toString()).build();
+    }
+
     private ResponseEntity<BrowserAuthResponse> authenticated(AuthResponse response) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.SET_COOKIE, cookie(response.refreshToken(), jwtProperties.getRefreshTokenTtl()).toString())
@@ -90,7 +103,7 @@ public class BrowserAuthController {
     }
 
     private void requireBrowserOrigin(HttpServletRequest request) {
-        // Only these three routes authenticate with cookies. Requiring an exact
+        // Cookie-authenticated routes require an exact
         // trusted Origin AND a non-simple header prevents cross-site form CSRF.
         // All business endpoints continue to authenticate exclusively by Bearer.
         String origin = request.getHeader(HttpHeaders.ORIGIN);

@@ -184,11 +184,17 @@ class WorkerDocumentIntegrationTest {
         documentRepository.saveAndFlush(failed);
         failed.softDelete();
         documentRepository.saveAndFlush(failed);
-        Thread.sleep(10);
         RagDocument healthy = new RagDocument(owner, "healthy.txt", "purge-healthy.txt", "text/plain", 23, 900, 120);
         documentRepository.saveAndFlush(healthy);
         healthy.softDelete();
         documentRepository.saveAndFlush(healthy);
+
+        // Both tombstones must be strictly expired even on a coarse system clock.
+        Instant deletedBefore = Instant.now().minusSeconds(60);
+        jdbcTemplate.update("update rag_documents set deleted_at = ? where id = ?",
+                java.sql.Timestamp.from(deletedBefore.minusSeconds(1)), failed.getId());
+        jdbcTemplate.update("update rag_documents set deleted_at = ? where id = ?",
+                java.sql.Timestamp.from(deletedBefore), healthy.getId());
 
         when(ingestionTrigger.requestDocumentPurge(failed.getId())).thenReturn(false);
         when(ingestionTrigger.requestDocumentPurge(healthy.getId())).thenReturn(true);

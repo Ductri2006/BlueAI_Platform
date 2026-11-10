@@ -24,12 +24,24 @@ khi nó tốn connection, Redis hoặc quota AI.
 4. Trong lần deploy đầu tiên, đặt email và mật khẩu bootstrap admin. Khi admin
    đã tồn tại, đặt **cả hai** `APP_BOOTSTRAP_ADMIN_EMAIL` và
    `APP_BOOTSTRAP_ADMIN_PASSWORD` thành chuỗi rỗng để không còn bootstrap.
-5. Tài khoản đăng nhập bằng email và mật khẩu do ADMIN cấp. Không cấu hình SMTP,
-   self-service password reset/change hoặc Google/Gmail SSO. `GOOGLE_API_KEY`
+5. Tài khoản đăng nhập bằng email và mật khẩu do ADMIN cấp. User quên mật khẩu
+   liên hệ admin để được cấp mật khẩu tạm riêng, mặc định 15 phút. Admin xác
+   nhận bằng mật khẩu hiện tại; User dùng mật khẩu tạm một lần để mở phiên chỉ
+   được đặt mật khẩu mới. Các phiên cũ bị thu hồi. Admin/User có thể tự đổi
+   mật khẩu hiện tại; sau khi đổi phải đăng nhập lại. Public password-reset
+   qua email và Google/Gmail SSO vẫn đóng. `GOOGLE_API_KEY`
    trong `.env` phục vụ Gemini AI, không phải credential đăng nhập. Không in
    `docker compose config` ra terminal/log vì cấu hình đã render chứa các
    secret như JWT và webhook; dùng `ops/deploy.ps1 -Action Validate` hoặc
    `docker compose ... config --quiet`.
+
+Migration V14 bổ sung trạng thái khôi phục với mặc định không yêu cầu đổi mật
+khẩu cho tài khoản đang tồn tại. `app.auth.temporary-password-ttl` mặc định
+`15m`, hỗ trợ thời hạn dương tối đa một ngày. API admin đặt mật khẩu hiện nhận
+`currentPassword` của admin và trả mật khẩu tạm một lần với `Cache-Control:
+no-store`; các tích hợp cũ gửi `newPassword` cần chuyển sang luồng này. Chỉ
+xóa mềm tài khoản USER. Hướng dẫn cấu hình Dialog có tại
+`/guides/blueai-custom.html` trên frontend.
 
 Khi nâng cấp deployment cũ, xóa `APP_RESET_*`/`SMTP_*` khỏi secret bundle sau
 khi bundle Java mới pass staging; thu hồi credential SMTP đã cấp riêng cho
@@ -103,12 +115,14 @@ từ chối khởi động nếu còn một trong các lỗi sau:
 - Rate-limit hoặc TTL widget không hợp lệ.
 
 Thông báo lỗi chỉ nêu tên biến cần sửa, không in secret.
-Image backend trong release phải hỗ trợ `POST /api/v1/admin/users/{userId}/password`,
-không còn route self-service password reset/change và không yêu cầu SMTP/reset
-trong production startup gate. Triển khai image backend và Compose override đã
+Image backend trong release phải hỗ trợ luồng mật khẩu tạm tại
+`POST /api/v1/admin/users/{userId}/password` và đổi mật khẩu có xác thực tại
+`POST /api/v1/auth/password/change` hoặc route browser tương ứng. Public reset
+qua email đóng và production startup gate không yêu cầu SMTP/reset.
+Triển khai image backend và Compose override đã
 kiểm thử như một bundle; không trộn image cũ với Compose mới vì ứng dụng có thể
 không khởi động hoặc lộ route ngoài hợp đồng. Trước khi mở traffic, xác nhận
-staging security E2E pass: route ADMIN hoạt động và các route self-service cũ
+staging security E2E pass: route ADMIN hoạt động và các route reset qua email cũ
 trả 403/404. Nếu gate không đạt, dừng rollout và rollback cả bundle.
 
 ## 4. Ba lớp chống lạm dụng
@@ -478,8 +492,9 @@ Script kiểm tra anonymous/invalid bearer 401, USER admin/operational metrics
 allowed/denied CORS headers, token/header assertions, và data isolation: user B không thấy, không
 GET được và không DELETE được conversation của user A. Không in token hay
 secret response ra output. Nó cũng kiểm tra paging/filter cho admin users và
-conversation search, soft-delete conversation, và yêu cầu cả ba endpoint
-self-service password-reset request/confirm và password/change trả 403/404.
+conversation search, soft-delete conversation, và yêu cầu hai endpoint public
+password-reset request/confirm trả 403/404. Đổi mật khẩu có xác thực được kiểm
+tra trong luồng account mutation khi bật cờ kiểm tra tương ứng.
 Public worker route phải trả 403/404 tại edge; script không gửi
 `WORKER_API_KEY` qua staging ingress.
 
@@ -513,7 +528,7 @@ Script tự dọn container/network test; không dùng credential hoặc gọi G
 `node BE/ops/test-production-compose.mjs` kiểm tra Compose bằng credential giả
 và không in cấu hình chứa secret. Job MySQL 8.4 chạy
 `MySqlMigrationIntegrationTest` với database disposable `blueai_migration_test`,
-kiểm tra schema V5, nâng V6 giữ dữ liệu cũ rồi migrate/validate tới latest V9,
+kiểm tra schema V5, nâng V6 giữ dữ liệu cũ rồi migrate/validate tới latest V14,
 ghi usage/index và migrate lặp không làm thay đổi schema. Engine-upgrade test
 riêng kiểm tra history/data từ Flyway 11.7.2 tới 11.20.3 trên MySQL 8.4; kết quả
 CI không thay thế maintenance/recovery prerequisites ở section 11.
@@ -522,25 +537,29 @@ Test không bật nếu thiếu biến
 
 ADMIN cấp user qua `POST /api/v1/admin/users` và đặt lại mật khẩu qua
 `POST /api/v1/admin/users/{userId}/password` với body
-`{"newPassword":"..."}`. Kiểm tra live bằng account throwaway trên staging:
+`{"currentPassword":"..."}` để xác nhận mật khẩu admin. Response 200 trả
+`temporaryPassword` và `expiresAt`, kèm `Cache-Control: no-store`. Kiểm tra live
+bằng account throwaway trên staging.
 
 ```powershell
 $env:RUN_ACCOUNT_MUTATION_E2E = 'true'
 node .\ops\security-e2e.mjs
 ```
 
-Flow xác nhận USER bị 403 khi gọi route ADMIN, ADMIN nhận 204 không có body hay
-password/token, access JWT và refresh token cũ bị từ chối, mật khẩu cũ không
-đăng nhập được, còn mật khẩu mới đăng nhập và gọi `/auth/me` được. `finally`
+Flow xác nhận USER bị 403 khi gọi route ADMIN, ADMIN nhận mật khẩu tạm một lần,
+access JWT và refresh token cũ bị từ chối, mật khẩu cũ không đăng nhập được.
+Phiên dùng mật khẩu tạm bị chặn truy cập nghiệp vụ, phải đặt mật khẩu riêng qua
+route đổi mật khẩu rồi đăng nhập lại để gọi `/auth/me`. `finally`
 soft-delete user throwaway, kiểm tra `includeDeleted=false/true` và login sau
 xóa bị từ chối. Không chạy cờ này trên production hoặc user thật.
 
 Khi user thật quên mật khẩu, helpdesk xác minh danh tính theo quy trình nội bộ;
-ADMIN cấp mật khẩu mới bằng route trên qua kênh quản trị HTTPS, truyền mật khẩu
+ADMIN cấp mật khẩu tạm bằng route trên qua kênh quản trị HTTPS, truyền riêng
 cho user qua kênh bảo mật đã duyệt và kiểm tra audit event `ADMIN_PASSWORD_SET`.
 Không đưa mật khẩu vào URL, shell history, ticket hay log. Thao tác này làm
-access JWT và refresh token cũ mất hiệu lực; user phải đăng nhập lại. Hiện
-không có self-service đổi mật khẩu cho user.
+access JWT và refresh token cũ mất hiệu lực. User dùng mật khẩu tạm một lần,
+đặt mật khẩu riêng trong thời hạn khôi phục rồi đăng nhập lại. Admin/User có
+thể tự đổi mật khẩu trong giao diện khi biết mật khẩu hiện tại.
 
 Alertmanager reads `ALERTMANAGER_WEBHOOK_URL` from the deployment `.env` as an
 environment-backed Compose secret, mounted read-only at
@@ -643,10 +662,10 @@ bằng chứng session UTC. Xem [Connector/J datetime properties](https://dev.my
 
 Đây là **staging/production prerequisites**, không phải xác nhận đã chạy
 migration, ép UTC session hay recovery rehearsal trên production. Trước
-promotion phải lưu kết quả rehearsal fresh V1–V9, legacy baseline V1 hoặc V3
-lên V9 theo schema fingerprint, data preservation, migrate/validate lặp lại,
+promotion phải lưu kết quả rehearsal fresh V1–V14, legacy baseline V1 hoặc V3
+lên V14 theo schema fingerprint, data preservation, migrate/validate lặp lại,
 writer drain và partial-migration recovery. `FlywayMigrationIntegrationTest`,
 MySQL migration/engine-upgrade tests và CI verify là gate tự động, không thay
 thế preflight trên legacy schema thật hay production maintenance approval.
-Chỉ chọn baseline sau khi schema diff thực tế khớp mốc tương ứng; latest V9
-không phải lý do để baseline một database legacy thẳng lên V9.
+Chỉ chọn baseline sau khi schema diff thực tế khớp mốc tương ứng. Baseline cần
+phản ánh schema đang tồn tại trước khi áp dụng các migration còn thiếu.
