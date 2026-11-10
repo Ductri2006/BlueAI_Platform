@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './components/auth/LoginPage';
 import { loadChatWorkspace } from './components/layout/workspaceLoaders';
 import { blueAiApi } from './api/blueAiApi';
+import { PasswordChangePage } from './components/auth/PasswordChangeForm';
 
 const loadAppShell = () => import('./components/layout/AppShell');
 const AppShell = React.lazy(() => loadAppShell().then(module => ({ default: module.AppShell })));
@@ -17,7 +18,7 @@ const SessionFallback = () => (
 );
 
 function AuthenticatedApp() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
 
   React.useEffect(() => {
     if (status === 'checking' && blueAiApi.hasSession()) {
@@ -28,6 +29,7 @@ function AuthenticatedApp() {
   if (status === 'checking') {
     return <SessionFallback />;
   }
+  if (status === 'authenticated' && user?.passwordChangeRequired) return <PasswordChangePage />;
 
   return status === 'authenticated'
     ? <React.Suspense fallback={<SessionFallback />}><AppShell /></React.Suspense>
