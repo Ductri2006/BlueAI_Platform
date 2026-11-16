@@ -55,6 +55,7 @@ retrieval and completion calls also require `X-Worker-Api-Key`, using the same r
 ```powershell
 $env:APP_RAG_RETRIEVAL_BASE_URL = "http://localhost:8000"
 $env:APP_LLM_BASE_URL = "http://localhost:8000"
+$env:APP_RAG_WORKER_ORIGIN = "http://localhost:8000"
 $env:APP_LLM_API_KEY = "internal-rag-service"
 $env:APP_LLM_MODEL = "gemini-3.5-flash-lite"
 $env:APP_WORKER_API_KEY = "<same random secret configured as JAVA_WORKER_API_KEY>"

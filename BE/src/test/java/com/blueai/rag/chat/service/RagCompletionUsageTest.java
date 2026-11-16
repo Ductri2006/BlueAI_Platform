@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 
@@ -41,12 +43,55 @@ class RagCompletionUsageTest {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         when(factory.create()).thenAnswer(invocation -> builder.clone());
-        client = new RagCompletionClient(properties, factory, usageService, "test-worker-key");
+        client = new RagCompletionClient(properties, factory, usageService, "test-worker-key",
+                URI.create("http://gemini.test"));
     }
 
     @AfterEach
     void verifyRequests() {
         server.verify();
+    }
+
+    @Test
+    void sendsTheWorkerKeyOnlyToTheConfiguredOrigin() {
+        properties.setLlmBaseUrl("http://gemini.test:8081");
+        server.expect(requestTo("http://gemini.test:8081/v1/chat/completions"))
+                .andExpect(headerDoesNotExist("X-Worker-Api-Key"))
+                .andExpect(header("Authorization", "Bearer test-key"))
+                .andRespond(withSuccess(reply(null), MediaType.APPLICATION_JSON));
+        assertThat(ask()).isEqualTo("Answer");
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "http://gemini.test, http://gemini.test:80, true",
+            "http://GEMINI.test, http://gemini.test, true",
+            "https://gemini.test:443, https://gemini.test, true",
+            "http://gemini.test, https://gemini.test, false",
+            "http://gemini.test, http://external.test, false",
+            "http://gemini.test, http://gemini.test.external.test, false",
+            "http://gemini.test, http://gemini.test:8000, false",
+            "http://gemini.test, http://user@gemini.test, false",
+            "http://user@gemini.test, http://gemini.test, false"
+    })
+    void checksTheCompleteWorkerOrigin(String trustedOrigin, String targetOrigin, boolean trusted) {
+        properties.setLlmBaseUrl(targetOrigin);
+        client = new RagCompletionClient(properties, factory, usageService, "test-worker-key",
+                URI.create(trustedOrigin));
+        server.expect(requestTo(targetOrigin + "/v1/chat/completions"))
+                .andExpect(trusted ? header("X-Worker-Api-Key", "test-worker-key")
+                        : headerDoesNotExist("X-Worker-Api-Key"))
+                .andRespond(withSuccess(reply(null), MediaType.APPLICATION_JSON));
+        assertThat(ask()).isEqualTo("Answer");
+    }
+
+    @Test
+    void absoluteChatPathCannotSendTheWorkerKeyToAnotherOrigin() {
+        properties.setLlmChatPath("https://external.test/chat");
+        server.expect(requestTo("https://external.test/chat"))
+                .andExpect(headerDoesNotExist("X-Worker-Api-Key"))
+                .andRespond(withSuccess(reply(null), MediaType.APPLICATION_JSON));
+        assertThat(ask()).isEqualTo("Answer");
     }
 
     @Test

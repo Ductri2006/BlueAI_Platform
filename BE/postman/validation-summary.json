@@ -1,0 +1,36 @@
+{
+  "collectionSchema": "Postman Collection v2.1",
+  "requestCount": 95,
+  "folderCount": 18,
+  "uniqueRequestRouteCount": 70,
+  "checks": [
+    "Newman loads collection and environment",
+    "all scripts compile",
+    "all referenced variables declared",
+    "exported credentials blank",
+    "V14 temporary-password contract",
+    "administrator token isolated from USER recovery tokens",
+    "normal and forced password change",
+    "browser password-change route",
+    "read-only quota endpoints"
+  ],
+  "scriptValidation": {
+    "compiledScripts": 177
+  },
+  "liveApiTested": true,
+  "liveApiRun": {
+    "date": "2026-11-16",
+    "environment": "Disposable local backend with MySQL 8.4 and Redis 7.4",
+    "runner": "Newman",
+    "enabledFlags": [
+      "runAdmin",
+      "runBrowserPassword",
+      "runCleanup"
+    ],
+    "executedRequests": 54,
+    "assertions": 114,
+    "failures": 0,
+    "skippedRequests": 41
+  },
+  "scope": "Live run covers health, bearer auth, conversations/context, memories, admin USER lifecycle/recovery, quota policies, metrics, browser password change, expected errors and scoped cleanup. Optional RAG/provider, Studio/widget, integration task, worker, registration and maintenance folders require separate configured runs."
+}

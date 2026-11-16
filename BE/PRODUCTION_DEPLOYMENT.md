@@ -53,8 +53,10 @@ provider phải được thực hiện trong dashboard của provider trước k
 ## 2. Reverse proxy, IP thật và TLS
 
 `compose.production.yaml` bỏ public port của Java API, MySQL và RAG. Chỉ
-frontend Nginx còn bind `80:80`; đặt CDN/WAF hoặc TLS reverse proxy trước cổng
-này. Không expose `auth-api` trực tiếp ra Internet, vì khi đó người ngoài có
+frontend Nginx bind `127.0.0.1:80:80` mặc định. Đặt CDN/WAF và TLS reverse
+proxy trước cổng này. Với reverse proxy trên máy khác, đặt
+`BLUEAI_ORIGIN_BIND_ADDRESS` thành IP riêng của host và dùng firewall chỉ cho
+proxy tin cậy truy cập. Không expose `auth-api` trực tiếp ra Internet, vì khi đó người ngoài có
 thể bỏ qua Nginx/WAF và giả `X-Forwarded-For`.
 
 Nginx trong FE thay thế, không nối thêm, header `X-Forwarded-For`. Backend chỉ
@@ -77,6 +79,10 @@ Chỉ nhập CIDR của proxy có thể thực sự kết nối tới `auth-api`
 Nginx, cấu hình `real_ip` ở lớp edge với dải IP chính thức của CDN trước khi
 Nginx ghi header. Không tin `CF-Connecting-IP` hoặc `X-Forwarded-For` từ bất
 kỳ client nào nếu edge chưa xác thực nguồn gửi.
+
+Java chỉ gửi khóa worker trên yêu cầu completion nếu đích có cùng origin
+với `APP_RAG_WORKER_ORIGIN` (mặc định trong Compose là `http://rag-ai:8000`).
+Nếu LLM dùng dịch vụ bên ngoài, giữ origin worker trỏ về worker nội bộ.
 
 ## 3. Khởi động production
 

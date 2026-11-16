@@ -26,6 +26,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Validate Postman scripts and current account recovery contract
+        run: node ops/test-postman-collection.mjs
       - name: Test durable AI task recovery after killing the backend process
         env:
           BLUEAI_TEST_ARTIFACT_VOLUME: blueai-ci-ai-recovery-target
