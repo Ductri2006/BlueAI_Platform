@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 
@@ -41,12 +42,23 @@ class RagCompletionUsageTest {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         when(factory.create()).thenAnswer(invocation -> builder.clone());
-        client = new RagCompletionClient(properties, factory, usageService, "test-worker-key");
+        client = new RagCompletionClient(properties, factory, usageService, "test-worker-key",
+                URI.create("http://gemini.test"));
     }
 
     @AfterEach
     void verifyRequests() {
         server.verify();
+    }
+
+    @Test
+    void sendsTheWorkerKeyOnlyToTheConfiguredOrigin() {
+        properties.setLlmBaseUrl("http://gemini.test:8081");
+        server.expect(requestTo("http://gemini.test:8081/v1/chat/completions"))
+                .andExpect(headerDoesNotExist("X-Worker-Api-Key"))
+                .andExpect(header("Authorization", "Bearer test-key"))
+                .andRespond(withSuccess(reply(null), MediaType.APPLICATION_JSON));
+        assertThat(ask()).isEqualTo("Answer");
     }
 
     @Test

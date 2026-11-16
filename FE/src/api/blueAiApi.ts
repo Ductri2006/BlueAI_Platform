@@ -167,6 +167,32 @@ export interface GeminiUsageReport {
   generatedAt: string;
 }
 
+export interface GeminiUsageCost {
+  inputUsd: number;
+  outputUsd: number;
+  totalUsd: number;
+  unpricedRequests: number;
+}
+
+export interface GeminiUsageFilter {
+  startDate: string;
+  endDate: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface GeminiUsageRangeReport extends GeminiUsageFilter {
+  timezone: string;
+  totals: { requests: number; cost: GeminiUsageCost };
+  daily: Array<{ date: string; requests: number; cost: GeminiUsageCost }>;
+  models: Array<{ model: string; requests: number; cost: GeminiUsageCost }>;
+  recent: Array<{ id: string; model: string; recordedAt: string; cost: GeminiUsageCost }>;
+  totalPages: number;
+  generatedAt: string;
+  pricingSource: string;
+  pricingAsOf: string;
+}
+
 export type StudioBotStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type StudioDialogNodeType = 'WELCOME' | 'ROUTE' | 'FALLBACK' | 'FOLDER';
 export type StudioDialogNextStep = 'WAIT_FOR_REPLY' | 'SKIP_USER_INPUT' | 'JUMP_TO';
@@ -525,8 +551,12 @@ export class BlueAiApi {
     return this.authorizedRequest<SystemMetricsResponse>('/api/v1/system/metrics', { method: 'GET' });
   }
 
-  async getGeminiUsage(): Promise<GeminiUsageReport> {
-    return this.authorizedRequest<GeminiUsageReport>('/api/v1/system/gemini-usage', { method: 'GET' });
+  async getGeminiUsage(filters: GeminiUsageFilter): Promise<GeminiUsageRangeReport> {
+    const params = new URLSearchParams({
+      startDate: filters.startDate, endDate: filters.endDate,
+      page: String(filters.page), pageSize: String(filters.pageSize),
+    });
+    return this.authorizedRequest<GeminiUsageRangeReport>(`/api/v1/system/gemini-usage?${params}`, { method: 'GET' });
   }
 
   async listStudioBots(): Promise<StudioBotSummary[]> {

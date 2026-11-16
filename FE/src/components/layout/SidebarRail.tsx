@@ -28,7 +28,7 @@ export const SidebarRail: React.FC = () => {
     { role: 'employee', label: 'Hỏi BlueAI', icon: MessageSquare },
     { role: 'knowledge_owner', label: 'Tài liệu & Tri thức RAG', icon: BookOpen },
     { role: 'studio', label: 'BlueAI Custom', icon: Bot },
-    { role: 'gemini_usage', label: 'Token Gemini', icon: Gauge },
+    { role: 'gemini_usage', label: 'Chi phí API', icon: Gauge },
     { role: 'admin', label: 'Quản trị Hệ thống', icon: ShieldCheck },
   ];
   const roleNavItems = allRoleNavItems.filter(item => item.role === 'employee' || user?.role === 'ADMIN');

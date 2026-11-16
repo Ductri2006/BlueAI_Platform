@@ -50,6 +50,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -80,8 +81,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class DialogSalesContextIntegrationTest {
 
     private static final String PROVIDER_URL = "http://rag-stub.test";
-    private static final String ADMIN_EMAIL = "dialog-sales-admin@example.com";
-    private static final String USER_EMAIL = "dialog-sales-user@example.com";
+    private final String ADMIN_EMAIL = "dialog-sales-admin-" + UUID.randomUUID() + "@example.com";
+    private final String USER_EMAIL = "dialog-sales-user-" + UUID.randomUUID() + "@example.com";
     private static final String SALES_QUESTION = "Tư vấn gói eSIM cho khách hàng.";
     private static final String STORE_HOURS_QUESTION = "giờ mở cửa";
     private static final String KB_QUESTION = "Theo Knowledge Base, hướng dẫn xử lý eSIM không có sóng?";

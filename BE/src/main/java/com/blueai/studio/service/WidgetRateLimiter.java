@@ -65,13 +65,17 @@ public class WidgetRateLimiter {
     }
 
     public void check(String key, int maxRequests, Duration window, String message) {
+        check(key, maxRequests, window, message, "WIDGET_RATE_LIMITED");
+    }
+
+    public void check(String key, int maxRequests, Duration window, String message, String errorCode) {
         if (maxRequests < 1 || window.isNegative() || window.isZero()) {
             throw new IllegalArgumentException("Widget rate-limit configuration must be positive.");
         }
         long count = increment(key, window);
         if (count > maxRequests) {
             protectionMetrics.record(WidgetProtectionMetrics.Event.RATE_LIMITED, scopeFor(key));
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "WIDGET_RATE_LIMITED", message);
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, errorCode, message);
         }
     }
 

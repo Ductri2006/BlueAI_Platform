@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -404,7 +405,7 @@ class DocumentUploadIntegrationTest {
     }
 
     private String registerAndGetAccessToken() throws Exception {
-        return registerAndGetAccessToken("owner@example.com");
+        return registerAndGetAccessToken("owner-" + UUID.randomUUID() + "@example.com");
     }
 
     private String uploadDocument(String accessToken, String filename, String content) throws Exception {

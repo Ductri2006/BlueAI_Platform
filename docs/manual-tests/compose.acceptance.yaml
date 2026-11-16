@@ -69,6 +69,7 @@ services:
       APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE: "false"
       APP_RAG_RETRIEVAL_BASE_URL: http://rag-ai:8000
       APP_LLM_BASE_URL: http://rag-ai:8000
+      APP_RAG_WORKER_ORIGIN: http://rag-ai:8000
       APP_LLM_API_KEY: internal-rag-service
       APP_LLM_MODEL: gemini-3.5-flash-lite
     ports: ["127.0.0.1:23081:8080"]

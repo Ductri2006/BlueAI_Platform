@@ -1,0 +1,26 @@
+{
+  "collectionSchema": "Postman Collection v2.1 (official JSON Schema, draft-04)",
+  "requestCount": 81,
+  "folderCount": 17,
+  "uniqueControllerRouteCount": 62,
+  "missingControllerRoutes": [],
+  "checks": [
+    "official collection JSON schema",
+    "all variables declared",
+    "credentials exported blank",
+    "controller route coverage",
+    "response assertions present"
+  ],
+  "liveApiTested": false,
+  "liveApiLimitation": "localhost:8080 not reachable; Docker daemon not running during authoring",
+  "scope": "Java REST controllers plus actuator health; excludes Python service and other actuator endpoints",
+  "scriptValidation": {
+    "compiledScripts": 150,
+    "syntheticAssertions": 193,
+    "disabledFoldersSkip": true,
+    "tokenRotation": true,
+    "botRevisionBody": true,
+    "failedTaskRejected": true,
+    "liveBackend": false
+  }
+}
