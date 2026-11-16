@@ -1,0 +1,6 @@
+TÀI LIỆU KIỂM THỬ POSTMAN
+
+Đây là dữ liệu giả dùng riêng cho kiểm thử API.
+Gói Demo Postman được hoàn tiền trong vòng 7 ngày nếu chưa kích hoạt.
+Gửi yêu cầu hỗ trợ đến demo-support@example.com.
+Không dùng chính sách giả này để tư vấn khách hàng thật.

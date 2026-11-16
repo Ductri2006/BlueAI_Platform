@@ -2,8 +2,8 @@
 # docker compose -f compose.yaml -f compose.production.yaml up -d --build
 #
 # This override intentionally removes every host port except the frontend.
-# Put TLS/CDN/WAF in front of port 80, or change the frontend binding to a
-# loopback/private address for an external reverse proxy.
+# Put TLS/CDN/WAF in front of the loopback listener. For a remote proxy use
+# a private interface and allow inbound access only from that proxy.
 services:
   rag-ai:
     ports: !override []
@@ -111,7 +111,7 @@ services:
 
   frontend:
     ports: !override
-      - "80:80"
+      - "${BLUEAI_ORIGIN_BIND_ADDRESS:-127.0.0.1}:80:80"
 
 volumes:
   blueai-prometheus-data:

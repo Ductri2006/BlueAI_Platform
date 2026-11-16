@@ -17,6 +17,7 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.io.UncheckedIOException;
+import java.net.URI;
 import java.util.List;
 
 /** Shared LLM transport for answers and background conversation summarization. */
@@ -29,14 +30,17 @@ public class RagCompletionClient {
     private final RagRestClientFactory restClientFactory;
     private final GeminiUsageService usageService;
     private final String workerApiKey;
+    private final URI trustedWorkerOrigin;
 
     public RagCompletionClient(RagChatProperties properties, RagRestClientFactory restClientFactory,
                                GeminiUsageService usageService,
-                               @Value("${app.worker.api-key}") String workerApiKey) {
+                               @Value("${app.worker.api-key}") String workerApiKey,
+                               @Value("${app.rag.worker-origin:http://127.0.0.1:8000}") URI trustedWorkerOrigin) {
         this.properties = properties;
         this.restClientFactory = restClientFactory;
         this.usageService = usageService;
         this.workerApiKey = workerApiKey;
+        this.trustedWorkerOrigin = trustedWorkerOrigin;
     }
 
     public String complete(List<LlmChatMessage> messages) {
@@ -55,7 +59,12 @@ public class RagCompletionClient {
                 RestClient client = restClientFactory.create()
                         .baseUrl(properties.getLlmBaseUrl())
                         .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getLlmApiKey())
-                        .defaultHeader("X-Worker-Api-Key", workerApiKey)
+                        .requestInterceptor((request, body, execution) -> {
+                            if (isWorkerOrigin(request.getURI())) {
+                                request.getHeaders().set("X-Worker-Api-Key", workerApiKey);
+                            }
+                            return execution.execute(request, body);
+                        })
                         .build();
                 LlmResponse response = client
                     .post()
@@ -99,6 +108,20 @@ public class RagCompletionClient {
         }
 
         throw requestFailed();
+    }
+
+    private boolean isWorkerOrigin(URI target) {
+        String scheme = target.getScheme();
+        return ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                && scheme.equalsIgnoreCase(trustedWorkerOrigin.getScheme())
+                && target.getUserInfo() == null && trustedWorkerOrigin.getUserInfo() == null
+                && target.getHost() != null && target.getHost().equalsIgnoreCase(trustedWorkerOrigin.getHost())
+                && effectivePort(target) == effectivePort(trustedWorkerOrigin);
+    }
+
+    private int effectivePort(URI uri) {
+        if (uri.getPort() != -1) return uri.getPort();
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
     }
 
     private boolean isTransient(RuntimeException exception) {

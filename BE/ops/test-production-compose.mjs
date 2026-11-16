@@ -21,6 +21,7 @@ const result = spawnSync('docker', ['compose', '--env-file', 'FE/.env.example',
     APP_WIDGET_TRUSTED_PROXY_CIDRS: '172.30.0.10/32',
     APP_BOOTSTRAP_ADMIN_EMAIL: '', APP_BOOTSTRAP_ADMIN_PASSWORD: '',
     ALERTMANAGER_WEBHOOK_URL: 'https://alerts.example.test/webhook',
+    BLUEAI_ORIGIN_BIND_ADDRESS: '',
   },
 });
 if (result.error || result.status !== 0) throw new Error(`Compose validation failed: ${result.error?.message ?? result.stderr}`);
@@ -31,6 +32,7 @@ for (const [name, service] of Object.entries(services)) {
 assert.equal(services.frontend.ports.length, 1);
 assert.equal(services.frontend.ports[0].target, 80);
 assert.equal(services.frontend.ports[0].published, '80');
+assert.equal(services.frontend.ports[0].host_ip, '127.0.0.1');
 for (const name of ['mysql', 'redis', 'rag-ai', 'auth-api', 'frontend']) {
   assert.equal(services[name].restart, 'unless-stopped', `${name} restart policy`);
   assert(services[name].healthcheck?.test?.length, `${name} healthcheck missing`);
@@ -41,6 +43,7 @@ assert.equal(services['auth-api'].depends_on.mysql.condition, 'service_healthy')
 assert.equal(services['auth-api'].depends_on['rag-ai'].condition, 'service_healthy');
 assert.equal(services['auth-api'].depends_on.redis.condition, 'service_healthy');
 assert.equal(services['auth-api'].environment.SPRING_PROFILES_ACTIVE, 'prod');
+assert.equal(services['auth-api'].environment.APP_RAG_WORKER_ORIGIN, 'http://rag-ai:8000');
 assert.equal(services['auth-api'].environment.APP_PUBLIC_REGISTRATION_ENABLED, 'false');
 assert.equal(services['auth-api'].environment.APP_RAG_ALLOW_SHARED_DEMO_KNOWLEDGE, 'false');
 assert.equal(services['auth-api'].environment.APP_WIDGET_TRUST_FORWARDED_HEADERS, 'true');
