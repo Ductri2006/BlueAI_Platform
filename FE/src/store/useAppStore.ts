@@ -209,14 +209,15 @@ export function useAppStore(): AppState {
         id: `error-${crypto.randomUUID()}`,
         sender: 'system',
         content: apiError.status === 429
-          ? `Đã đạt giới hạn gửi câu hỏi. Vui lòng chờ ${apiError.retryAfterSeconds || 60} giây rồi gửi lại.`
+          ? apiError.code.startsWith('AI_') ? apiError.message
+            : `Đã đạt giới hạn gửi câu hỏi. Vui lòng chờ ${apiError.retryAfterSeconds || 60} giây rồi gửi lại.`
           : `Không thể nhận câu trả lời từ RAG API.\n\n**${apiError.code}**: ${apiError.message}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         confidence: 'danger',
       });
       state.streamStatus = 'error';
       state.currentStreamActivity = '';
-      showToast(apiError.status === 429 ? 'Đã đạt giới hạn gửi. Câu đang soạn được giữ lại để bạn thử sau.'
+      showToast(apiError.status === 429 ? `${apiError.code.startsWith('AI_') ? apiError.message : 'Đã đạt giới hạn gửi.'} Câu đang soạn được giữ lại để bạn thử sau.`
         : 'RAG API đang lỗi hoặc chưa được cấu hình.', 'warning');
       return false;
     }

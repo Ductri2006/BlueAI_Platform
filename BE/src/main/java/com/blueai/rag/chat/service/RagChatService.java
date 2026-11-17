@@ -80,6 +80,10 @@ public class RagChatService {
     private final String workerApiKey;
     private final WidgetRateLimiter rateLimiter;
     private final int requestsPerUserPerMinute;
+    private com.blueai.quota.AiTokenQuotaService tokenQuota;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setTokenQuota(com.blueai.quota.AiTokenQuotaService tokenQuota) { this.tokenQuota = tokenQuota; }
 
     public RagChatService(
             UserRepository userRepository,
@@ -203,6 +207,7 @@ public class RagChatService {
                             result.trace() == null ? List.of() : result.trace().visitedNodes(), java.util.Map.of(), null))
                     .withEvidence(sources, contextSources);
         } catch (ApiException unavailable) {
+            if (unavailable.getCode().startsWith("AI_")) throw unavailable;
             return result.withTrace(new DialogTrace("CORE_UNAVAILABLE", "AI/RAG không khả dụng; đang trả lời dự phòng của kịch bản.",
                     List.of(), java.util.Map.of(), null));
         }
@@ -339,6 +344,8 @@ public class RagChatService {
             );
         }
 
+        var embeddingReservation = tokenQuota == null ? null : tokenQuota.reserve("EMBEDDING",
+                com.blueai.quota.AiTokenQuotaService.inputBound(question), 0);
         try {
             RetrievalResponse response = restClientFactory.create()
                     .baseUrl(properties.getRetrievalBaseUrl())
@@ -349,8 +356,18 @@ public class RagChatService {
                     .body(new RetrievalRequest(ownerId, question, RETRIEVAL_LIMIT, allowedDocumentIds))
                     .retrieve()
                     .body(RetrievalResponse.class);
+            if (embeddingReservation != null && response != null && response.embeddingTokens() != null) {
+                if ("COUNT_TOKENS".equals(response.embeddingCountMethod())) tokenQuota.confirmCountedInput(embeddingReservation, response.embeddingTokens());
+                else tokenQuota.confirm(embeddingReservation, response.embeddingTokens(), 0, response.embeddingTokens());
+            }
             return response == null || response.matches() == null ? List.of() : response.matches();
         } catch (RestClientException | UncheckedIOException exception) {
+            if (embeddingReservation != null && exception instanceof org.springframework.web.client.RestClientResponseException limited
+                    && limited.getStatusCode().value() == 429) {
+                tokenQuota.release(embeddingReservation);
+                throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "AI_PROVIDER_RATE_LIMITED",
+                        "Nhà cung cấp AI đang giới hạn lượt dùng chung. Vui lòng thử lại sau.", 60L);
+            }
             throw new ApiException(
                     HttpStatus.BAD_GATEWAY,
                     "RAG_RETRIEVAL_FAILED",
@@ -676,7 +693,7 @@ public class RagChatService {
     private record RetrievalRequest(String userId, String query, int limit, List<String> allowedDocumentIds) {
     }
 
-    private record RetrievalResponse(List<RetrievedChunk> matches) {
+    private record RetrievalResponse(List<RetrievedChunk> matches, Long embeddingTokens, String embeddingCountMethod) {
     }
 
     private record RetrievedChunk(

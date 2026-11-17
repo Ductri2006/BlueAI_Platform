@@ -130,6 +130,8 @@ public class Conversation {
         return id;
     }
 
+    public String getOwnerId() { return owner.getId(); }
+
     public String getTitle() {
         return title;
     }

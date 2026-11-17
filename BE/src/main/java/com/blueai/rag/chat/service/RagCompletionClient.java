@@ -31,6 +31,12 @@ public class RagCompletionClient {
     private final GeminiUsageService usageService;
     private final String workerApiKey;
     private final URI trustedWorkerOrigin;
+    private com.blueai.quota.AiTokenQuotaService tokenQuota;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setTokenQuota(com.blueai.quota.AiTokenQuotaService tokenQuota) {
+        this.tokenQuota = tokenQuota;
+    }
 
     public RagCompletionClient(RagChatProperties properties, RagRestClientFactory restClientFactory,
                                GeminiUsageService usageService,
@@ -52,7 +58,12 @@ public class RagCompletionClient {
             );
         }
 
-        int maxAttempts = properties.getLlmMaxAttempts();
+        var reservation = tokenQuota == null ? null : tokenQuota.reserve(com.blueai.quota.AiUsageActor.operationKind(),
+                com.blueai.quota.AiTokenQuotaService.inputBound(messages.stream()
+                        .map(message -> message.role() + ":" + message.content()).collect(java.util.stream.Collectors.joining("\n"))),
+                tokenQuota.maxOutputTokens());
+        // An ambiguous provider timeout must not silently replay potentially paid work.
+        int maxAttempts = reservation == null ? properties.getLlmMaxAttempts() : 1;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
@@ -69,10 +80,15 @@ public class RagCompletionClient {
                 LlmResponse response = client
                     .post()
                     .uri(properties.getLlmChatPath())
-                    .body(new LlmRequest(properties.getLlmModel(), messages, 0.2))
+                    .body(new LlmRequest(properties.getLlmModel(), messages, 0.2,
+                            reservation == null ? null : tokenQuota.maxOutputTokens(),
+                            reservation == null ? null : reservation.id()))
                     .retrieve()
                     .body(LlmResponse.class);
 
+                if (reservation != null && response != null && response.usage() != null && response.usage().isComplete()) {
+                    tokenQuota.confirm(reservation, response.usage().promptTokens(), response.usage().completionTokens(), response.usage().totalTokens());
+                }
                 if (response == null || response.choices() == null || response.choices().isEmpty()
                         || response.choices().getFirst().message() == null
                         || response.choices().getFirst().message().content() == null
@@ -94,6 +110,15 @@ public class RagCompletionClient {
                 }
                 return response.choices().getFirst().message().content().trim();
             } catch (RestClientException | UncheckedIOException exception) {
+                if (reservation != null && exception instanceof RestClientResponseException rejected
+                        && rejected.getStatusCode().is4xxClientError() && rejected.getStatusCode().value() != 408) {
+                    tokenQuota.release(reservation);
+                }
+                if (reservation != null && exception instanceof RestClientResponseException limited
+                        && limited.getStatusCode().value() == 429) {
+                    throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "AI_PROVIDER_RATE_LIMITED",
+                            "Nhà cung cấp AI đang giới hạn lượt dùng chung. Vui lòng thử lại sau.", 60L);
+                }
                 if (attempt >= maxAttempts || !isTransient(exception)) {
                     throw requestFailed();
                 }
@@ -165,7 +190,9 @@ public class RagCompletionClient {
         );
     }
 
-    private record LlmRequest(String model, List<LlmChatMessage> messages, double temperature) {
+    private record LlmRequest(String model, List<LlmChatMessage> messages, double temperature,
+                              @JsonProperty("max_tokens") Integer maxTokens,
+                              @JsonProperty("operation_id") String operationId) {
     }
 
     private record LlmResponse(String model, List<LlmChoice> choices, LlmUsage usage) {

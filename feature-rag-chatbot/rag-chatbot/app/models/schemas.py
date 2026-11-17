@@ -26,6 +26,8 @@ class RetrievalMatch(BaseModel):
 
 class RetrievalResponse(BaseModel):
     matches: list[RetrievalMatch]
+    embeddingTokens: int | None = Field(default=None, ge=0)
+    embeddingCountMethod: Literal["COUNT_TOKENS", "USAGE_METADATA"] | None = None
 
 
 class ChatMessage(BaseModel):
@@ -37,6 +39,8 @@ class ChatCompletionRequest(BaseModel):
     model: str | None = None
     messages: list[ChatMessage] = Field(min_length=1)
     temperature: float = Field(default=0.2, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1, le=8192)
+    operation_id: str | None = Field(default=None, max_length=36)
 
 
 class CompletionChoice(BaseModel):

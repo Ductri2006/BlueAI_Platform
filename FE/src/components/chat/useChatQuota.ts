@@ -1,8 +1,10 @@
 import React from 'react';
-import { blueAiApi, type ChatQuota } from '../../api/blueAiApi';
+import { blueAiApi, type ChatQuota, type AiTokenQuota } from '../../api/blueAiApi';
 
 export function useChatQuota() {
   const [quota, setQuota] = React.useState<ChatQuota>();
+  const [aiQuota, setAiQuota] = React.useState<AiTokenQuota>();
+  const [aiError, setAiError] = React.useState('');
   const [error, setError] = React.useState('');
   const [now, setNow] = React.useState(Date.now());
   const [blockedUntil, setBlockedUntil] = React.useState(0);
@@ -11,6 +13,13 @@ export function useChatQuota() {
   const generation = React.useRef(0);
   const refresh = React.useCallback(async () => {
     const request = ++generation.current;
+    const tokens = blueAiApi.getAiTokenQuota().then(result => {
+      if (active.current && request === generation.current) { setAiQuota(result); setAiError(''); }
+    }).catch(() => {
+      if (active.current && request === generation.current) {
+        setAiQuota(undefined); setAiError('Chưa đọc được hạn mức AI. Hãy thử làm mới.');
+      }
+    });
     try {
       const result = await blueAiApi.getChatQuota();
       if (active.current && request === generation.current) {
@@ -28,6 +37,7 @@ export function useChatQuota() {
         setError('Chưa đọc được quota. Bạn có thể thử tải lại.');
       }
     }
+    await tokens;
   }, []);
   React.useEffect(() => {
     active.current = true;
@@ -59,7 +69,7 @@ export function useChatQuota() {
     return () => window.clearTimeout(timeout);
   }, [deadline, refresh]);
   return {
-    quota, error, refresh,
+    quota, error, refresh, aiQuota, aiError,
     seconds: Math.max(0, Math.ceil((deadline - now) / 1000)),
     blocked: blockedUntil > now || quota?.remaining === 0,
   };

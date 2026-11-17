@@ -42,6 +42,23 @@ export interface QuotaOverview {
   blockedRequestsOnThisInstance: number;
 }
 
+export interface TokenWindow {
+  limit: number;
+  used: number;
+  reserved: number;
+  uncertain: number;
+  remaining: number;
+  resetsAt: string | null;
+  resetAfterSeconds: number;
+}
+
+export interface AiTokenQuota {
+  enabled: boolean;
+  serverTime: string;
+  fiveHour: TokenWindow | null;
+  weekly: TokenWindow | null;
+}
+
 export interface TemporaryPassword {
   temporaryPassword: string;
   expiresAt: string;
@@ -446,6 +463,10 @@ export class BlueAiApi {
     return this.authorizedRequest<ChatQuota>('/api/v1/auth/quota', { method: 'GET' });
   }
 
+  async getAiTokenQuota(): Promise<AiTokenQuota> {
+    return this.authorizedRequest<AiTokenQuota>('/api/v1/auth/ai-quota', { method: 'GET' });
+  }
+
   async getQuotaOverview(): Promise<QuotaOverview> {
     return this.authorizedRequest<QuotaOverview>('/api/v1/admin/quotas', { method: 'GET' });
   }
@@ -827,7 +848,7 @@ export class BlueAiApi {
     const chatRequest = init.method === 'POST' && /\/(ask|preview)$/.test(path);
     if (!response.ok) {
       const error = await readApiError(response);
-      if (chatRequest) this.quotaChangedListeners.forEach(listener => listener(error.status === 429 ? error.retryAfterSeconds : undefined));
+      if (chatRequest) this.quotaChangedListeners.forEach(listener => listener(error.status === 429 && error.code === 'RAG_RATE_LIMITED' ? error.retryAfterSeconds : undefined));
       throw error;
     }
     if (chatRequest) this.quotaChangedListeners.forEach(listener => listener());
