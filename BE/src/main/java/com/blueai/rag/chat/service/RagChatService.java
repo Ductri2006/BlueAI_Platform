@@ -268,7 +268,11 @@ public class RagChatService {
                         contextSources.stream().map(ConversationContextSourceResponse::from).toList(), origin)
         ));
         conversation.touch();
-        eventPublisher.publishEvent(new ConversationTurnCompletedEvent(conversation.getId()));
+        // Pure Dialog turns must remain zero-AI even after the history becomes long.
+        // A later Core turn can summarize the preceding mixed history within its AI budget.
+        if (origin == AnswerOrigin.CORE) {
+            eventPublisher.publishEvent(new ConversationTurnCompletedEvent(conversation.getId()));
+        }
 
         return new RagAnswerResponse(
                 ConversationMessageResponse.from(userMessage),
