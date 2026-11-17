@@ -53,6 +53,7 @@ Gemini Free hiện có chi phí API bằng 0 cho các model trên trong phạm v
 
 - Giữ trước hai hạn mức bằng transaction ngắn, khóa hàng tài khoản trên database, dùng chung giữa các instance.
 - Counter project cũng được khóa khi nhận tác vụ. Không giữ transaction quota qua thời gian gọi Gemini.
+- Ghi quota và số liệu Gemini dùng một pool nhỏ riêng, cùng database. Vì vậy các transaction chat đang giữ hết kết nối chính không chặn việc nhận và quyết toán token.
 - Settlement theo mã tác vụ chỉ ghi một lần, cho phép thay phần ước tính bằng số liệu xác nhận sau đó.
 - Từ chối rõ ràng trước sinh nội dung trả lại phần giữ trước. Khi timeout không biết provider đã dùng bao nhiêu, giữ tối đa 5 phút, sau đó chuyển sang phần tạm tính có đánh dấu.
 - Không tự phát lại completion đã nhận admission khi gặp timeout không rõ trạng thái. Tắt retry/fallback ẩn ở worker cho luồng này để tránh nhân đôi chi phí.
