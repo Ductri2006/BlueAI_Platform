@@ -73,6 +73,8 @@ class CompletionService:
             for message in request.messages
         ]
         models = _chat_models()
+        if request.operation_id:
+            models = models[:1]
         for index, model_name in enumerate(models):
             try:
                 # The Java client sends an OpenAI-compatible model name, which
@@ -81,8 +83,8 @@ class CompletionService:
                 llm = ChatGoogleGenerativeAI(
                     model=model_name,
                     temperature=request.temperature,
-                    max_tokens=2048,
-                    max_retries=1,
+                    max_tokens=request.max_tokens or 2048,
+                    max_retries=0 if request.operation_id else 1,
                     timeout=12,
                 )
                 response = llm.invoke(messages)

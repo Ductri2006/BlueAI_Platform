@@ -90,7 +90,10 @@ public class ConversationSummaryService {
                 coveredMessageCount,
                 coveredMessageCount + batchSize
         );
-        String summary = summarize(existing == null ? null : existing.getContent(), batch);
+        String summary;
+        try (var ignored = com.blueai.quota.AiUsageActor.forOwner(conversation.getOwnerId())) {
+            summary = summarize(existing == null ? null : existing.getContent(), batch);
+        }
         if (existing == null) {
             summaryRepository.save(new ConversationSummary(conversation, summary, batchSize));
         } else {

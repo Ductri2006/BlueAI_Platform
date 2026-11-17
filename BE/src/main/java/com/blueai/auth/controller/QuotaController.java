@@ -19,6 +19,15 @@ public class QuotaController {
     private final WidgetProtectionMetrics metrics;
     private final int loginLimit;
     private final int defaultApiLimit;
+    private com.blueai.quota.AiTokenQuotaService tokenQuota;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setTokenQuota(com.blueai.quota.AiTokenQuotaService tokenQuota) { this.tokenQuota = tokenQuota; }
+
+    @GetMapping("/api/v1/auth/ai-quota")
+    ResponseEntity<com.blueai.quota.AiTokenQuotaService.Snapshot> aiQuota(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(tokenQuota.snapshot(jwt.getSubject()));
+    }
 
     public QuotaController(RagChatService ragChatService, WidgetProtectionProperties widget,
                            WidgetProtectionMetrics metrics,

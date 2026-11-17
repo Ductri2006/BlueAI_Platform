@@ -12,6 +12,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.vectorstores.utils import DistanceStrategy
 from langchain_core.documents import Document
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from app.services.embedding_usage import MeteredEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.core.config import INDEX_METADATA_FILENAME, _embedding_model, _index_dir
@@ -29,7 +30,7 @@ class FaissRepository:
         # task_type is left unset on purpose: langchain-google-genai then applies
         # RETRIEVAL_DOCUMENT when indexing and RETRIEVAL_QUERY when searching,
         # which is what Gemini recommends for RAG.
-        return GoogleGenerativeAIEmbeddings(model=_embedding_model())
+        return MeteredEmbeddings(model=_embedding_model())
 
     @staticmethod
     def is_gemini_configured() -> bool:

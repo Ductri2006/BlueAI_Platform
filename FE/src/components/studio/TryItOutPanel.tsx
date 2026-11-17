@@ -2,6 +2,8 @@ import React from 'react';
 import { Bot, RotateCcw, Send, UserRound, X } from 'lucide-react';
 import { blueAiApi, type ConversationResponse, type StudioCustomization, type StudioPreviewContext, type StudioRuntimeResponse } from '../../api/blueAiApi';
 import { StudioPreviewFallbackBadge } from './StudioPreviewFallbackBadge';
+import { useChatQuota } from '../chat/useChatQuota';
+import { QuotaIndicator } from '../chat/QuotaIndicator';
 
 interface TryItOutPanelProps {
   botId: string;
@@ -52,6 +54,7 @@ const structureLabels: Record<string, string> = {
 };
 
 export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, blueAiCoreEnabled, dialogEnabled = true, customization, onClose, welcomeMessage }) => {
+  const quota = useChatQuota();
   const welcome = { ...INITIAL_MESSAGE, text: welcomeMessage || (dialogEnabled ? INITIAL_MESSAGE.text : 'Chế độ chỉ RAG: hỏi đáp trực tiếp từ kho tri thức, không chạy kịch bản Dialog.') };
   const [items, setItems] = React.useState<TranscriptItem[]>([welcome]);
   const [conversations, setConversations] = React.useState<ConversationResponse[]>([]);
@@ -86,7 +89,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
     const value = message.trim();
-    if (!value || isSending) return;
+    if (!value || isSending || quota.blocked) return;
 
     setItems(current => [...current, { id: crypto.randomUUID(), role: 'user', text: value }]);
     setMessage('');
@@ -114,7 +117,10 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
         result: response,
       }]);
     } catch (requestError) {
-      if (currentGeneration === generation.current) setError(requestError instanceof Error ? requestError.message : 'Không thể chạy bản thử nghiệm.');
+      if (currentGeneration === generation.current) {
+        setMessage(value);
+        setError(requestError instanceof Error ? requestError.message : 'Không thể chạy bản thử nghiệm.');
+      }
     } finally {
       if (currentGeneration === generation.current) setIsSending(false);
     }
@@ -196,6 +202,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
       </div>
 
       <div className="border-t border-white/10 p-4">
+        <div className="mb-3"><QuotaIndicator {...quota} refresh={() => void quota.refresh()} /></div>
         {error && <p className="mb-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</p>}
         {context && (
           <div className="mb-3 flex flex-wrap gap-1.5 text-[10px] text-slate-400">
@@ -214,7 +221,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
             className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500"
             autoFocus
           />
-          <button type="submit" disabled={!message.trim() || isSending} className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-cobalt-600 text-white hover:bg-cobalt-500 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Gửi câu thử nghiệm">
+          <button type="submit" disabled={!message.trim() || isSending || quota.blocked} className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-cobalt-600 text-white hover:bg-cobalt-500 disabled:cursor-not-allowed disabled:opacity-40" aria-label="Gửi câu thử nghiệm">
             <Send className="h-4 w-4" />
           </button>
         </form>
