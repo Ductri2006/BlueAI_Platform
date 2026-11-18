@@ -2,8 +2,9 @@ import React from 'react';
 import { Bot, RotateCcw, Send, UserRound, X } from 'lucide-react';
 import { blueAiApi, type ConversationResponse, type StudioCustomization, type StudioPreviewContext, type StudioRuntimeResponse } from '../../api/blueAiApi';
 import { StudioPreviewFallbackBadge } from './StudioPreviewFallbackBadge';
-import { useChatQuota } from '../chat/useChatQuota';
+import { useSharedChatQuota } from '../chat/ChatQuotaContext';
 import { QuotaIndicator } from '../chat/QuotaIndicator';
+import { AiQuotaMenu } from '../chat/AiQuotaMenu';
 
 interface TryItOutPanelProps {
   botId: string;
@@ -54,7 +55,7 @@ const structureLabels: Record<string, string> = {
 };
 
 export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, blueAiCoreEnabled, dialogEnabled = true, customization, onClose, welcomeMessage }) => {
-  const quota = useChatQuota();
+  const quota = useSharedChatQuota();
   const welcome = { ...INITIAL_MESSAGE, text: welcomeMessage || (dialogEnabled ? INITIAL_MESSAGE.text : 'Chế độ chỉ RAG: hỏi đáp trực tiếp từ kho tri thức, không chạy kịch bản Dialog.') };
   const [items, setItems] = React.useState<TranscriptItem[]>([welcome]);
   const [conversations, setConversations] = React.useState<ConversationResponse[]>([]);
@@ -141,7 +142,8 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
             </>}
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
+          <AiQuotaMenu quota={quota.aiQuota} error={quota.aiError} refresh={quota.refresh} iconOnly />
           <button type="button" onClick={reset} disabled={isSending} className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white disabled:opacity-40" title="Xoá ngữ cảnh" aria-label="Xoá ngữ cảnh thử nghiệm">
             <RotateCcw className="h-4 w-4" />
           </button>
@@ -202,7 +204,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
       </div>
 
       <div className="border-t border-white/10 p-4">
-        <div className="mb-3"><QuotaIndicator {...quota} refresh={() => void quota.refresh()} /></div>
+        {quota.blocked && <div className="mb-2"><QuotaIndicator seconds={quota.seconds} blocked /></div>}
         {error && <p className="mb-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</p>}
         {context && (
           <div className="mb-3 flex flex-wrap gap-1.5 text-[10px] text-slate-400">

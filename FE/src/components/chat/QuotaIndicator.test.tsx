@@ -1,20 +1,20 @@
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-import {describe, expect, it, vi} from 'vitest';
+import {describe, expect, it} from 'vitest';
 import {QuotaIndicator} from './QuotaIndicator';
 
 describe('quota presentation', () => {
-  it('shows the shared account quota and recovery countdown', () => {
-    const html = renderToStaticMarkup(<QuotaIndicator quota={{limit:30, remaining:0, windowSeconds:60, resetsAt:null}}
-      seconds={17} error="" refresh={vi.fn()} blocked />);
-    expect(html).toContain('Quota gửi câu hỏi');
+  it('only displays the recovery message during an active cooldown', () => {
+    const html = renderToStaticMarkup(<QuotaIndicator seconds={17} blocked />);
     expect(html).toContain('Có thể gửi lại');
     expect(html).toContain('17');
-    expect(html).toContain('dùng chung giữa các tab');
+    expect(html).not.toContain('lượt /');
   });
-  it('shows unavailability explicitly when the counter cannot be read', () => {
-    const html = renderToStaticMarkup(<QuotaIndicator seconds={0} error="Chưa đọc được quota" refresh={vi.fn()} blocked={false} />);
-    expect(html).toContain('Chưa đọc được quota');
-    expect(html).not.toContain('Còn 0');
+  it('occupies no space while sending is available', () => {
+    expect(renderToStaticMarkup(<QuotaIndicator seconds={0} blocked={false} />)).toBe('');
+    expect(renderToStaticMarkup(<QuotaIndicator seconds={28} blocked={false} />)).toBe('');
+  });
+  it('does not invent a recovery countdown while waiting for the server', () => {
+    expect(renderToStaticMarkup(<QuotaIndicator seconds={0} blocked />)).toContain('Đang cập nhật');
   });
 });

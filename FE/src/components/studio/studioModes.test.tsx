@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BlueAiApi } from '../../api/blueAiApi';
 import { StudioTemplateSelector } from './StudioTemplateSelector';
 import { TryItOutPanel } from './TryItOutPanel';
+import { ChatQuotaProvider } from '../chat/ChatQuotaContext';
 
 describe('RAG and Dialog modes', () => {
   it('creates the combined website demo through the API', async () => {
@@ -26,7 +27,7 @@ describe('RAG and Dialog modes', () => {
   });
 
   it('shows RAG-only preview without claiming that Dialog is running', () => {
-    const html = renderToStaticMarkup(<TryItOutPanel botId="bot" botName="Bot" blueAiCoreEnabled dialogEnabled={false} onClose={() => {}} />);
+    const html = renderToStaticMarkup(<ChatQuotaProvider><TryItOutPanel botId="bot" botName="Bot" blueAiCoreEnabled dialogEnabled={false} onClose={() => {}} /></ChatQuotaProvider>);
     expect(html).toContain('Chỉ RAG');
     expect(html).toContain('không chạy kịch bản Dialog');
     expect(html).not.toContain('Intent/entity/Dialog chạy trước');

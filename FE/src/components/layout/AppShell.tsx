@@ -5,6 +5,7 @@ import { SidebarRail } from './SidebarRail';
 import { TopHeader } from './TopHeader';
 import { CheckCircle2, Info, AlertTriangle } from 'lucide-react';
 import { loadChatWorkspace } from './workspaceLoaders';
+import { ChatQuotaProvider } from '../chat/ChatQuotaContext';
 
 const ChatWorkspace = lazy(() => loadChatWorkspace().then(module => ({ default: module.ChatWorkspace })));
 const KnowledgeDashboard = lazy(() => import('../dashboards/KnowledgeDashboard').then(module => ({ default: module.KnowledgeDashboard })));
@@ -45,6 +46,7 @@ export const AppShell: React.FC = () => {
   };
 
   return (
+    <ChatQuotaProvider>
     <div className="flex h-[100dvh] w-full min-w-0 overflow-hidden bg-canvas-light dark:bg-canvas-dark text-slate-900 dark:text-slate-100 font-sans select-text">
       {/* 1. Left Sidebar Rail */}
       <SidebarRail />
@@ -72,5 +74,6 @@ export const AppShell: React.FC = () => {
         </div>
       )}
     </div>
+    </ChatQuotaProvider>
   );
 };
