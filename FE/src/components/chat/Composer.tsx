@@ -7,7 +7,7 @@ import {
 import { Button } from '../ui/Button';
 import { SlashCommandMenu, SlashCommand } from './SlashCommandMenu';
 import { VoiceInputModal } from './VoiceInputModal';
-import { useChatQuota } from './useChatQuota';
+import { useSharedChatQuota } from './ChatQuotaContext';
 import { QuotaIndicator } from './QuotaIndicator';
 
 interface ComposerProps {
@@ -22,7 +22,7 @@ export const Composer: React.FC<ComposerProps> = ({
   onClearContext
 }) => {
   const { sendMessage, streamStatus } = useAppStore();
-  const quota = useChatQuota();
+  const quota = useSharedChatQuota();
   const [text, setText] = useState('');
   const [slashFilter, setSlashFilter] = useState('');
   const [isSlashOpen, setIsSlashOpen] = useState(false);
@@ -76,7 +76,7 @@ export const Composer: React.FC<ComposerProps> = ({
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-2 relative">
-      <QuotaIndicator {...quota} refresh={() => void quota.refresh()} />
+      <QuotaIndicator seconds={quota.seconds} blocked={quota.blocked} />
       <VoiceInputModal
         isOpen={isVoiceOpen}
         onClose={() => setIsVoiceOpen(false)}

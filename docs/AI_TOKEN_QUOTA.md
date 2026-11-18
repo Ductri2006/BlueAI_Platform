@@ -4,10 +4,12 @@ Chính sách demo được chuẩn bị cho 10 tài khoản. Mỗi Admin/User c�
 
 ## Người dùng nhìn thấy gì?
 
-- Hai thanh tiến độ hiển thị mức đã dùng và thời điểm hồi phục theo giờ Việt Nam.
-- “Chi tiết” cho biết số đã dùng, giới hạn, còn khả dụng, phần đang chờ xác nhận và phần tạm tính.
+- Nút **Hạn mức AI** nằm trên thanh đầu trang, cạnh tài khoản. Bấm để mở hai thanh tiến độ và thời điểm hồi phục theo giờ Việt Nam; đóng bảng không chiếm chỗ trong hội thoại.
+- Bảng mở cho biết số đã dùng, giới hạn, còn khả dụng, phần đang chờ xác nhận và phần tạm tính. Mục “Cách tính token” giải thích cách ghi nhận.
 - Từ 80% sẽ có cảnh báo. Phần giữ trước được vẽ bằng màu xanh nhạt.
-- Dòng chống spam vẫn hiển thị số lượt còn lại trong 60 giây. Đây là giới hạn riêng.
+- Dòng chống spam không hiển thị thường trực. Server và cơ chế chặn gửi vẫn giữ nguyên; khi bị giới hạn mới xuất hiện thông báo ngắn kèm thời gian chờ. Có thể kiểm tra cấu hình trong phần quản trị.
+- Trên điện thoại, nút quota thu thành biểu tượng. Escape, nút đóng hoặc bấm ra ngoài sẽ đóng bảng; việc đóng không mất câu hỏi đang soạn. Bảng Thử BlueAI có nút quota nhỏ trên tiêu đề riêng.
+- Header, ô gửi và bảng Thử BlueAI dùng chung một bộ đọc quota trong workspace để không nhân các lượt thăm dò khi mở nhiều thành phần cùng lúc.
 - Các tab và Thử BlueAI dùng chung tài khoản. Đăng xuất, đăng nhập hay đổi mật khẩu không hồi token.
 - Hết token vẫn có thể dùng Dialog thuần kịch bản. Hạn mức chống spam tiếp tục áp dụng.
 - Một yêu cầu có ngữ cảnh lớn có thể bị từ chối khi số còn lại không đủ để giữ trước phần đầu vào và đầu ra tối đa.
