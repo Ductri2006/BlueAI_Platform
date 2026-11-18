@@ -3,7 +3,6 @@ package com.blueai.system.service;
 import com.blueai.system.dto.GeminiUsageReport;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
@@ -15,16 +14,29 @@ import java.util.UUID;
 public class GeminiUsageService {
 
     private final JdbcTemplate jdbcTemplate;
+    private com.blueai.quota.AiUsageDataAccess usageDataAccess;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setUsageDataAccess(com.blueai.quota.AiUsageDataAccess usageDataAccess) {
+        this.usageDataAccess = usageDataAccess;
+    }
 
     public GeminiUsageService(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
     /** Records only provider-reported usage; no prompt or response text is stored. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(String model, long promptTokens, long completionTokens, long totalTokens) {
         if (promptTokens < 0 || completionTokens < 0 || totalTokens < 0) return;
-        jdbcTemplate.update("""
+        if (usageDataAccess != null) {
+            usageDataAccess.write(target -> insertUsage(target, model, promptTokens, completionTokens, totalTokens));
+        } else {
+            insertUsage(jdbcTemplate, model, promptTokens, completionTokens, totalTokens);
+        }
+    }
+
+    private void insertUsage(JdbcTemplate target, String model, long promptTokens, long completionTokens, long totalTokens) {
+        target.update("""
                 INSERT INTO gemini_usage_events
                     (id, model, prompt_tokens, completion_tokens, total_tokens, recorded_at)
                 VALUES (?, ?, ?, ?, ?, ?)

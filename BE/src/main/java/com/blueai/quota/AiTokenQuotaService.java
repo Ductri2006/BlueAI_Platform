@@ -27,8 +27,8 @@ public class AiTokenQuotaService {
     private final Clock clock;
 
     @org.springframework.beans.factory.annotation.Autowired
-    public AiTokenQuotaService(JdbcTemplate jdbc, AiQuotaProperties properties, PlatformTransactionManager manager) {
-        this(jdbc, properties, manager, Clock.systemUTC());
+    public AiTokenQuotaService(AiUsageDataAccess dataAccess, AiQuotaProperties properties) {
+        this(dataAccess.jdbc(), properties, dataAccess.manager(), Clock.systemUTC());
     }
 
     AiTokenQuotaService(JdbcTemplate jdbc, AiQuotaProperties properties, PlatformTransactionManager manager, Clock clock) {
