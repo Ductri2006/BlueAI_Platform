@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   AlertTriangle, ArrowDown, ArrowUp, Bot, Boxes, Braces, BrainCircuit, CheckCircle2,
-  ChevronDown, ChevronRight, CircleDot, ClipboardPaste, Code2, Copy, CopyPlus, FlaskConical, FolderPlus,
+  ChevronDown, ChevronRight, CircleDot, ClipboardPaste, Code2, Copy, CopyPlus, FileMinus, FlaskConical, FolderPlus,
   GitBranch, LoaderCircle, MessageSquareText, MoreVertical, MoveRight, Plus,
   Rocket, Save, Search, ShieldCheck, Sparkles, Trash2, Upload, X,
 } from 'lucide-react';
@@ -15,6 +15,7 @@ import {
   type DocumentResponse,
 } from '../../api/blueAiApi';
 import { useAppStore } from '../../store/useAppStore';
+import { Button } from '../ui/Button';
 import { TryItOutPanel } from './TryItOutPanel';
 import { analyzeDialogNodes } from './dialogValidation';
 import { deleteDialogNode, planDialogInsertion, renameDialogNode, summarizeDialogStep, uniqueDialogName } from './dialogNodeOperations';
@@ -981,21 +982,39 @@ function SearchableSelect({ label, value, options, onChange, emptyLabel, disable
 }
 
 function WidgetKnowledgeSelector({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
-  const [documents, setDocuments] = React.useState<DocumentResponse[]>([]);
+  const [documents, setDocuments] = React.useState<DocumentResponse[] | null>(null);
   const [loadError, setLoadError] = React.useState('');
+  const heading = React.useRef<HTMLHeadingElement>(null);
   React.useEffect(() => {
     let active = true;
     blueAiApi.listDocuments().then(items => { if (active) setDocuments(items.filter(item => item.status === 'READY')); })
       .catch(error => { if (active) setLoadError(errorMessage(error)); });
     return () => { active = false; };
   }, []);
+  const availableSelection = documents === null
+    ? selected
+    : selected.filter(id => documents.some(document => document.id === id));
+
   return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-[#0B1324]">
-    <h2 className="text-sm font-black">Tài liệu RAG công khai cho widget</h2>
+    <h2 ref={heading} tabIndex={-1} className="text-sm font-black">Tài liệu RAG công khai cho widget</h2>
     <p className="mt-1 text-xs text-slate-500">Chỉ chọn tài liệu được phép chia sẻ cho khách truy cập website. Widget chỉ dùng tài liệu đã chọn và lịch sử phiên của khách. Lưu và phát hành lại để áp dụng; phiên đang mở tiếp tục dùng bản phát hành cũ.</p>
     {loadError && <p role="alert" className="mt-2 text-xs text-red-600">{loadError}</p>}
-    <div className="mt-3 max-h-52 space-y-2 overflow-auto">{documents.map(document => <label key={document.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selected.includes(document.id)} onChange={event => onChange(event.target.checked ? [...selected, document.id] : selected.filter(id => id !== document.id))} />{document.originalFilename}</label>)}</div>
-    {documents.length === 0 && !loadError && <p className="mt-2 text-xs text-slate-500">Chưa có tài liệu READY. Thêm tài liệu tại Tài liệu &amp; Tri thức RAG trước.</p>}
-    {selected.some(id => !documents.some(document => document.id === id)) && <button type="button" className="mt-2 text-xs text-red-600" onClick={() => onChange(selected.filter(id => documents.some(document => document.id === id)))}>Bỏ tài liệu không còn khả dụng</button>}
+    <div className="mt-3 max-h-52 space-y-2 overflow-auto">{documents?.map(document => <label key={document.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selected.includes(document.id)} onChange={event => onChange(event.target.checked ? [...selected, document.id] : selected.filter(id => id !== document.id))} />{document.originalFilename}</label>)}</div>
+    {documents?.length === 0 && <p className="mt-2 text-xs text-slate-500">Chưa có tài liệu READY. Thêm tài liệu tại Tài liệu &amp; Tri thức RAG trước.</p>}
+    {availableSelection.length < selected.length && (
+      <Button
+        type="button"
+        variant="outline"
+        className="mt-3 h-auto min-h-11 max-w-full whitespace-normal py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cobalt-500 motion-reduce:transition-none motion-reduce:active:scale-100"
+        onClick={() => {
+          onChange(availableSelection);
+          heading.current?.focus({ preventScroll: true });
+        }}
+      >
+        <FileMinus className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span>Bỏ tài liệu không còn khả dụng</span>
+      </Button>
+    )}
     {selected.length === 0 && <p className="mt-2 text-xs text-amber-700">Chưa chọn nguồn công khai; widget sẽ trả thông báo chưa đủ thông tin khi cần RAG.</p>}
   </section>;
 }
