@@ -33,6 +33,19 @@ class DialogConfigurationValidatorTest {
     private final DialogConfigurationValidator validator = new DialogConfigurationValidator();
 
     @Test
+    void languageDictionaryValidatesLocaleLengthAndExactVariables() {
+        for (var translations : List.of(
+                java.util.Map.of("en", new com.blueai.studio.dto.BotStudioDtos.DialogReplyInput("Hello {{other}}", null, null)),
+                java.util.Map.of("vi", new com.blueai.studio.dto.BotStudioDtos.DialogReplyInput("Hello {{name}}", null, null)),
+                java.util.Map.of("bad_code", new com.blueai.studio.dto.BotStudioDtos.DialogReplyInput("Hello {{name}}", null, null)),
+                java.util.Map.of("fr", new com.blueai.studio.dto.BotStudioDtos.DialogReplyInput("x".repeat(4001), null, null)))) {
+            var node = new DialogNodeInput("welcome", WELCOME, null, null, null, null, null, "Xin chào {{name}}", null,
+                    WAIT_FOR_REPLY, null, null, 1, com.blueai.studio.model.DialogContextReusePolicy.NONE, null, null, null, translations);
+            assertThat(validator.analyze(List.of(node), List.of())).anyMatch(item -> item.code().startsWith("LOCALIZED_") || item.code().equals("INVALID_TRANSLATION_LOCALE"));
+        }
+    }
+
+    @Test
     void englishTemplateMustPreserveTheExactRenderableVariables() {
         for (String english : List.of("Hello {{other}}", "Hello {{ name }}")) {
             var node = new DialogNodeInput("welcome", WELCOME, null, null, null, null, null,

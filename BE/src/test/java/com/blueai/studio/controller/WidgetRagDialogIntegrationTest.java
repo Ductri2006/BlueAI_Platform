@@ -246,6 +246,48 @@ class WidgetRagDialogIntegrationTest {
     }
 
     @Test
+    void languageDictionarySurvivesLegacySavePublicationAndExplicitRemoval() {
+        var configuration = create();
+        var translations = new java.util.LinkedHashMap<String, DialogReplyInput>();
+        for (String locale : List.of("en", "fr", "de", "es", "it", "pt", "ja", "ko", "zh", "ru", "th", "id", "ms", "ar", "hi", "nl")) {
+            translations.put(locale, new DialogReplyInput("Hello! How can I help you with your eSIM?", null, null));
+        }
+        var nodes = configuration.dialogNodes().stream().map(node -> new DialogNodeInput(
+                node.name(), node.type(), node.parentNode(), node.matchIntent(), node.matchEntityName(), node.matchEntityValue(),
+                node.requiredEntityName(), node.responseText(), node.missingEntityPrompt(), node.nextStep(), node.jumpToNode(),
+                node.irrelevantResponseText(), node.priority(), node.contextReusePolicy(), "Old English text.", null, null,
+                "chao_hoi".equals(node.matchIntent()) ? translations : java.util.Map.of())).toList();
+        var bot = configuration.bot();
+        var saved = studio.save(owner.getId(), bot.id(), new SaveConfigurationRequest(bot.draftRevision(), bot.name(),
+                bot.description(), bot.locale(), bot.timezone(), false, bot.customInstructions(), configuration.intents(),
+                configuration.entities(), nodes, configuration.customization(), true, List.of()));
+        assertThat(studio.get(owner.getId(), bot.id()).dialogNodes().stream()
+                .filter(node -> "chao_hoi".equals(node.matchIntent())).findFirst().orElseThrow().translations())
+                .hasSize(16).containsKey("ja");
+        var visitor = session(saved);
+        assertThat(message(visitor, "hello", "dictionary-greeting").result().message()).isEqualTo("Hello! How can I help you with your eSIM?");
+        var legacyNodes = saved.dialogNodes().stream().map(node -> new DialogNodeInput(node.name(), node.type(), node.parentNode(),
+                node.matchIntent(), node.matchEntityName(), node.matchEntityValue(), node.requiredEntityName(), node.responseText(),
+                node.missingEntityPrompt(), node.nextStep(), node.jumpToNode(), node.irrelevantResponseText(), node.priority(), node.contextReusePolicy())).toList();
+        saved = studio.save(owner.getId(), bot.id(), new SaveConfigurationRequest(saved.bot().draftRevision(), bot.name(),
+                bot.description(), bot.locale(), bot.timezone(), false, bot.customInstructions(), saved.intents(), saved.entities(),
+                legacyNodes, saved.customization(), true, List.of()));
+        assertThat(saved.dialogNodes().stream().filter(node -> "chao_hoi".equals(node.matchIntent())).findFirst().orElseThrow().translations()).hasSize(16);
+        var clearedNodes = saved.dialogNodes().stream().map(node -> new DialogNodeInput(node.name(), node.type(), node.parentNode(),
+                node.matchIntent(), node.matchEntityName(), node.matchEntityValue(), node.requiredEntityName(), node.responseText(),
+                node.missingEntityPrompt(), node.nextStep(), node.jumpToNode(), node.irrelevantResponseText(), node.priority(), node.contextReusePolicy(),
+                node.englishResponseText(), node.englishMissingEntityPrompt(), node.englishIrrelevantResponseText(), java.util.Map.of())).toList();
+        saved = studio.save(owner.getId(), bot.id(), new SaveConfigurationRequest(saved.bot().draftRevision(), bot.name(),
+                bot.description(), bot.locale(), bot.timezone(), false, bot.customInstructions(), saved.intents(), saved.entities(),
+                clearedNodes, saved.customization(), true, List.of()));
+        assertThat(saved.dialogNodes()).allSatisfy(node -> {
+            assertThat(node.translations()).isEmpty();
+            assertThat(node.englishResponseText()).isNull();
+        });
+        verifyNoInteractions(completion, clientFactory);
+    }
+
+    @Test
     void configuredEnglishDialogSurvivesSaveAndPublicationWithoutAnyAiCall() {
         var configuration = create();
         var nodes = configuration.dialogNodes().stream().map(node -> new DialogNodeInput(

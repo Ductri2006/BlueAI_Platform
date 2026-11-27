@@ -75,6 +75,10 @@ public class BotDialogNode {
     @Column(name = "english_irrelevant_response_text", length = 1000)
     private String englishIrrelevantResponseText;
 
+    @Lob
+    @Column(name = "reply_translations_json", columnDefinition = "longtext")
+    private String replyTranslationsJson;
+
     @Column(nullable = false)
     private int priority;
 
@@ -136,6 +140,8 @@ public class BotDialogNode {
     public String getEnglishResponseText() { return englishResponseText; }
     public String getEnglishMissingEntityPrompt() { return englishMissingEntityPrompt; }
     public String getEnglishIrrelevantResponseText() { return englishIrrelevantResponseText; }
+    public String getReplyTranslationsJson() { return replyTranslationsJson; }
+    public void setReplyTranslationsJson(String value) { replyTranslationsJson = value; }
     public void setEnglishReplies(String response, String missing, String irrelevant) {
         englishResponseText = response;
         englishMissingEntityPrompt = missing;

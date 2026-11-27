@@ -73,7 +73,9 @@ public class BilingualReplyService {
         if ("en".equals(language.code()) && ENGLISH.containsKey(text)) return ENGLISH.get(text);
         String sourceLanguage = ReplyLanguagePolicy.detect(withoutEntityValues(text, variables));
         if (sourceLanguage == null || sourceLanguage.equals(language.code())) return text;
-        if (!allowAi) return "This request needs help from a support agent. Please contact support to continue in English.";
+        if (!allowAi) return "en".equals(language.code())
+                ? "This request needs help from a support agent. Please contact support to continue in English."
+                : "Yêu cầu này cần nhân viên hỗ trợ. Bạn vui lòng liên hệ hỗ trợ để tiếp tục bằng tiếng Việt.";
         try {
             String response = completion.complete(List.of(
                     new LlmChatMessage("system", "Translate the supplied customer-support message into " + language.name()
@@ -106,13 +108,16 @@ public class BilingualReplyService {
     }
 
     public BotSnapshot dialogSnapshot(BotSnapshot snapshot, ReplyLanguagePolicy.State language) {
-        if (!"en".equals(language.code())) return snapshot;
-        List<DialogNodeInput> nodes = snapshot.dialogNodes().stream().map(node -> new DialogNodeInput(
+        if ("vi".equals(language.code())) return snapshot;
+        List<DialogNodeInput> nodes = snapshot.dialogNodes().stream().map(node -> {
+            var translated = node.replyTranslations().get(language.code());
+            if (translated == null) return node;
+            return new DialogNodeInput(
                 node.name(), node.type(), node.parentNode(), node.matchIntent(), node.matchEntityName(), node.matchEntityValue(),
-                node.requiredEntityName(), englishOrDefault(node.englishResponseText(), node.responseText()),
-                englishOrDefault(node.englishMissingEntityPrompt(), node.missingEntityPrompt()), node.nextStep(), node.jumpToNode(),
-                englishOrDefault(node.englishIrrelevantResponseText(), node.irrelevantResponseText()), node.priority(), node.contextReusePolicy()
-        )).toList();
+                node.requiredEntityName(), englishOrDefault(translated.responseText(), node.responseText()),
+                englishOrDefault(translated.missingEntityPrompt(), node.missingEntityPrompt()), node.nextStep(), node.jumpToNode(),
+                englishOrDefault(translated.irrelevantResponseText(), node.irrelevantResponseText()), node.priority(), node.contextReusePolicy());
+        }).toList();
         return new BotSnapshot(snapshot.schemaVersion(), snapshot.botId(), snapshot.ownerId(), snapshot.name(), snapshot.description(),
                 snapshot.revision(), snapshot.locale(), snapshot.timezone(), snapshot.blueAiCoreEnabled(), snapshot.customInstructions(),
                 snapshot.customization(), snapshot.intents(), snapshot.entities(), nodes, snapshot.dialogEnabled(), snapshot.widgetDocumentIds());

@@ -30,6 +30,8 @@ class BilingualReplyServiceTest {
     @Test
     void disablingCorePreventsAutomaticDialogTranslation() {
         assertThat(replies.localize("Bạn muốn hỏi về gói eSIM nào?", english, false)).contains("support agent");
+        assertThat(replies.localize("Please provide your device model.", new ReplyLanguagePolicy.State("vi", false), false))
+                .contains("tiếng Việt");
         verifyNoInteractions(completion);
     }
 

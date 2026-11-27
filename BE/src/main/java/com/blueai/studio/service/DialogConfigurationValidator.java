@@ -50,6 +50,30 @@ public final class DialogConfigurationValidator {
         return variables;
     }
 
+    private void validateTranslations(DialogNodeInput node, List<Diagnostic> diagnostics) {
+        if (node.translations().size() > 16) {
+            error(diagnostics, "TOO_MANY_TRANSLATIONS", node, "Mỗi bước hỗ trợ tối đa 16 bản dịch.", List.of(node.name()));
+        }
+        node.translations().forEach((locale, reply) -> {
+            if (locale == null || !locale.matches("[a-z]{2,3}(?:-[A-Z]{2})?") || "vi".equals(locale) || reply == null) {
+                error(diagnostics, "INVALID_TRANSLATION_LOCALE", node, "Mã ngôn ngữ bản dịch không hợp lệ; nội dung gốc dùng tiếng Việt.", List.of(node.name()));
+                return;
+            }
+            validateLocalizedField(node, locale, node.responseText(), reply.responseText(), 4000, diagnostics);
+            validateLocalizedField(node, locale, node.missingEntityPrompt(), reply.missingEntityPrompt(), 1000, diagnostics);
+            validateLocalizedField(node, locale, node.irrelevantResponseText(), reply.irrelevantResponseText(), 1000, diagnostics);
+        });
+    }
+
+    private void validateLocalizedField(DialogNodeInput node, String locale, String original, String translated,
+                                        int maxLength, List<Diagnostic> diagnostics) {
+        if (translated == null || translated.isBlank()) return;
+        if (translated.length() > maxLength || !templateVariables(original).equals(templateVariables(translated))) {
+            error(diagnostics, "LOCALIZED_TEMPLATE_INVALID", node,
+                    "Bản dịch " + locale + " phải giữ nguyên biến {{entity}} và nằm trong giới hạn độ dài.", List.of(node.name()));
+        }
+    }
+
     public enum Severity { ERROR, WARNING }
 
     public record Diagnostic(
@@ -118,9 +142,13 @@ public final class DialogConfigurationValidator {
             }
         }
         for (DialogNodeInput node : byName.values()) {
-            validateTranslation(node, node.responseText(), node.englishResponseText(), diagnostics);
-            validateTranslation(node, node.missingEntityPrompt(), node.englishMissingEntityPrompt(), diagnostics);
-            validateTranslation(node, node.irrelevantResponseText(), node.englishIrrelevantResponseText(), diagnostics);
+            if (node.translations() == null) {
+                validateTranslation(node, node.responseText(), node.englishResponseText(), diagnostics);
+                validateTranslation(node, node.missingEntityPrompt(), node.englishMissingEntityPrompt(), diagnostics);
+                validateTranslation(node, node.irrelevantResponseText(), node.englishIrrelevantResponseText(), diagnostics);
+            } else {
+                validateTranslations(node, diagnostics);
+            }
             if (!key(node.parentNode()).isEmpty() && !byName.containsKey(key(node.parentNode()))) {
                 error(diagnostics, "UNKNOWN_PARENT_NODE", node,
                         "Node '" + node.name() + "' references unknown parent '" + node.parentNode() + "'.", List.of(node.name()));

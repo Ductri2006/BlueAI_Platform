@@ -140,6 +140,12 @@ public final class BotStudioDtos {
     ) {
     }
 
+    public record DialogReplyInput(
+            @Size(max = 4000) String responseText,
+            @Size(max = 1000) String missingEntityPrompt,
+            @Size(max = 1000) String irrelevantResponseText
+    ) { }
+
     public record DialogNodeInput(
             @NotBlank @Size(max = 120) String name,
             @NotNull DialogNodeType type,
@@ -157,8 +163,27 @@ public final class BotStudioDtos {
             DialogContextReusePolicy contextReusePolicy,
             @Size(max = 4000) String englishResponseText,
             @Size(max = 1000) String englishMissingEntityPrompt,
-            @Size(max = 1000) String englishIrrelevantResponseText
+            @Size(max = 1000) String englishIrrelevantResponseText,
+            @Size(max = 16) Map<@Pattern(regexp = "[a-z]{2,3}(?:-[A-Z]{2})?") String, @NotNull @Valid DialogReplyInput> translations
     ) {
+        public DialogNodeInput(String name, DialogNodeType type, String parentNode, String matchIntent,
+                               String matchEntityName, String matchEntityValue, String requiredEntityName,
+                               String responseText, String missingEntityPrompt, DialogNextStep nextStep,
+                               String jumpToNode, String irrelevantResponseText, int priority,
+                               DialogContextReusePolicy contextReusePolicy, String englishResponseText,
+                               String englishMissingEntityPrompt, String englishIrrelevantResponseText) {
+            this(name, type, parentNode, matchIntent, matchEntityName, matchEntityValue, requiredEntityName,
+                    responseText, missingEntityPrompt, nextStep, jumpToNode, irrelevantResponseText, priority,
+                    contextReusePolicy, englishResponseText, englishMissingEntityPrompt, englishIrrelevantResponseText, null);
+        }
+
+        /** An explicit map is authoritative; null means an older client/snapshot. */
+        public Map<String, DialogReplyInput> replyTranslations() {
+            if (translations != null) return translations;
+            if (englishResponseText == null && englishMissingEntityPrompt == null && englishIrrelevantResponseText == null) return Map.of();
+            return Map.of("en", new DialogReplyInput(englishResponseText, englishMissingEntityPrompt, englishIrrelevantResponseText));
+        }
+
         public DialogNodeInput(String name, DialogNodeType type, String parentNode, String matchIntent,
                                String matchEntityName, String matchEntityValue, String requiredEntityName,
                                String responseText, String missingEntityPrompt, DialogNextStep nextStep,

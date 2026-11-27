@@ -65,7 +65,7 @@ class FlywayMigrationIntegrationTest {
 
     @Test
     void appliesFullMigrationChainAndLeavesExpectedSchemaForHibernateValidation() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
         flyway.validate();
 
         Set<String> usageColumns = jdbcTemplate.queryForList(

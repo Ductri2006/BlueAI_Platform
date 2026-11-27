@@ -15,7 +15,7 @@ Ngôn ngữ được lưu trong trạng thái hội thoại hiện có. Tin tr�
 
 ## Cấu hình Dialog
 
-Trong BlueAI Custom, mở Luồng hội thoại, chọn bước cần sửa, rồi mở Câu trả lời tiếng Anh.
+Trong BlueAI Custom, mở Luồng hội thoại, chọn bước cần sửa, rồi mở Bản dịch câu trả lời và chọn Tiếng Anh.
 
 1. Điền Nội dung trả lời tiếng Anh.
 2. Với bước cần dữ kiện, điền Câu hỏi bổ sung tiếng Anh.
@@ -24,7 +24,11 @@ Trong BlueAI Custom, mở Luồng hội thoại, chọn bước cần sửa, r�
 5. Bổ sung câu mẫu tiếng Anh cho intent và từ đồng nghĩa tiếng Anh cho entity khi muốn cùng một kịch bản nhận cả hai ngôn ngữ. Giá trị entity chuẩn tiếp tục dùng chung cho cả hai.
 6. Lưu nháp, thử cả hai ngôn ngữ rồi phát hành. Kiểm tra phiên mới để nghiệm thu đúng bản phát hành.
 
-Các trường API tương ứng là `englishResponseText`, `englishMissingEntityPrompt` và `englishIrrelevantResponseText` trên mỗi Dialog node. Chuỗi rỗng xóa bản dịch. Caller cũ bỏ qua các trường mới được giữ bản dịch đã lưu cho cùng tên bước. Khi thay đổi tên biến trong bản gốc, cập nhật bản dịch đi kèm.
+API mới dùng `translations` trên mỗi Dialog node, ví dụ `{"en":{"responseText":"Hello {{name}}","missingEntityPrompt":"Your device?"}}`. Mỗi bản dịch có ba trường `responseText`, `missingEntityPrompt`, `irrelevantResponseText`; nội dung gốc tiếng Việt tiếp tục dùng các trường gốc của node.
+
+Các trường cũ `englishResponseText`, `englishMissingEntityPrompt`, `englishIrrelevantResponseText` vẫn được đọc để tương thích với client và snapshot cũ. Khi bỏ qua `translations`, server giữ các ngôn ngữ đã lưu và áp dụng các trường tiếng Anh cũ nếu caller gửi chúng. Gửi `translations: {}` xóa toàn bộ bản dịch của node; map được gửi đầy đủ có quyền ưu tiên so với trường tiếng Anh cũ. Chuỗi rỗng ở một nội dung để hệ thống dùng cơ chế dự phòng cho nội dung đó. Khi thay đổi tên biến trong bản gốc, cập nhật bản dịch đi kèm.
+
+Cấu trúc lưu trữ đã được kiểm tra với 16 mã ngôn ngữ trong cùng node. Đây là khả năng lưu và giữ bản dịch; phiên bản hiện tại chỉ nhận diện và trả lời bằng Việt–Anh. Các ngôn ngữ khác cần bổ sung chính sách nhận diện, nội dung và nghiệm thu trước khi kích hoạt.
 
 ## Cách dùng AI và token
 
@@ -48,9 +52,9 @@ Giữ `messageId` khi phát lại cùng một tin. Dùng cùng bộ định danh
 
 ## Dữ liệu và triển khai
 
-Migration V16 thêm ba cột nullable cho bản tiếng Anh của Dialog node. Cấu hình và snapshot cũ vẫn đọc được. Bản dịch được lưu vào snapshot khi phát hành. Trạng thái ngôn ngữ dùng JSON hội thoại hiện có.
+Migration V16 thêm ba cột nullable cho bản tiếng Anh của Dialog node. V17 thêm cột nullable `reply_translations_json` để lưu từ điển ngôn ngữ chung. Giữ V16 để tương thích dữ liệu đã có; khi chưa có JSON, server đọc các cột tiếng Anh cũ. Khi lưu cấu hình, server ghi từ điển và đồng bộ phần tiếng Anh tương ứng. Snapshot cũ vẫn đọc được, snapshot mới chứa từ điển. Trạng thái ngôn ngữ dùng JSON hội thoại hiện có.
 
-Triển khai backend hỗ trợ V16 cùng frontend có các trường tiếng Anh. Khi khôi phục image cũ, giữ lịch sử migration đã áp dụng và bộ sao lưu của lần triển khai. Phiên widget và API đang mở tiếp tục dùng cấu hình bản phát hành đã gắn với phiên đó.
+Triển khai backend hỗ trợ V16/V17 cùng frontend có biểu mẫu bản dịch chung. Khi khôi phục image cũ, giữ lịch sử migration đã áp dụng và bộ sao lưu của lần triển khai. Phiên widget và API đang mở tiếp tục dùng cấu hình bản phát hành đã gắn với phiên đó.
 
 ## Các ca nghiệm thu
 
@@ -95,3 +99,11 @@ Các ca MySQL chạy riêng không thay thế toàn bộ 65 ca có điều kiệ
 Phép thử trình duyệt dùng giao diện thật với API giả lập cục bộ. Phép thử Gemini dùng mã backend ứng viên với nguồn eSIM kiểm thử được giới hạn. Các kết quả này chưa phải nghiệm thu trên production với toàn bộ kho tài liệu doanh nghiệp hoặc trên ứng dụng Telegram thật.
 
 Bản sửa được chuẩn bị trên nhánh `codex/vietnamese-english-chat`. Tại thời điểm ghi kết quả, chưa push, merge hoặc triển khai bản sửa này lên website chính thức.
+
+## Đợt hoàn thiện cấu trúc ngôn ngữ chung
+
+Bản Việt–Anh ban đầu và workspace gọn đã được push ở commit `47c9f3f`. CI của commit này đã đạt cả 6 nhóm sau khi chạy lại lỗi tải Maven 429.
+
+Thay đổi tiếp theo dùng từ điển ngôn ngữ, giữ tương thích client cũ, kiểm tra lưu 16 bản dịch, phát hành, lưu lại bằng client cũ và xóa bản dịch có chủ ý. Kiểm thử backend mặc định đạt 561 ca, 65 ca theo điều kiện môi trường được bỏ qua; frontend đạt 173 ca và build thành công. Các kết quả trên là kiểm thử local trước bước triển khai.
+
+Theo phạm vi người dùng xác nhận, không sửa code, token, webhook hoặc cấu hình cầu nối Telegram do anh Duy Anh quản lý. Nghiệm thu `@blc_chatbot` chỉ bằng tương tác người dùng. Nếu vấn đề nằm ở cầu nối, ghi nhận request/response không chứa bí mật và chuyển bằng chứng cho người quản lý; không đánh dấu phần đó đã sửa trên gateway.
