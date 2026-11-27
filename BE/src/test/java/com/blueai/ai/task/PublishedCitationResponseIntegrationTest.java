@@ -49,7 +49,7 @@ class PublishedCitationResponseIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("apiKey").asText();
         String raw = "Cài đặt > Thêm eSIM **[S4]**.\n\nDùng Wi-Fi ổn định [S2, S4].";
         String clean = "Cài đặt > Thêm eSIM.\n\nDùng Wi-Fi ổn định.";
-        when(rag.answerForWidget(any(), anyString(), anyList())).thenReturn(raw);
+        when(rag.answerForWidget(any(), anyString(), anyList(), any())).thenReturn(raw);
         String body = "{\"userId\":\"customer\",\"message\":\"Samsung có dùng eSIM không?\",\"messageId\":\"same-message\"}";
         JsonNode response = mapper.readTree(mvc.perform(post("/api/v1/ai/tasks/chat").header("Authorization", "Bearer " + apiKey)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -63,7 +63,7 @@ class PublishedCitationResponseIntegrationTest {
         mvc.perform(post("/api/v1/ai/tasks/chat").header("Authorization", "Bearer " + apiKey)
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.answer").value(clean));
-        verify(rag, times(1)).answerForWidget(any(), anyString(), anyList());
+        verify(rag, times(1)).answerForWidget(any(), anyString(), anyList(), any());
         assertThat(jdbc.queryForObject("SELECT state_json FROM studio_bot_sessions WHERE id=?", String.class, session))
                 .contains("[S2, S4]");
     }

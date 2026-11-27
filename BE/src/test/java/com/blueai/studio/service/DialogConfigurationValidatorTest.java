@@ -31,6 +31,20 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class DialogConfigurationValidatorTest {
 
     private final DialogConfigurationValidator validator = new DialogConfigurationValidator();
+
+    @Test
+    void englishTemplateMustPreserveTheExactRenderableVariables() {
+        for (String english : List.of("Hello {{other}}", "Hello {{ name }}")) {
+            var node = new DialogNodeInput("welcome", WELCOME, null, null, null, null, null,
+                    "Xin chào {{name}}", null, WAIT_FOR_REPLY, null, null, 1,
+                    com.blueai.studio.model.DialogContextReusePolicy.NONE, english, null, null);
+            assertThat(validator.analyze(List.of(node), List.of())).anyMatch(item -> item.code().equals("ENGLISH_TEMPLATE_VARIABLES"));
+        }
+        var valid = new DialogNodeInput("welcome", WELCOME, null, null, null, null, null,
+                "Xin chào {{name}}", null, WAIT_FOR_REPLY, null, null, 1,
+                com.blueai.studio.model.DialogContextReusePolicy.NONE, "Hello {{name}}", null, null);
+        assertThat(validator.analyze(List.of(valid), List.of())).noneMatch(item -> item.code().equals("ENGLISH_TEMPLATE_VARIABLES"));
+    }
     private final List<EntityInput> entities = List.of(entity("location", "Hà Nội", "HCM", "Đà Nẵng"));
 
     @Test

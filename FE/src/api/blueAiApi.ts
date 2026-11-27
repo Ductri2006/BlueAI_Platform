@@ -298,6 +298,9 @@ export interface StudioEntity {
 }
 
 export interface StudioDialogNode {
+  englishResponseText?: string;
+  englishMissingEntityPrompt?: string;
+  englishIrrelevantResponseText?: string;
   name: string;
   type: StudioDialogNodeType;
   parentNode?: string;

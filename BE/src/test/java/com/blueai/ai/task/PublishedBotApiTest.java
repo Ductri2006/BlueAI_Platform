@@ -61,7 +61,7 @@ class PublishedBotApiTest {
 
     @BeforeEach void fixture() {
         owner = users.save(new User(UUID.randomUUID()+"@published.test", "unused", "Key owner", UserRole.ADMIN));
-        reset(rag); when(rag.answerForWidget(any(), anyString(), anyList())).thenReturn("Core reply");
+        reset(rag); when(rag.answerForWidget(any(), anyString(), anyList(), any())).thenReturn("Core reply");
     }
 
     @Test void firstPublishGeneratesACopyableEncryptedKeyAndRepublishKeepsIt() throws Exception {

@@ -35,6 +35,21 @@ public final class DialogConfigurationValidator {
     public DialogConfigurationValidator() {
     }
 
+    private void validateTranslation(DialogNodeInput node, String original, String translated, List<Diagnostic> diagnostics) {
+        if (translated == null || translated.isBlank()) return;
+        if (!templateVariables(original).equals(templateVariables(translated))) {
+            error(diagnostics, "ENGLISH_TEMPLATE_VARIABLES", node,
+                    "Bản tiếng Anh của bước '" + node.name() + "' phải giữ nguyên các biến {{entity}} của bản gốc.", List.of(node.name()));
+        }
+    }
+
+    private Set<String> templateVariables(String text) {
+        Set<String> variables = new HashSet<>();
+        var matcher = java.util.regex.Pattern.compile("\\{\\{\\s*([^{}]+?)\\s*}}").matcher(text == null ? "" : text);
+        while (matcher.find()) variables.add(matcher.group());
+        return variables;
+    }
+
     public enum Severity { ERROR, WARNING }
 
     public record Diagnostic(
@@ -103,6 +118,9 @@ public final class DialogConfigurationValidator {
             }
         }
         for (DialogNodeInput node : byName.values()) {
+            validateTranslation(node, node.responseText(), node.englishResponseText(), diagnostics);
+            validateTranslation(node, node.missingEntityPrompt(), node.englishMissingEntityPrompt(), diagnostics);
+            validateTranslation(node, node.irrelevantResponseText(), node.englishIrrelevantResponseText(), diagnostics);
             if (!key(node.parentNode()).isEmpty() && !byName.containsKey(key(node.parentNode()))) {
                 error(diagnostics, "UNKNOWN_PARENT_NODE", node,
                         "Node '" + node.name() + "' references unknown parent '" + node.parentNode() + "'.", List.of(node.name()));

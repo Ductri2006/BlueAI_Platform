@@ -154,8 +154,21 @@ public final class BotStudioDtos {
             @Size(max = 120) String jumpToNode,
             @Size(max = 1000) String irrelevantResponseText,
             int priority,
-            DialogContextReusePolicy contextReusePolicy
+            DialogContextReusePolicy contextReusePolicy,
+            @Size(max = 4000) String englishResponseText,
+            @Size(max = 1000) String englishMissingEntityPrompt,
+            @Size(max = 1000) String englishIrrelevantResponseText
     ) {
+        public DialogNodeInput(String name, DialogNodeType type, String parentNode, String matchIntent,
+                               String matchEntityName, String matchEntityValue, String requiredEntityName,
+                               String responseText, String missingEntityPrompt, DialogNextStep nextStep,
+                               String jumpToNode, String irrelevantResponseText, int priority,
+                               DialogContextReusePolicy contextReusePolicy) {
+            this(name, type, parentNode, matchIntent, matchEntityName, matchEntityValue, requiredEntityName,
+                    responseText, missingEntityPrompt, nextStep, jumpToNode, irrelevantResponseText, priority,
+                    contextReusePolicy, null, null, null);
+        }
+
         public DialogNodeInput(String name, DialogNodeType type, String parentNode, String matchIntent,
                                String matchEntityName, String matchEntityValue, String requiredEntityName,
                                String responseText, String missingEntityPrompt, DialogNextStep nextStep,
@@ -199,8 +212,15 @@ public final class BotStudioDtos {
             @Size(max = 50) Map<@NotBlank @Size(max = 100) String, @NotBlank @Size(max = 150) String> variables,
             @Size(max = 120) String waitingNode,
             @Size(max = 1) Map<@NotBlank @Size(max = 100) String, @NotBlank @Size(max = 150) String> suggestedVariables,
-            @Size(max = 500) String suggestionSource
+            @Size(max = 500) String suggestionSource,
+            @Pattern(regexp = "vi|en") String replyLanguage,
+            boolean languageExplicit
     ) {
+        public PreviewContext(String pendingIntent, String pendingEntity, String lastIntent, Map<String, String> variables,
+                              String waitingNode, Map<String, String> suggestedVariables, String suggestionSource) {
+            this(pendingIntent, pendingEntity, lastIntent, variables, waitingNode, suggestedVariables, suggestionSource, null, false);
+        }
+
         public PreviewContext(String pendingIntent, String pendingEntity, String lastIntent,
                               Map<String, String> variables, String waitingNode) {
             this(pendingIntent, pendingEntity, lastIntent, variables, waitingNode, Map.of(), null);
@@ -213,6 +233,19 @@ public final class BotStudioDtos {
         public PreviewContext {
             variables = variables == null ? Map.of() : Map.copyOf(variables);
             suggestedVariables = suggestedVariables == null ? Map.of() : Map.copyOf(suggestedVariables);
+        }
+
+        public com.blueai.rag.chat.service.ReplyLanguagePolicy.State languageState() {
+            return replyLanguage == null ? null : new com.blueai.rag.chat.service.ReplyLanguagePolicy.State(replyLanguage, languageExplicit);
+        }
+
+        public PreviewContext withLanguage(com.blueai.rag.chat.service.ReplyLanguagePolicy.State language) {
+            return new PreviewContext(pendingIntent, pendingEntity, lastIntent, variables, waitingNode,
+                    suggestedVariables, suggestionSource, language.code(), language.explicit());
+        }
+
+        public PreviewContext languageOnly() {
+            return new PreviewContext(null, null, null, Map.of(), null, Map.of(), null, replyLanguage, languageExplicit);
         }
     }
 

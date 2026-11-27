@@ -10,6 +10,13 @@ class ContextRelevanceRankerTest {
 
     private final ContextRelevanceRanker ranker = new ContextRelevanceRanker();
 
+    @Test
+    void englishFollowUpsKeepContextAndBusinessQuestionsStillRequireEvidence() {
+        assertThat(ranker.isFollowUpQuestion("Please tell me more about that plan")).isTrue();
+        assertThat(ranker.isContextRecallQuestion("What did I tell you about my phone?")).isTrue();
+        assertThat(ranker.isContextRecallQuestion("Remember my trip and compare the refund policy")).isFalse();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {
             "Vậy nếu khách dùng máy lock thì sao? Nhắc lại hành trình và số ngày của khách trước khi tư vấn nhé.",

@@ -296,7 +296,10 @@ public class BotStudioService {
                         node.getJumpToNode(),
                         node.getIrrelevantResponseText(),
                         node.getPriority(),
-                        node.getContextReusePolicy()
+                        node.getContextReusePolicy(),
+                        node.getEnglishResponseText(),
+                        node.getEnglishMissingEntityPrompt(),
+                        node.getEnglishIrrelevantResponseText()
                 ))
                 .toList();
         return new BotConfigurationResponse(summary(bot), intents, entities, nodes, customization(bot));
@@ -358,6 +361,19 @@ public class BotStudioService {
     }
 
     private void replaceConfiguration(Bot bot, List<IntentInput> intents, List<EntityInput> entities, List<DialogNodeInput> nodes) {
+        Map<String, BotDialogNode> previous = dialogNodeRepository.findByBot_IdOrderByPriorityAsc(bot.getId()).stream()
+                .collect(java.util.stream.Collectors.toMap(node -> key(node.getNodeName()), node -> node));
+        List<DialogNodeInput> merged = nodes.stream().map(node -> {
+            BotDialogNode old = previous.get(key(node.name()));
+            if (old == null) return node;
+            return new DialogNodeInput(node.name(), node.type(), node.parentNode(), node.matchIntent(), node.matchEntityName(),
+                    node.matchEntityValue(), node.requiredEntityName(), node.responseText(), node.missingEntityPrompt(), node.nextStep(),
+                    node.jumpToNode(), node.irrelevantResponseText(), node.priority(), node.contextReusePolicy(),
+                    node.englishResponseText() == null ? old.getEnglishResponseText() : node.englishResponseText(),
+                    node.englishMissingEntityPrompt() == null ? old.getEnglishMissingEntityPrompt() : node.englishMissingEntityPrompt(),
+                    node.englishIrrelevantResponseText() == null ? old.getEnglishIrrelevantResponseText() : node.englishIrrelevantResponseText());
+        }).toList();
+        validate(intents, entities, merged);
         entityValueRepository.deleteByEntity_Bot_Id(bot.getId());
         dialogNodeRepository.deleteByBot_Id(bot.getId());
         intentRepository.deleteByBot_Id(bot.getId());
@@ -366,7 +382,7 @@ public class BotStudioService {
         dialogNodeRepository.flush();
         intentRepository.flush();
         entityRepository.flush();
-        persistConfiguration(bot, intents, entities, nodes);
+        persistConfiguration(bot, intents, entities, merged);
     }
 
     private void persistConfiguration(Bot bot, List<IntentInput> intents, List<EntityInput> entities, List<DialogNodeInput> nodes) {
@@ -413,6 +429,8 @@ public class BotStudioService {
                     input.priority()
             );
             node.setContextReusePolicy(input.contextReusePolicy());
+            node.setEnglishReplies(trimToNull(input.englishResponseText()), trimToNull(input.englishMissingEntityPrompt()),
+                    trimToNull(input.englishIrrelevantResponseText()));
             dialogNodeRepository.save(node);
         }
     }

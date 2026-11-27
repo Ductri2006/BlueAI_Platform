@@ -57,6 +57,7 @@ class WidgetRagDialogIntegrationTest {
     @Autowired RagChatService rag;
     @Autowired ObjectMapper mapper;
     @Autowired MockMvc mvc;
+    @Autowired com.blueai.ai.task.service.PublishedBotApiService publishedApi;
     @MockitoBean RagRestClientFactory clientFactory;
     @MockitoBean RagCompletionClient completion;
     MockRestServiceServer retrieval;
@@ -227,6 +228,135 @@ class WidgetRagDialogIntegrationTest {
         documents.delete(publicDocument); documents.flush();
         assertThat(message(configured, "xem chính sách đổi trả", "removed").result().message()).contains("chưa tìm thấy");
         verifyNoInteractions(completion, clientFactory);
+    }
+
+    @Test
+    void providerLimitIsReportedInEnglishWithTheSameStatusAndRetryAfter() throws Exception {
+        var session = session(configure(create(), false, true, List.of(publicDocument.getId())));
+        expectRetrieval(true);
+        when(completion.complete(anyList())).thenThrow(new ApiException(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
+                "AI_PROVIDER_RATE_LIMITED", "Nhà cung cấp AI đang giới hạn lượt dùng chung.", 7L));
+        mvc.perform(post("/api/v1/runtime/sessions/" + session.sessionId() + "/messages")
+                        .header("X-Widget-Token", session.accessToken()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestId\":\"provider-limit\",\"message\":\"How do I install my eSIM?\"}"))
+                .andExpect(status().isTooManyRequests()).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Retry-After", "7"))
+                .andExpect(jsonPath("$.code").value("AI_PROVIDER_RATE_LIMITED"))
+                .andExpect(jsonPath("$.message").value("The AI provider has reached its usage limit. Please wait and try again."));
+        retrieval.verify();
+    }
+
+    @Test
+    void configuredEnglishDialogSurvivesSaveAndPublicationWithoutAnyAiCall() {
+        var configuration = create();
+        var nodes = configuration.dialogNodes().stream().map(node -> new DialogNodeInput(
+                node.name(), node.type(), node.parentNode(), node.matchIntent(), node.matchEntityName(), node.matchEntityValue(),
+                node.requiredEntityName(), node.responseText(), node.missingEntityPrompt(), node.nextStep(), node.jumpToNode(),
+                node.irrelevantResponseText(), node.priority(), node.contextReusePolicy(),
+                "chao_hoi".equals(node.matchIntent()) ? "Hello! How can I help you with your eSIM?" : null, null, null)).toList();
+        var bot = configuration.bot();
+        var saved = studio.save(owner.getId(), bot.id(), new SaveConfigurationRequest(bot.draftRevision(), bot.name(),
+                bot.description(), bot.locale(), bot.timezone(), false, bot.customInstructions(), configuration.intents(),
+                configuration.entities(), nodes, configuration.customization(), true, List.of()));
+        assertThat(studio.get(owner.getId(), bot.id()).dialogNodes()).anyMatch(node ->
+                "Hello! How can I help you with your eSIM?".equals(node.englishResponseText()));
+        // A caller built before the new fields existed must not silently erase translations.
+        var legacyNodes = nodes.stream().map(node -> new DialogNodeInput(node.name(), node.type(), node.parentNode(), node.matchIntent(),
+                node.matchEntityName(), node.matchEntityValue(), node.requiredEntityName(), node.responseText(), node.missingEntityPrompt(),
+                node.nextStep(), node.jumpToNode(), node.irrelevantResponseText(), node.priority(), node.contextReusePolicy())).toList();
+        saved = studio.save(owner.getId(), bot.id(), new SaveConfigurationRequest(saved.bot().draftRevision(), bot.name(),
+                bot.description(), bot.locale(), bot.timezone(), false, bot.customInstructions(), configuration.intents(),
+                configuration.entities(), legacyNodes, configuration.customization(), true, List.of()));
+        var session = session(saved);
+        assertThat(message(session, "hello", "english-greeting").result().message()).isEqualTo("Hello! How can I help you with your eSIM?");
+        verifyNoInteractions(completion);
+    }
+
+    @Test
+    void publishedApiCarriesEnglishAcrossTelegramStyleMessagesAndReplays() throws Exception {
+        var configuration = configure(create(), false, true, List.of(publicDocument.getId()));
+        studio.publish(owner.getId(), configuration.bot().id());
+        String key = (String) publishedApi.settings(owner.getId(), configuration.bot().id()).get("apiKey");
+        expectRetrieval(true);
+        expectRetrieval(true);
+        String first = "{\"userId\":\"telegram-customer\",\"conversationId\":\"private-chat\",\"channel\":\"telegram\",\"messageId\":\"first\",\"message\":\"Please answer in English.\"}";
+        String second = first.replace("\"first\"", "\"second\"").replace("Please answer in English.", "iPhone 15");
+        for (String body : List.of(first, second, second)) {
+            mvc.perform(post("/api/v1/ai/tasks/chat").header("Authorization", "Bearer " + key)
+                    .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.userId").value("telegram-customer"));
+        }
+        assertThat(prompt.get().getFirst().content()).contains("Reply language for this turn: English (en)")
+                .doesNotContain("PRIVATE_SALARY_SECRET");
+        verify(completion, times(2)).complete(anyList());
+        retrieval.verify();
+    }
+
+    @Test
+    void englishSupportQuestionUsesVietnamesePublicEvidenceAndEnglishSystemLanguage() {
+        var session = session(configure(create(), true, true, List.of(publicDocument.getId())));
+        expectRetrieval(true);
+        message(session, "Hello, I can't set up my eSIM.", "english-setup");
+        assertThat(prompt.get().getFirst().content()).contains("Reply language for this turn: English (en)", "PUBLIC_RETURN_POLICY")
+                .doesNotContain("PRIVATE_SALARY_SECRET");
+        assertThat(prompt.get().getLast().content()).isEqualTo("Hello, I can't set up my eSIM.");
+        retrieval.verify();
+    }
+
+    @Test
+    void explicitPreferenceSurvivesShortRepliesAndVisitorsAreIsolated() {
+        var configuration = configure(create(), false, true, List.of(publicDocument.getId()));
+        var first = session(configuration);
+        var second = runtime.createSession(configuration.bot().publicKey(), "127.0.0.78");
+        expectRetrieval(true);
+        expectRetrieval(true);
+        expectRetrieval(true);
+        message(first, "Please answer in English.", "choose-english");
+        message(first, "iPhone 15", "device");
+        assertThat(prompt.get().getFirst().content()).contains("Reply language for this turn: English (en)");
+        var duplicate = message(first, "iPhone 15", "device");
+        assertThat(duplicate.requestId()).isEqualTo("device");
+        message(second, "Tôi cần hướng dẫn cài eSIM", "vietnamese");
+        assertThat(prompt.get().getFirst().content()).contains("Reply language for this turn: Vietnamese (vi)");
+        verify(completion, times(3)).complete(anyList());
+        retrieval.verify();
+    }
+
+    @Test
+    void noPublicEvidenceUsesEnglishFallbackWithoutCallingAi() {
+        var session = session(configure(create(), false, true, List.of()));
+        var result = message(session, "How do I install my eSIM?", "no-public-docs");
+        assertThat(result.result().message()).startsWith("I do not have enough verified information");
+        verifyNoInteractions(completion);
+    }
+
+    @Test
+    void authenticatedWebKeepsExplicitLanguageAndCanSwitchBack() {
+        var configuration = configure(create(), false, true, List.of(publicDocument.getId()));
+        studio.publish(owner.getId(), configuration.bot().id());
+        studio.activate(owner.getId(), configuration.bot().id());
+        var conversation = conversations.saveAndFlush(new Conversation(owner, "Bilingual web"));
+        expectRetrieval(false);
+        expectRetrieval(false);
+        expectRetrieval(false);
+        rag.ask(owner.getId(), conversation.getId(), new AskQuestionRequest("Please answer in English."));
+        rag.ask(owner.getId(), conversation.getId(), new AskQuestionRequest("Tôi muốn cài eSIM"));
+        assertThat(prompt.get().getFirst().content()).contains("Reply language for this turn: English (en)");
+        rag.ask(owner.getId(), conversation.getId(), new AskQuestionRequest("Please explain in Vietnamese."));
+        assertThat(prompt.get().getFirst().content()).contains("Reply language for this turn: Vietnamese (vi)");
+        retrieval.verify();
+    }
+
+    @Test
+    void englishCancellationIsLocalizedAndKeepsLanguageAfterClearingSlots() {
+        var session = session(configure(create(), true, true, List.of()));
+        var response = message(session, "cancel", "cancel-default");
+        assertThat(response.result().message()).startsWith("Đã hủy");
+        message(session, "Please answer in English.", "select-english");
+        var cancelled = message(session, "cancel", "cancel-english");
+        assertThat(cancelled.result().message()).startsWith("Your current request has been cancelled");
+        var stillEnglish = message(session, "iPhone 15", "after-cancel");
+        assertThat(stillEnglish.result().message()).startsWith("I do not have enough verified information");
+        verifyNoInteractions(completion);
     }
 
     @Test

@@ -65,6 +65,16 @@ public class BotDialogNode {
     @Column(name = "irrelevant_response_text", length = 1000)
     private String irrelevantResponseText;
 
+    @Lob
+    @Column(name = "english_response_text", columnDefinition = "longtext")
+    private String englishResponseText;
+
+    @Column(name = "english_missing_entity_prompt", length = 1000)
+    private String englishMissingEntityPrompt;
+
+    @Column(name = "english_irrelevant_response_text", length = 1000)
+    private String englishIrrelevantResponseText;
+
     @Column(nullable = false)
     private int priority;
 
@@ -123,6 +133,14 @@ public class BotDialogNode {
     public String getJumpToNode() { return jumpToNode; }
     public String getIrrelevantResponseText() { return irrelevantResponseText; }
     public int getPriority() { return priority; }
+    public String getEnglishResponseText() { return englishResponseText; }
+    public String getEnglishMissingEntityPrompt() { return englishMissingEntityPrompt; }
+    public String getEnglishIrrelevantResponseText() { return englishIrrelevantResponseText; }
+    public void setEnglishReplies(String response, String missing, String irrelevant) {
+        englishResponseText = response;
+        englishMissingEntityPrompt = missing;
+        englishIrrelevantResponseText = irrelevant;
+    }
     public DialogContextReusePolicy getContextReusePolicy() { return contextReusePolicy; }
     public void setContextReusePolicy(DialogContextReusePolicy policy) {
         contextReusePolicy = policy == null ? DialogContextReusePolicy.NONE : policy;

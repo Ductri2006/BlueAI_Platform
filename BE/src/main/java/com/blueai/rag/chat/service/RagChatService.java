@@ -80,6 +80,7 @@ public class RagChatService {
     private final String workerApiKey;
     private final WidgetRateLimiter rateLimiter;
     private final int requestsPerUserPerMinute;
+    private final BilingualReplyService bilingualReplies;
     private com.blueai.quota.AiTokenQuotaService tokenQuota;
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -101,7 +102,8 @@ public class RagChatService {
             ObjectMapper objectMapper,
             @Value("${app.worker.api-key}") String workerApiKey,
             WidgetRateLimiter rateLimiter,
-            @Value("${app.rag.requests-per-user-per-minute:30}") int requestsPerUserPerMinute
+            @Value("${app.rag.requests-per-user-per-minute:30}") int requestsPerUserPerMinute,
+            BilingualReplyService bilingualReplies
     ) {
         this.userRepository = userRepository;
         this.conversationRepository = conversationRepository;
@@ -119,10 +121,12 @@ public class RagChatService {
         this.workerApiKey = workerApiKey;
         this.rateLimiter = rateLimiter;
         this.requestsPerUserPerMinute = requestsPerUserPerMinute;
+        this.bilingualReplies = bilingualReplies;
     }
 
     @Transactional
     public RagAnswerResponse ask(String ownerId, String conversationId, AskQuestionRequest request) {
+        BilingualReplyService.bindLanguage(ReplyLanguagePolicy.resolve(request.question(), null, List.of()));
         requireActiveUser(ownerId);
         checkUserQuota(ownerId);
         Conversation conversation = findOwnedConversation(ownerId, conversationId);
@@ -130,6 +134,9 @@ public class RagChatService {
         ActiveConfiguration activeConfiguration = loadActiveConfiguration();
         PreviewContext dialogContext = readDialogContext(conversation.getDialogStateJson(), activeConfiguration);
         ResolvedConversationContext context = conversationContextService.resolve(ownerId, conversation, contextLookupQuestion(question, dialogContext));
+        ReplyLanguagePolicy.State language = resolveLanguage(question, dialogContext, context);
+        BilingualReplyService.bindLanguage(language);
+        dialogContext = languageContext(dialogContext, language);
         DialogEvaluation evaluation = activeConfiguration == null ? null
                 : evaluateDialog(ownerId, conversation, activeConfiguration.snapshot(), dialogContext, question, context);
         RuntimeResponse dialogResponse = evaluation == null ? null : evaluation.response();
@@ -142,6 +149,7 @@ public class RagChatService {
                 || dialogResponse.dialogHandled()
                 || Boolean.FALSE.equals(activeConfiguration.snapshot().blueAiCoreEnabled()));
         if (dialogHandled) {
+            dialogResponse = localizeDialog(dialogResponse, language, activeConfiguration.snapshot().blueAiCoreEnabled());
             conversation.updateDialogState(writeDialogState(activeConfiguration, dialogResponse.context()));
             boolean usedContext = dialogResponse.trace() != null && dialogResponse.trace().contextSource() != null;
             AnswerOrigin origin = dialogResponse.trace() != null && "CONTEXT_CONFIRMATION".equals(dialogResponse.trace().route())
@@ -161,10 +169,12 @@ public class RagChatService {
                 sources,
                 activeConfiguration == null ? null : activeConfiguration.snapshot().customization(),
                 activeConfiguration == null ? null : activeConfiguration.snapshot().name(),
-                activeConfiguration == null ? null : activeConfiguration.snapshot().customInstructions()
+                activeConfiguration == null ? null : activeConfiguration.snapshot().customInstructions(),
+                language
         );
 
-        if (dialogResponse != null) conversation.updateDialogState(writeDialogState(activeConfiguration, dialogResponse.context()));
+        conversation.updateDialogState(writeDialogState(activeConfiguration,
+                languageContext(dialogResponse == null ? null : dialogResponse.context(), language)));
         return saveAnswer(conversation, question, answer, sources, context.sources(), AnswerOrigin.CORE);
     }
 
@@ -177,13 +187,16 @@ public class RagChatService {
         ResolvedConversationContext base = selected == null
                 ? new ResolvedConversationContext(request.message(), List.of(), "", List.of(), List.of(), List.of(), false)
                 : conversationContextService.resolve(ownerId, selected, contextLookupQuestion(request.message(), request.context()));
-        DialogEvaluation evaluation = evaluateDialog(ownerId, selected, snapshot, request.context(), request.message(), base);
+        ReplyLanguagePolicy.State language = resolveLanguage(request.message(), request.context(), base);
+        BilingualReplyService.bindLanguage(language);
+        DialogEvaluation evaluation = evaluateDialog(ownerId, selected, snapshot,
+                languageContext(request.context(), language), request.message(), base);
         RuntimeResponse result = evaluation.response();
         List<ConversationContextSourceResponse> contextSources = evaluation.grounding().sources().stream()
                 .map(ConversationContextSourceResponse::from).toList();
         boolean handled = result.context().pendingEntity() != null || !result.fallback() || result.dialogHandled()
                 || Boolean.FALSE.equals(snapshot.blueAiCoreEnabled());
-        if (handled) return result.withEvidence(List.of(), contextSources);
+        if (handled) return localizeDialog(result, language, snapshot.blueAiCoreEnabled()).withEvidence(List.of(), contextSources);
 
         List<ConversationHistoryMessage> history = new ArrayList<>(base.recentHistory());
         request.history().forEach(item -> history.add(new ConversationHistoryMessage(
@@ -201,14 +214,14 @@ public class RagChatService {
                 base.conversationSummary(), base.memories(), base.relatedContexts(), base.sources(), base.contextRecall());
         try {
             List<RagSourceResponse> sources = context.contextRecall() ? List.of() : toVerifiedSources(ownerId, retrieve(ownerId, context.retrievalQuery()));
-            String answer = askLlm(request.message(), context, sources, snapshot.customization(), snapshot.name(), snapshot.customInstructions());
-            return new RuntimeResponse(answer, result.matchedIntent(), result.recognizedEntities(), "BlueAI Core", result.context(), false)
+            String answer = askLlm(request.message(), context, sources, snapshot.customization(), snapshot.name(), snapshot.customInstructions(), language);
+            return new RuntimeResponse(answer, result.matchedIntent(), result.recognizedEntities(), "BlueAI Core", languageContext(result.context(), language), false)
                     .withTrace(new DialogTrace("CORE", "Không có nhánh Dialog phù hợp; đã gọi AI với context được giới hạn và nguồn KB.",
                             result.trace() == null ? List.of() : result.trace().visitedNodes(), java.util.Map.of(), null))
                     .withEvidence(sources, contextSources);
         } catch (ApiException unavailable) {
             if (unavailable.getCode().startsWith("AI_")) throw unavailable;
-            return result.withTrace(new DialogTrace("CORE_UNAVAILABLE", "AI/RAG không khả dụng; đang trả lời dự phòng của kịch bản.",
+            return localizeDialog(result, language, false).withTrace(new DialogTrace("CORE_UNAVAILABLE", "AI/RAG không khả dụng; đang trả lời dự phòng của kịch bản.",
                     List.of(), java.util.Map.of(), null));
         }
     }
@@ -230,10 +243,25 @@ public class RagChatService {
 
     private record DialogEvaluation(RuntimeResponse response, ResolvedConversationContext grounding) { }
 
+    private ReplyLanguagePolicy.State resolveLanguage(String question, PreviewContext context, ResolvedConversationContext base) {
+        List<LlmChatMessage> history = base.recentHistory().stream()
+                .map(item -> new LlmChatMessage(item.role() == MessageRole.USER ? "user" : "assistant", item.content())).toList();
+        return ReplyLanguagePolicy.resolve(question, context == null ? null : context.languageState(), history);
+    }
+
+    private PreviewContext languageContext(PreviewContext context, ReplyLanguagePolicy.State language) {
+        return (context == null ? new PreviewContext(null, null, null, java.util.Map.of()) : context).withLanguage(language);
+    }
+
+    private RuntimeResponse localizeDialog(RuntimeResponse result, ReplyLanguagePolicy.State language, Boolean coreEnabled) {
+        return bilingualReplies.dialogReply(result, language, coreEnabled);
+    }
+
     private DialogEvaluation evaluateDialog(String ownerId, Conversation conversation, BotSnapshot snapshot,
                                             PreviewContext supplied, String question, ResolvedConversationContext base) {
         DialogContextBridge bridge = new DialogContextBridge();
-        RuntimeResponse result = dialogRuntimeService.evaluate(snapshot, supplied, question, bridge.suggestions(snapshot, base));
+        BotSnapshot localizedSnapshot = bilingualReplies.dialogSnapshot(snapshot, resolveLanguage(question, supplied, base));
+        RuntimeResponse result = dialogRuntimeService.evaluate(localizedSnapshot, supplied, question, bridge.suggestions(snapshot, base));
         // Initial questions often omit the entity's technical name (e.g. "location").
         // Resolve that slot only after Dialog requests it. Never alter the KB retrieval query.
         boolean maySuggest = conversation != null && result.context().pendingEntity() != null
@@ -242,7 +270,7 @@ public class RagChatService {
         if (!maySuggest) return new DialogEvaluation(result, base);
         ResolvedConversationContext targeted = conversationContextService.resolve(ownerId, conversation,
                 question + " " + result.context().pendingEntity());
-        return new DialogEvaluation(dialogRuntimeService.evaluate(snapshot, supplied, question,
+        return new DialogEvaluation(dialogRuntimeService.evaluate(localizedSnapshot, supplied, question,
                 bridge.suggestions(snapshot, targeted)), targeted);
     }
 
@@ -303,6 +331,7 @@ public class RagChatService {
             systemPrompt.append("Customization instructions set by the BlueAI administrator:\n")
                     .append(shorten(customInstructions, 2_000));
         }
+        systemPrompt.append(ReplyLanguagePolicy.instruction(ReplyLanguagePolicy.resolve(question, null, List.of())));
         return completionClient.complete(List.of(
                 new LlmChatMessage("system", systemPrompt.toString()),
                 new LlmChatMessage("user", question)
@@ -311,12 +340,18 @@ public class RagChatService {
 
     @Transactional(readOnly = true)
     public String answerForWidget(BotSnapshot snapshot, String question, List<LlmChatMessage> history) {
+        return answerForWidget(snapshot, question, history, ReplyLanguagePolicy.resolve(question, null, history));
+    }
+
+    public String answerForWidget(BotSnapshot snapshot, String question, List<LlmChatMessage> history,
+                                  ReplyLanguagePolicy.State language) {
+        BilingualReplyService.bindLanguage(language);
         requireActiveUser(snapshot.ownerId());
         List<String> allowed = snapshot.publicDocumentIds().stream()
                 .filter(id -> findReadyKnowledgeDocument(snapshot.ownerId(), id).isPresent()).toList();
         CustomizationInput customization = (snapshot.customization() == null
                 ? CustomizationInput.defaults() : snapshot.customization()).withDefaults();
-        if (allowed.isEmpty()) return customization.fallbackMessage();
+        if (allowed.isEmpty()) return bilingualReplies.localize(customization.fallbackMessage(), language);
         List<RetrievedChunk> chunks = retrieve(snapshot.ownerId(), question, allowed);
         List<RagSourceResponse> sources = new ArrayList<>();
         for (RetrievedChunk chunk : chunks) {
@@ -324,10 +359,10 @@ public class RagChatService {
             findReadyKnowledgeDocument(snapshot.ownerId(), chunk.documentId())
                     .ifPresent(document -> sources.add(toSource(document, chunk)));
         }
-        if (sources.isEmpty()) return customization.fallbackMessage();
+        if (sources.isEmpty()) return bilingualReplies.localize(customization.fallbackMessage(), language);
         List<LlmChatMessage> messages = new ArrayList<>();
         messages.add(new LlmChatMessage("system", buildSystemPrompt(List.of(), null, sources, List.of(), false,
-                customization, snapshot.name(), snapshot.customInstructions())));
+                customization, snapshot.name(), snapshot.customInstructions()) + ReplyLanguagePolicy.instruction(language)));
         history.stream().filter(item -> "user".equals(item.role()) || "assistant".equals(item.role()))
                 .skip(Math.max(0, history.size() - 20))
                 .forEach(item -> messages.add(new LlmChatMessage(item.role(), shorten(item.content(), 2000))));
@@ -435,7 +470,8 @@ public class RagChatService {
             List<RagSourceResponse> sources,
             CustomizationInput customization,
             String assistantName,
-            String customInstructions
+            String customInstructions,
+            ReplyLanguagePolicy.State language
     ) {
         List<LlmChatMessage> messages = new ArrayList<>();
         messages.add(new LlmChatMessage("system", buildSystemPrompt(
@@ -447,7 +483,7 @@ public class RagChatService {
                 customization,
                 assistantName,
                 customInstructions
-        )));
+        ) + ReplyLanguagePolicy.instruction(language)));
         for (ConversationHistoryMessage message : context.recentHistory()) {
             messages.add(new LlmChatMessage(message.role() == MessageRole.USER ? "user" : "assistant", message.content()));
         }
@@ -621,14 +657,14 @@ public class RagChatService {
 
     private PreviewContext readDialogContext(String stateJson, ActiveConfiguration activeConfiguration) {
         if (stateJson == null || stateJson.isBlank()) return null;
-        if (activeConfiguration == null) return null;
         try {
             DialogStateEnvelope state = readJson(stateJson, DialogStateEnvelope.class);
-            if (state.botId() == null || state.releaseId() == null || state.context() == null
+            if (state.context() == null) return null;
+            if (activeConfiguration == null || state.botId() == null || state.releaseId() == null
                     || !state.botId().equals(activeConfiguration.snapshot().botId())
                     || !state.releaseId().equals(activeConfiguration.releaseId())
                     || state.revision() != activeConfiguration.snapshot().revision()) {
-                return null;
+                return state.context().languageOnly();
             }
             return state.context();
         } catch (ApiException exception) {
@@ -638,10 +674,10 @@ public class RagChatService {
     }
 
     private String writeDialogState(ActiveConfiguration activeConfiguration, PreviewContext context) {
-        return activeConfiguration == null ? null : writeJson(new DialogStateEnvelope(
-                activeConfiguration.snapshot().botId(),
-                activeConfiguration.releaseId(),
-                activeConfiguration.snapshot().revision(),
+        return writeJson(new DialogStateEnvelope(
+                activeConfiguration == null ? null : activeConfiguration.snapshot().botId(),
+                activeConfiguration == null ? null : activeConfiguration.releaseId(),
+                activeConfiguration == null ? 0 : activeConfiguration.snapshot().revision(),
                 context
         ));
     }

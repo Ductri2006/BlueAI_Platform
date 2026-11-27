@@ -84,11 +84,14 @@ public class Conversation {
 
     @PreUpdate
     void onUpdate() {
-        updatedAt = Instant.now();
+        touch();
     }
 
     public void touch() {
-        updatedAt = Instant.now();
+        Instant now = Instant.now();
+        // Message allocation can advance a few microseconds beyond the wall clock.
+        // Do not discard that order when a flush or a subsequent turn touches us.
+        if (updatedAt == null || now.isAfter(updatedAt)) updatedAt = now;
     }
 
     /**

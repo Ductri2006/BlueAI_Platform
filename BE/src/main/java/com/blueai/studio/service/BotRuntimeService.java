@@ -3,6 +3,8 @@ package com.blueai.studio.service;
 import com.blueai.auth.exception.ApiException;
 import com.blueai.rag.chat.service.RagChatService;
 import com.blueai.rag.chat.service.LlmChatMessage;
+import com.blueai.rag.chat.service.ReplyLanguagePolicy;
+import com.blueai.rag.chat.service.BilingualReplyService;
 import com.blueai.studio.config.WidgetProtectionProperties;
 import com.blueai.studio.dto.BotStudioDtos.CreateWidgetSessionResponse;
 import com.blueai.studio.dto.BotStudioDtos.PreviewContext;
@@ -50,6 +52,7 @@ public class BotRuntimeService {
     private final WidgetProtectionMetrics protectionMetrics;
     private final ObjectMapper objectMapper;
     private final RagChatService ragChatService;
+    private final BilingualReplyService bilingualReplies;
 
     public BotRuntimeService(
             BotRepository botRepository,
@@ -63,7 +66,8 @@ public class BotRuntimeService {
             WidgetProtectionProperties protectionProperties,
             WidgetProtectionMetrics protectionMetrics,
             ObjectMapper objectMapper,
-            RagChatService ragChatService
+            RagChatService ragChatService,
+            BilingualReplyService bilingualReplies
     ) {
         this.botRepository = botRepository;
         this.releaseRepository = releaseRepository;
@@ -77,6 +81,7 @@ public class BotRuntimeService {
         this.protectionMetrics = protectionMetrics;
         this.objectMapper = objectMapper;
         this.ragChatService = ragChatService;
+        this.bilingualReplies = bilingualReplies;
     }
 
     @Transactional
@@ -146,6 +151,9 @@ public class BotRuntimeService {
         }
 
         String trimmedMessage = request.message().trim();
+        WidgetState currentState = readWidgetState(session.getStateJson());
+        BilingualReplyService.bindLanguage(ReplyLanguagePolicy.resolve(trimmedMessage,
+                currentState.dialogContext() == null ? null : currentState.dialogContext().languageState(), currentState.history()));
         String digest = sha256(trimmedMessage);
         // A network retry must not consume a new rate-limit token or invoke the
         // LLM again. requestId is the widget's idempotency key.
@@ -276,11 +284,15 @@ public class BotRuntimeService {
             BotRelease release = requireRelease(session.getBot(), session.getReleaseId());
             BotSnapshot snapshot = readJson(release.getConfigurationSnapshot(), BotSnapshot.class);
             WidgetState state = readWidgetState(session.getStateJson());
-            RuntimeResponse result = dialogRuntimeService.evaluate(snapshot, state.dialogContext(), trimmedMessage);
+            ReplyLanguagePolicy.State language = ReplyLanguagePolicy.resolve(trimmedMessage,
+                    state.dialogContext() == null ? null : state.dialogContext().languageState(), state.history());
+            RuntimeResponse result = dialogRuntimeService.evaluate(bilingualReplies.dialogSnapshot(snapshot, language), state.dialogContext(), trimmedMessage);
             boolean handled = result.context().pendingEntity() != null || !result.fallback() || result.dialogHandled();
             if (!handled && !Boolean.FALSE.equals(snapshot.blueAiCoreEnabled())) {
-                String answer = ragChatService.answerForWidget(snapshot, trimmedMessage, state.history());
-                result = new RuntimeResponse(answer, null, Map.of(), "BlueAI Core", result.context(), false);
+                String answer = ragChatService.answerForWidget(snapshot, trimmedMessage, state.history(), language);
+                result = new RuntimeResponse(answer, null, Map.of(), "BlueAI Core", result.context().withLanguage(language), false);
+            } else {
+                result = bilingualReplies.dialogReply(result, language, snapshot.blueAiCoreEnabled());
             }
             RuntimeMessageResponse response = new RuntimeMessageResponse(
                     request.requestId(),

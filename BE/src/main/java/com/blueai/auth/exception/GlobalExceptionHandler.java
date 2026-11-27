@@ -22,7 +22,9 @@ public class GlobalExceptionHandler {
         ApiError body = ApiError.of(
                 exception.getStatus(),
                 exception.getCode(),
-                exception.getMessage(),
+                "en".equals(request.getAttribute(com.blueai.rag.chat.service.BilingualReplyService.LANGUAGE_ATTRIBUTE))
+                        ? com.blueai.rag.chat.service.BilingualReplyService.englishError(exception.getCode(), exception.getMessage())
+                        : exception.getMessage(),
                 request,
                 Map.of()
         );
