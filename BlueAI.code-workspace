@@ -1,0 +1,33 @@
+{
+  "folders": [
+    { "name": "BlueAI", "path": "." }
+  ],
+  "settings": {
+    "java.autobuild.enabled": false,
+    "files.exclude": {
+      "**/.gitnexus": true,
+      "**/.codegraph": true,
+      "**/node_modules": true,
+      "**/target": true,
+      "**/dist": true,
+      "**/__pycache__": true,
+      "**/.venv": true
+    },
+    "search.exclude": {
+      "**/.gitnexus/**": true,
+      "**/.codegraph/**": true,
+      "**/node_modules/**": true,
+      "**/target/**": true,
+      "**/dist/**": true,
+      "**/__pycache__/**": true,
+      "**/.venv/**": true
+    },
+    "files.watcherExclude": {
+      "**/.gitnexus/**": true,
+      "**/.codegraph/**": true,
+      "**/node_modules/**": true,
+      "**/target/**": true
+    },
+    "git.autoRepositoryDetection": "subFolders"
+  }
+}

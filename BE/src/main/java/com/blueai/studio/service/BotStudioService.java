@@ -296,7 +296,11 @@ public class BotStudioService {
                         node.getJumpToNode(),
                         node.getIrrelevantResponseText(),
                         node.getPriority(),
-                        node.getContextReusePolicy()
+                        node.getContextReusePolicy(),
+                        node.getEnglishResponseText(),
+                        node.getEnglishMissingEntityPrompt(),
+                        node.getEnglishIrrelevantResponseText(),
+                        readTranslations(node)
                 ))
                 .toList();
         return new BotConfigurationResponse(summary(bot), intents, entities, nodes, customization(bot));
@@ -358,6 +362,18 @@ public class BotStudioService {
     }
 
     private void replaceConfiguration(Bot bot, List<IntentInput> intents, List<EntityInput> entities, List<DialogNodeInput> nodes) {
+        Map<String, BotDialogNode> previous = dialogNodeRepository.findByBot_IdOrderByPriorityAsc(bot.getId()).stream()
+                .collect(java.util.stream.Collectors.toMap(node -> key(node.getNodeName()), node -> node));
+        List<DialogNodeInput> merged = nodes.stream().map(node -> {
+            BotDialogNode old = previous.get(key(node.name()));
+            Map<String, com.blueai.studio.dto.BotStudioDtos.DialogReplyInput> translations = mergeTranslations(node, old);
+            var english = translations.getOrDefault("en", new com.blueai.studio.dto.BotStudioDtos.DialogReplyInput(null, null, null));
+            return new DialogNodeInput(node.name(), node.type(), node.parentNode(), node.matchIntent(), node.matchEntityName(),
+                    node.matchEntityValue(), node.requiredEntityName(), node.responseText(), node.missingEntityPrompt(), node.nextStep(),
+                    node.jumpToNode(), node.irrelevantResponseText(), node.priority(), node.contextReusePolicy(),
+                    english.responseText(), english.missingEntityPrompt(), english.irrelevantResponseText(), translations);
+        }).toList();
+        validate(intents, entities, merged);
         entityValueRepository.deleteByEntity_Bot_Id(bot.getId());
         dialogNodeRepository.deleteByBot_Id(bot.getId());
         intentRepository.deleteByBot_Id(bot.getId());
@@ -366,7 +382,7 @@ public class BotStudioService {
         dialogNodeRepository.flush();
         intentRepository.flush();
         entityRepository.flush();
-        persistConfiguration(bot, intents, entities, nodes);
+        persistConfiguration(bot, intents, entities, merged);
     }
 
     private void persistConfiguration(Bot bot, List<IntentInput> intents, List<EntityInput> entities, List<DialogNodeInput> nodes) {
@@ -413,8 +429,37 @@ public class BotStudioService {
                     input.priority()
             );
             node.setContextReusePolicy(input.contextReusePolicy());
+            node.setEnglishReplies(trimToNull(input.englishResponseText()), trimToNull(input.englishMissingEntityPrompt()),
+                    trimToNull(input.englishIrrelevantResponseText()));
+            node.setReplyTranslationsJson(writeJson(input.replyTranslations()));
             dialogNodeRepository.save(node);
         }
+    }
+
+    private Map<String, com.blueai.studio.dto.BotStudioDtos.DialogReplyInput> readTranslations(BotDialogNode node) {
+        if (node.getReplyTranslationsJson() == null) {
+            if (node.getEnglishResponseText() == null && node.getEnglishMissingEntityPrompt() == null && node.getEnglishIrrelevantResponseText() == null) return Map.of();
+            return Map.of("en", new com.blueai.studio.dto.BotStudioDtos.DialogReplyInput(node.getEnglishResponseText(),
+                    node.getEnglishMissingEntityPrompt(), node.getEnglishIrrelevantResponseText()));
+        }
+        try {
+            return objectMapper.readValue(node.getReplyTranslationsJson(), new com.fasterxml.jackson.core.type.TypeReference<>() { });
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "DIALOG_TRANSLATIONS_INVALID", "Không thể đọc bản dịch hội thoại đã lưu.");
+        }
+    }
+
+    private Map<String, com.blueai.studio.dto.BotStudioDtos.DialogReplyInput> mergeTranslations(DialogNodeInput input, BotDialogNode old) {
+        if (input.translations() != null) return input.translations();
+        var translations = new java.util.LinkedHashMap<String, com.blueai.studio.dto.BotStudioDtos.DialogReplyInput>(old == null ? Map.of() : readTranslations(old));
+        if (input.englishResponseText() != null || input.englishMissingEntityPrompt() != null || input.englishIrrelevantResponseText() != null) {
+            var previous = translations.getOrDefault("en", new com.blueai.studio.dto.BotStudioDtos.DialogReplyInput(null, null, null));
+            translations.put("en", new com.blueai.studio.dto.BotStudioDtos.DialogReplyInput(
+                    input.englishResponseText() == null ? previous.responseText() : input.englishResponseText(),
+                    input.englishMissingEntityPrompt() == null ? previous.missingEntityPrompt() : input.englishMissingEntityPrompt(),
+                    input.englishIrrelevantResponseText() == null ? previous.irrelevantResponseText() : input.englishIrrelevantResponseText()));
+        }
+        return translations;
     }
 
     private String canonicalReference(List<String> names, String supplied) {

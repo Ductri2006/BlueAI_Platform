@@ -116,8 +116,8 @@ class MySqlMigrationIntegrationTest {
                         "idempotency_key_type", "VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"))
                 .cleanDisabled(true)
                 .load();
-        assertThat(latest.migrate().migrationsExecuted).isEqualTo(9);
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("15");
+        assertThat(latest.migrate().migrationsExecuted).isEqualTo(11);
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("17");
         latest.validate();
         assertThat(latest.info().pending()).isEmpty();
         assertThat(latest.migrate().migrationsExecuted).isZero();

@@ -130,6 +130,12 @@ BlueAI_Platform/
 
 ## 4. Chạy local
 
+### Workspace VS Code
+
+Mở file `BlueAI.code-workspace` trong repository để làm việc với một thư mục BlueAI chung. Workspace dùng đường dẫn tương đối, có thể mở ở bất kỳ vị trí clone nào; thư mục build/cache được ẩn khỏi Explorer và tìm kiếm. Java tự biên dịch được tắt trong workspace để hạn chế phát sinh thay đổi file build khi mở dự án; vẫn chạy build/test thủ công như bình thường.
+
+Các thư mục báo cáo, bản sao lưu và worktree riêng trên máy của người phát triển không thuộc workspace dùng chung. Việc chọn workspace chỉ điều chỉnh trình soạn thảo, không thay đổi cấu hình chạy ứng dụng hoặc production.
+
 ### Chuẩn bị
 
 - Git và quyền truy cập repository nếu repo riêng tư.

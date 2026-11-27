@@ -297,7 +297,17 @@ export interface StudioEntity {
   values: StudioEntityValue[];
 }
 
+export interface StudioDialogReply {
+  responseText?: string | null;
+  missingEntityPrompt?: string | null;
+  irrelevantResponseText?: string | null;
+}
+
 export interface StudioDialogNode {
+  translations?: Record<string, StudioDialogReply> | null;
+  englishResponseText?: string;
+  englishMissingEntityPrompt?: string;
+  englishIrrelevantResponseText?: string;
   name: string;
   type: StudioDialogNodeType;
   parentNode?: string;

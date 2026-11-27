@@ -9,9 +9,10 @@ final class DialogMessagePolicy {
                     + "(?: a|nhe|nha)?");
     private static final Pattern QUESTION_CUE = Pattern.compile(
             "(?:^| )(?:gi|nao|tai sao|vi sao|bao nhieu|ra sao|the nao|khi nao)(?: |$)"
-                    + "|(?:^| )co .+ khong(?: |$)|(?:^| )duoc khong(?: |$)");
+                    + "|(?:^| )co .+ khong(?: |$)|(?:^| )duoc khong(?: |$)"
+                    + "|(?:^| )(?:how|what|why|where|when|which|can|could|does|is|are|should)(?: |$)");
     private static final Pattern REQUEST_CUE = Pattern.compile(
-            "(?:^| )(?:toi can|toi muon|cho toi|giup toi|minh can|minh muon)(?: |$)");
+            "(?:^| )(?:toi can|toi muon|cho toi|giup toi|minh can|minh muon|i need|i want|help me|please help|i can t|i cannot|not working)(?: |$)");
 
     private DialogMessagePolicy() { }
 
@@ -24,6 +25,6 @@ final class DialogMessagePolicy {
         // Short slot replies and ambiguous acknowledgements stay in Dialog.
         // An unmatched substantive question must not be trapped by that state.
         return (words >= 4 && (message.contains("?") || QUESTION_CUE.matcher(normalized).find()))
-                || (words >= 6 && !hasRecognizedEntity && REQUEST_CUE.matcher(normalized).find());
+                || (words >= 4 && !hasRecognizedEntity && REQUEST_CUE.matcher(normalized).find());
     }
 }
