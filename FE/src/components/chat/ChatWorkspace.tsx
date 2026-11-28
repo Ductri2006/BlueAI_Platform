@@ -124,18 +124,18 @@ export const ChatWorkspace: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-canvas-light dark:bg-canvas-dark bg-ambient-grid relative">
       {/* Top Workspace Bar */}
-      <header className="h-12 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/75 dark:bg-[#070E1C]/75 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between shrink-0 z-10">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <header className="h-12 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/75 dark:bg-[#070E1C]/75 backdrop-blur-md px-4 sm:px-6 flex items-center justify-between gap-2 shrink-0 z-10">
+        <div className="flex flex-1 items-center gap-2.5 min-w-0">
           <button
             onClick={() => currentSession && togglePinSession(currentSession.id)}
-            className={`p-1.5 rounded-lg transition-colors ${currentSession?.isPinned ? 'text-cobalt-600 dark:text-cobalt-400 bg-cobalt-50 dark:bg-cobalt-950/80' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+            className={`shrink-0 p-1.5 rounded-lg transition-colors ${currentSession?.isPinned ? 'text-cobalt-600 dark:text-cobalt-400 bg-cobalt-50 dark:bg-cobalt-950/80' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
             title={currentSession?.isPinned ? 'Bỏ ghim cuộc trò chuyện' : 'Ghim cuộc trò chuyện này'}
             aria-label={currentSession?.isPinned ? 'Bỏ ghim cuộc trò chuyện' : 'Ghim cuộc trò chuyện này'}
           >
             <Pin className="w-3.5 h-3.5" />
           </button>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="w-2 h-2 shrink-0 rounded-full bg-cyan-400 animate-pulse" />
             <h2 className="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate tracking-tight">
               {currentSession?.title || 'Hỏi BlueAI'}
             </h2>
@@ -143,7 +143,7 @@ export const ChatWorkspace: React.FC = () => {
         </div>
 
         {/* Action Tools */}
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={() => setIsContextOpen(true)}
             disabled={!currentSession?.conversationId}

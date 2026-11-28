@@ -77,6 +77,8 @@ class WidgetRagDialogIntegrationTest {
         prompt = new AtomicReference<>();
         when(completion.complete(anyList())).thenAnswer(invocation -> {
             prompt.set(List.copyOf(invocation.getArgument(0)));
+            if (!prompt.get().isEmpty() && prompt.get().getFirst().content().contains("Reply language for this turn: English (en)"))
+                return "RAG: Returns are allowed within 7 days according to the public FAQ.";
             return "RAG: đổi trả trong 7 ngày theo FAQ công khai.";
         });
     }

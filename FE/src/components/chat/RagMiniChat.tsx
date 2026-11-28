@@ -1,12 +1,15 @@
 import React, { useRef, useState } from 'react';
 import { Layers, Send, Sparkles } from 'lucide-react';
 import { blueAiApi, ragAnswerToChatMessage } from '../../api/blueAiApi';
+import { chatErrorToMessage } from '../../api/chatErrors';
 import type { ChatMessage } from '../../types';
+import { visibleMessageText } from './answerText';
 import type { ConversationContextMode } from '../../api/blueAiApi';
 import { Button } from '../ui/Button';
 import { ConversationContextPanel } from './ConversationContextPanel';
 import { useChatInputComposition } from './useChatInputComposition';
-import { visibleMessageText } from './answerText';
+import { ChatErrorNotice } from './ChatErrorNotice';
+import { GroundedStatusBadge } from './GroundedStatusBadge';
 
 interface RagMiniChatProps {
   title: string;
@@ -27,7 +30,7 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
   const send = async () => {
     const question = text.trim();
     if (!question || loading) return;
-    setText('');
+    const submitted = text;
     setMessages(current => [...current, {
       id: `local-${crypto.randomUUID()}`,
       sender: 'user',
@@ -43,15 +46,11 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
         setContextMode(conversation.contextMode);
       }
       const answer = await blueAiApi.askQuestion(conversationId.current, question);
-      setMessages(current => [...current, ragAnswerToChatMessage(answer)]);
+      const message = ragAnswerToChatMessage(answer);
+      setMessages(current => [...current, message]);
+      if (!message.error) setText(current => current === submitted ? '' : current);
     } catch (error) {
-      setMessages(current => [...current, {
-        id: `error-${crypto.randomUUID()}`,
-        sender: 'system',
-        content: error instanceof Error ? error.message : 'Không thể kết nối dịch vụ RAG.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        confidence: 'danger',
-      }]);
+      setMessages(current => [...current, chatErrorToMessage(error)]);
     } finally {
       setLoading(false);
     }
@@ -78,9 +77,10 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
         {messages.length === 0 && <p className="text-sm text-slate-500">Chưa có hội thoại. Hãy nhập câu hỏi để bắt đầu.</p>}
         {messages.map(message => (
           <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${message.sender === 'user' ? 'bg-cobalt-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100'}`}>
-              {visibleMessageText(message)}
-              {!!message.contextSources?.length && (
+            <div className={`min-w-0 max-w-[86%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap [overflow-wrap:anywhere] ${message.sender === 'user' ? 'bg-cobalt-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100'}`}>
+              {!message.error && message.confidence === 'danger' && <div className="mb-2"><GroundedStatusBadge confidence="danger" /></div>}
+              {message.error ? <ChatErrorNotice error={message.error} content={message.content} /> : visibleMessageText(message)}
+              {!message.error && !!message.contextSources?.length && (
                 <div className="mt-2 pt-2 border-t border-current/20 text-xs opacity-80">
                   Context: {message.contextSources.map(source => source.title).join(', ')}
                 </div>
@@ -98,9 +98,10 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
           onCompositionStart={composition.onCompositionStart}
           onCompositionEnd={composition.onCompositionEnd}
           placeholder={placeholder}
-          className="flex-1 px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+          aria-label={placeholder}
+          className="min-w-0 flex-1 px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
         />
-        <Button size="sm" variant="primary" onClick={() => void send()} disabled={loading || !text.trim()}>
+        <Button size="sm" variant="primary" onClick={() => void send()} disabled={loading || !text.trim()} aria-label={loading ? 'Đang xử lý câu hỏi' : 'Gửi câu hỏi'}>
           <Send className="w-4 h-4" />
         </Button>
       </div>

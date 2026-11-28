@@ -27,7 +27,28 @@ public class BilingualReplyService {
             Map.entry("AI_REQUEST_TOO_LARGE", "This request is too large. Please shorten it and try again."),
             Map.entry("SESSION_TURN_LIMIT", "This conversation has reached its message limit. Please start a new conversation."),
             Map.entry("WIDGET_RATE_LIMITED", "You are sending messages too quickly. Please wait and try again."),
-            Map.entry("RAG_RATE_LIMITED", "You are sending messages too quickly. Please wait and try again.")
+            Map.entry("RAG_RATE_LIMITED", "You are sending messages too quickly. Please wait and try again."),
+            Map.entry("RAG_RETRIEVAL_FAILED", "I cannot access the information needed right now. Please try again later or contact support."),
+            Map.entry("RAG_RETRIEVER_NOT_CONFIGURED", "I cannot access the information needed right now. Please try again later or contact support."),
+            Map.entry("AI_RETRIEVAL_FAILED", "I cannot access the information needed right now. Please try again later or contact support."),
+            Map.entry("AI_RETRIEVAL_NOT_CONFIGURED", "I cannot access the information needed right now. Please try again later or contact support."),
+            Map.entry("LLM_UNAVAILABLE", "I could not prepare a reliable reply right now. Please try again later or contact support."),
+            Map.entry("LLM_NOT_CONFIGURED", "I could not prepare a reliable reply right now. Please try again later or contact support."),
+            Map.entry("LLM_REQUEST_FAILED", "I could not prepare a reliable reply right now. Please try again later or contact support."),
+            Map.entry("LLM_INVALID_RESPONSE", "I could not prepare a reliable reply right now. Please try again later or contact support."),
+            Map.entry("AI_PROVIDER_NOT_CONFIGURED", "I could not prepare a reliable reply right now. Please try again later or contact support."),
+            Map.entry("AI_PROVIDER_FAILED", "I could not prepare a reliable reply right now. Please try again later or contact support."),
+            Map.entry("AI_PROVIDER_CAPACITY", "I could not prepare a reliable reply right now. Please try again later or contact support."),
+            Map.entry("AI_INVALID_OUTPUT", "I could not prepare a reliable reply right now. Please try again later or contact support."),
+            Map.entry("LLM_RESPONSE_LANGUAGE_MISMATCH", "I could not prepare an accurate reply in English. Please try again later or contact support."),
+            Map.entry("REPLY_TRANSLATION_FAILED", "I could not safely translate this reply. Please try again later or contact support."),
+            Map.entry("PRODUCT_UPSTREAM_IP_FORBIDDEN", "I cannot verify the current product catalogue right now. Please try again later or contact support."),
+            Map.entry("PRODUCT_UPSTREAM_UNAUTHORIZED", "I cannot verify the current product catalogue right now. Please try again later or contact support."),
+            Map.entry("PRODUCT_SYNC_FAILED", "I cannot verify the current product catalogue right now. Please try again later or contact support."),
+            Map.entry("PRODUCT_CATALOG_INCOMPLETE", "I cannot verify the current product catalogue right now. Please try again later or contact support."),
+            Map.entry("PRODUCT_CATALOG_UNAVAILABLE", "I cannot verify the current product catalogue right now. Please try again later or contact support."),
+            Map.entry("PRODUCT_CATALOG_EMPTY", "I cannot verify the current product catalogue right now. Please try again later or contact support."),
+            Map.entry("PRODUCT_SOURCE_CHANGED", "I cannot verify the current product catalogue right now. Please try again later or contact support.")
     );
     private static final Map<String, String> ENGLISH = Map.ofEntries(
             Map.entry("Xin chào! Bạn muốn tra cứu thông tin gì?", "Hello! What would you like to know?"),
@@ -45,7 +66,50 @@ public class BilingualReplyService {
             Map.entry("SESSION_TURN_LIMIT", "此对话已达到消息数量上限，请开始新的对话。"),
             Map.entry("WIDGET_RATE_LIMITED", "您发送消息过于频繁，请稍候重试。"),
             Map.entry("RAG_RATE_LIMITED", "您发送消息过于频繁，请稍候重试。"),
-            Map.entry("REPLY_TRANSLATION_FAILED", "暂时无法安全地翻译此回复，请重试或联系人工客服。")
+            Map.entry("REPLY_TRANSLATION_FAILED", "暂时无法安全地翻译此回复，请重试或联系人工客服。"),
+            Map.entry("RAG_RETRIEVAL_FAILED", "暂时无法获取所需资料，请稍后重试或联系人工客服。"),
+            Map.entry("RAG_RETRIEVER_NOT_CONFIGURED", "暂时无法获取所需资料，请稍后重试或联系人工客服。"),
+            Map.entry("AI_RETRIEVAL_FAILED", "暂时无法获取所需资料，请稍后重试或联系人工客服。"),
+            Map.entry("AI_RETRIEVAL_NOT_CONFIGURED", "暂时无法获取所需资料，请稍后重试或联系人工客服。"),
+            Map.entry("LLM_UNAVAILABLE", "暂时无法生成可靠的回复，请稍后重试或联系人工客服。"),
+            Map.entry("LLM_NOT_CONFIGURED", "暂时无法生成可靠的回复，请稍后重试或联系人工客服。"),
+            Map.entry("LLM_REQUEST_FAILED", "暂时无法生成可靠的回复，请稍后重试或联系人工客服。"),
+            Map.entry("LLM_INVALID_RESPONSE", "暂时无法生成可靠的回复，请稍后重试或联系人工客服。"),
+            Map.entry("AI_PROVIDER_NOT_CONFIGURED", "暂时无法生成可靠的回复，请稍后重试或联系人工客服。"),
+            Map.entry("AI_PROVIDER_FAILED", "暂时无法生成可靠的回复，请稍后重试或联系人工客服。"),
+            Map.entry("AI_PROVIDER_CAPACITY", "暂时无法生成可靠的回复，请稍后重试或联系人工客服。"),
+            Map.entry("AI_INVALID_OUTPUT", "暂时无法生成可靠的回复，请稍后重试或联系人工客服。"),
+            Map.entry("LLM_RESPONSE_LANGUAGE_MISMATCH", "暂时无法生成准确的简体中文回复，请稍后重试或联系人工客服。"),
+            Map.entry("PRODUCT_UPSTREAM_IP_FORBIDDEN", "暂时无法核实当前产品目录，请稍后重试或联系人工客服。"),
+            Map.entry("PRODUCT_UPSTREAM_UNAUTHORIZED", "暂时无法核实当前产品目录，请稍后重试或联系人工客服。"),
+            Map.entry("PRODUCT_SYNC_FAILED", "暂时无法核实当前产品目录，请稍后重试或联系人工客服。"),
+            Map.entry("PRODUCT_CATALOG_INCOMPLETE", "暂时无法核实当前产品目录，请稍后重试或联系人工客服。"),
+            Map.entry("PRODUCT_CATALOG_UNAVAILABLE", "暂时无法核实当前产品目录，请稍后重试或联系人工客服。"),
+            Map.entry("PRODUCT_CATALOG_EMPTY", "暂时无法核实当前产品目录，请稍后重试或联系人工客服。"),
+            Map.entry("PRODUCT_SOURCE_CHANGED", "暂时无法核实当前产品目录，请稍后重试或联系人工客服。")
+    );
+    private static final Map<String, String> VIETNAMESE_ERRORS = Map.ofEntries(
+            Map.entry("RAG_RETRIEVAL_FAILED", "Hiện chưa thể truy cập thông tin cần thiết. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("RAG_RETRIEVER_NOT_CONFIGURED", "Hiện chưa thể truy cập thông tin cần thiết. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("AI_RETRIEVAL_FAILED", "Hiện chưa thể truy cập thông tin cần thiết. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("AI_RETRIEVAL_NOT_CONFIGURED", "Hiện chưa thể truy cập thông tin cần thiết. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("LLM_UNAVAILABLE", "Hiện chưa thể tạo câu trả lời đáng tin cậy. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("LLM_NOT_CONFIGURED", "Hiện chưa thể tạo câu trả lời đáng tin cậy. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("LLM_REQUEST_FAILED", "Hiện chưa thể tạo câu trả lời đáng tin cậy. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("LLM_INVALID_RESPONSE", "Hiện chưa thể tạo câu trả lời đáng tin cậy. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("AI_PROVIDER_NOT_CONFIGURED", "Hiện chưa thể tạo câu trả lời đáng tin cậy. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("AI_PROVIDER_FAILED", "Hiện chưa thể tạo câu trả lời đáng tin cậy. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("AI_PROVIDER_CAPACITY", "Hiện chưa thể tạo câu trả lời đáng tin cậy. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("AI_INVALID_OUTPUT", "Hiện chưa thể tạo câu trả lời đáng tin cậy. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("LLM_RESPONSE_LANGUAGE_MISMATCH", "Hiện chưa thể tạo câu trả lời chính xác bằng tiếng Việt. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("REPLY_TRANSLATION_FAILED", "Hiện chưa thể dịch chính xác câu trả lời này. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("PRODUCT_UPSTREAM_IP_FORBIDDEN", "Hiện chưa thể xác minh danh mục sản phẩm hiện tại. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("PRODUCT_UPSTREAM_UNAUTHORIZED", "Hiện chưa thể xác minh danh mục sản phẩm hiện tại. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("PRODUCT_SYNC_FAILED", "Hiện chưa thể xác minh danh mục sản phẩm hiện tại. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("PRODUCT_CATALOG_INCOMPLETE", "Hiện chưa thể xác minh danh mục sản phẩm hiện tại. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("PRODUCT_CATALOG_UNAVAILABLE", "Hiện chưa thể xác minh danh mục sản phẩm hiện tại. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("PRODUCT_CATALOG_EMPTY", "Hiện chưa thể xác minh danh mục sản phẩm hiện tại. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ."),
+            Map.entry("PRODUCT_SOURCE_CHANGED", "Hiện chưa thể xác minh danh mục sản phẩm hiện tại. Bạn vui lòng thử lại sau hoặc liên hệ nhân viên hỗ trợ.")
     );
     private static final Map<String, String> CHINESE = Map.ofEntries(
             Map.entry("Xin chào! Bạn muốn tra cứu thông tin gì?", "您好！您想查询什么信息？"),
@@ -86,7 +150,7 @@ public class BilingualReplyService {
     public static String localizedError(String code, String original, String languageCode) {
         if ("en".equals(languageCode)) return englishError(code, original);
         if ("zh-CN".equals(languageCode)) return CHINESE_ERRORS.getOrDefault(code, original);
-        return original;
+        return VIETNAMESE_ERRORS.getOrDefault(code, original);
     }
 
     public String localize(String text, ReplyLanguagePolicy.State language) {

@@ -46,7 +46,7 @@ export const EvidenceDrawer: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
         {/* Document Title Card */}
         <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800">
-          <span className="text-[11px] font-semibold text-cobalt-600 dark:text-cobalt-400 uppercase tracking-wider">Tài liệu tham chiếu</span>
+          <span className="text-[11px] font-semibold text-cobalt-600 dark:text-cobalt-400 uppercase tracking-wider">{selectedCitation.sourceId.startsWith('product:') ? 'Sản phẩm tham chiếu' : 'Tài liệu tham chiếu'}</span>
           <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mt-1 leading-snug">
             {selectedCitation.title}
           </h4>
@@ -106,7 +106,7 @@ export const EvidenceDrawer: React.FC = () => {
             <div>
               <p className="font-semibold">Nguồn đã được backend xác minh</p>
               <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
-                Tài liệu thuộc phạm vi truy cập của tài khoản và ở trạng thái READY tại thời điểm truy xuất.
+                {selectedCitation.sourceId.startsWith('product:') ? 'Sản phẩm đang bán trong bản đồng bộ tại thời điểm tư vấn. Thời điểm đồng bộ nằm trong đoạn trích; giá là giá bán đề xuất.' : 'Tài liệu thuộc phạm vi truy cập của tài khoản và ở trạng thái READY tại thời điểm truy xuất.'}
                 {' '}Trạng thái: {selectedCitation.effectiveDate}.
               </p>
             </div>

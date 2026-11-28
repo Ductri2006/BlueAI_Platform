@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
-import org.springframework.web.client.ResourceAccessException;
 
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -114,7 +113,7 @@ public class RagCompletionClient {
                         && rejected.getStatusCode().is4xxClientError() && rejected.getStatusCode().value() != 408) {
                     tokenQuota.release(reservation);
                 }
-                if (reservation != null && exception instanceof RestClientResponseException limited
+                if (exception instanceof RestClientResponseException limited
                         && limited.getStatusCode().value() == 429) {
                     throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "AI_PROVIDER_RATE_LIMITED",
                             "Nhà cung cấp AI đang giới hạn lượt dùng chung. Vui lòng thử lại sau.", 60L);
@@ -152,11 +151,13 @@ public class RagCompletionClient {
     private boolean isTransient(RuntimeException exception) {
         if (exception instanceof RestClientResponseException responseException) {
             int status = responseException.getStatusCode().value();
-            return status == HttpStatus.REQUEST_TIMEOUT.value()
-                    || status == HttpStatus.TOO_MANY_REQUESTS.value()
-                    || responseException.getStatusCode().is5xxServerError();
+            // Rate limits and ambiguous request timeouts are terminal even without quota.
+            return status != HttpStatus.REQUEST_TIMEOUT.value()
+                    && status != HttpStatus.GATEWAY_TIMEOUT.value()
+                    && responseException.getStatusCode().is5xxServerError();
         }
-        return exception instanceof ResourceAccessException || exception instanceof UncheckedIOException;
+        // Transport failures can occur after the provider accepted paid work. Never replay it.
+        return false;
     }
 
     private long retryDelayMillis(int failedAttempt) {

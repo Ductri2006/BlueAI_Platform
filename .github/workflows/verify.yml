@@ -87,6 +87,9 @@ jobs:
       MYSQL_TOKEN_QUOTA_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_token_quota_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
       MYSQL_TOKEN_QUOTA_TEST_USERNAME: migration_test
       MYSQL_TOKEN_QUOTA_TEST_PASSWORD: ci-disposable-migration-password
+      MYSQL_SHARED_ADMIN_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_shared_admin_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      MYSQL_SHARED_ADMIN_TEST_USERNAME: migration_test
+      MYSQL_SHARED_ADMIN_TEST_PASSWORD: ci-disposable-migration-password
     defaults:
       run:
         working-directory: BE
@@ -101,10 +104,10 @@ jobs:
         env:
           MYSQL_CONTAINER_ID: ${{ job.services.mysql.id }}
         run: |
-          docker exec "$MYSQL_CONTAINER_ID" mysql --protocol=TCP -h127.0.0.1 -uroot -pci-disposable-root-password -e "CREATE DATABASE blueai_legacy_v1_test; CREATE DATABASE blueai_legacy_v3_test; CREATE DATABASE blueai_token_quota_test; CREATE DATABASE blueai_chinese_chat_test; GRANT ALL ON blueai_chinese_chat_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_token_quota_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v1_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v3_test.* TO 'migration_test'@'%';"
+          docker exec "$MYSQL_CONTAINER_ID" mysql --protocol=TCP -h127.0.0.1 -uroot -pci-disposable-root-password -e "CREATE DATABASE blueai_legacy_v1_test; CREATE DATABASE blueai_legacy_v3_test; CREATE DATABASE blueai_token_quota_test; CREATE DATABASE blueai_chinese_chat_test; CREATE DATABASE blueai_shared_admin_test; GRANT ALL ON blueai_chinese_chat_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_shared_admin_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_token_quota_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v1_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v3_test.* TO 'migration_test'@'%';"
       - run: mvn -B -Dtest=MySqlMigrationIntegrationTest,MySqlLegacyMigrationIntegrationTest test
       - run: mvn -B -Dtest=AiTokenQuotaMySqlTest test
-      - run: mvn -B -Dtest=AuthMySqlConcurrencyIntegrationTest,SingleLoginMySqlIntegrationTest,AuthAdminMutationMySqlIntegrationTest,AiTaskMySqlRecoveryIntegrationTest,AiTaskMySqlAuthorizationIntegrationTest,MySqlPasswordRecoveryIntegrationTest,WidgetRateLimiterRedisIntegrationTest test
+      - run: mvn -B -Dtest=AuthMySqlConcurrencyIntegrationTest,SingleLoginMySqlIntegrationTest,AuthAdminMutationMySqlIntegrationTest,AiTaskMySqlRecoveryIntegrationTest,AiTaskMySqlAuthorizationIntegrationTest,MySqlPasswordRecoveryIntegrationTest,SharedAdminWorkspaceMySqlIntegrationTest,WidgetRateLimiterRedisIntegrationTest test
       - name: Chinese chat and legacy widget runtime on MySQL 8.4
         env:
           BLUEAI_CHINESE_QA_DB_URL: ${{ env.MYSQL_CHINESE_TEST_URL }}

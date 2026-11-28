@@ -289,8 +289,9 @@ public class BotRuntimeService {
             RuntimeResponse result = dialogRuntimeService.evaluate(bilingualReplies.dialogSnapshot(snapshot, language), state.dialogContext(), trimmedMessage);
             boolean handled = result.context().pendingEntity() != null || !result.fallback() || result.dialogHandled();
             if (!handled && !Boolean.FALSE.equals(snapshot.blueAiCoreEnabled())) {
-                String answer = ragChatService.answerForWidget(snapshot, trimmedMessage, state.history(), language);
-                result = new RuntimeResponse(answer, null, Map.of(), "BlueAI Core", result.context().withLanguage(language), false);
+                var reply = ragChatService.answerForWidgetReply(snapshot, trimmedMessage, state.history(), language);
+                result = new RuntimeResponse(reply.text(), null, Map.of(), "BlueAI Core", result.context().withLanguage(language), reply.fallback())
+                        .withAnswerStatus(reply.status());
             } else {
                 result = bilingualReplies.dialogReply(result, language, snapshot.blueAiCoreEnabled());
             }

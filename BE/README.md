@@ -78,12 +78,43 @@ Hợp đồng giữa Java và Python được mô tả tại [`RAG_WORKER_CONTRA
 Nếu một trong hai upstream chưa sẵn sàng, API trả lỗi `503/502` có mã rõ ràng để
 frontend hiển thị, không tự chuyển sang câu trả lời giả.
 
+### Chạy Java và RAG riêng từ IDE
+
+Java đọc `APP_WORKER_API_KEY` từ môi trường tiến trình hoặc file local
+`backend/BE/.env.worker.properties` (file này được Git bỏ qua). File properties có dạng
+`APP_WORKER_API_KEY=<secret riêng>`. Dùng cùng secret cho `JAVA_WORKER_API_KEY`
+trong `backend/feature-rag-chatbot/rag-chatbot/.env`. Đây là khóa nội bộ Java ↔ RAG,
+khác với Gemini API key và Bluecom sandbox API key. File `BE/.env` dành cho Compose,
+không tự động được Java đọc khi chạy trực tiếp bằng IDE.
+
+Đường dẫn import hỗ trợ working directory là `BE`, `backend`, hoặc thư mục
+workspace chứa `backend`. Sau khi thay đổi secret hoặc import cấu hình, khởi động
+lại Java; nếu thay file `.env` của RAG thì khởi động lại RAG nữa.
+Nếu Java trả `503 WORKER_API_KEY_NOT_CONFIGURED` và RAG đồng thời trả `401` cho
+retrieval, kiểm tra Java đã nạp file secret theo đúng working directory chưa.
+Khi hoạt động, `GET http://127.0.0.1:8000/health` phải có
+`documentWorker.consecutiveFailures=0` và `lastSuccessAt` gần thời điểm hiện tại.
+
 Cho môi trường thật, không chạy file Compose local nguyên trạng. Dùng
 [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) cùng
 `compose.production.yaml`: nó bỏ host port của API/MySQL/RAG, bắt buộc secret
 và CORS production, đồng thời bật production gate chống cấu hình local.
 
 ## API
+
+### Định dạng câu trả lời chat
+
+Nội dung trả lời là văn bản thuần, dùng chung cho web và các kênh chat như
+Telegram/Messenger. Các trường `assistantMessage.content`, `message` của preview/widget
+và `answer` của API bot không chứa thẻ HTML, ký tự định dạng Markdown hay nhãn nguồn
+`[S1]`, `[S2, S3]`. Giữ xuống dòng, danh sách đơn giản, SKU, giá và URL dạng chữ.
+Backend làm sạch tại response boundary, bao gồm lịch sử và response cache cũ;
+nội dung người dùng không bị chỉnh sửa.
+
+Web hiển thị/copy phần văn bản thuần này. Nguồn xác minh vẫn là metadata riêng
+(`sources`, `contextSources`, `evidence`) cho web nội bộ; các trường metadata không
+được ghép vào tin nhắn gửi cho khách. API bot công khai tiếp tục không trả nguồn
+tài liệu nội bộ; tích hợp chat gửi trực tiếp giá trị `answer` dưới dạng plain text.
 
 ### Tài khoản admin bootstrap
 

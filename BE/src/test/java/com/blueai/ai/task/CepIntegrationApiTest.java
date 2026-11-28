@@ -186,7 +186,7 @@ class CepIntegrationApiTest {
                 .andExpect(jsonPath("$.result.message", org.hamcrest.Matchers.containsString("22:00")));
         botMessage(client, id, "Sài Gòn", "m2").andExpect(status().isOk());
         botMessage(client, id, "Hà Nội", "m2").andExpect(status().isConflict());
-        when(ragChat.answerForWidget(any(), anyString(), anyList(), any())).thenReturn("CORE answer");
+        when(ragChat.answerForWidgetReply(any(), anyString(), anyList(), any())).thenReturn(com.blueai.rag.chat.service.GroundedReplyComposer.Reply.answered("CORE answer"));
         botMessage(client, id, "Chính sách mới về bảo hành là gì?", "m3").andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.message").value("CORE answer"));
         assertThat(jdbc.queryForObject("select count(*) from studio_bot_turns where session_id=?", Integer.class, id)).isEqualTo(3);

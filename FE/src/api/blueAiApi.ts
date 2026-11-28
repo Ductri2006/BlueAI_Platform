@@ -131,6 +131,7 @@ export interface ConversationMessageResponse {
   role: 'USER' | 'ASSISTANT';
   content: string;
   createdAt: string;
+  answerStatus?: 'ANSWERED' | 'NEEDS_DETAILS' | 'INSUFFICIENT_EVIDENCE' | 'SAFE_FALLBACK' | null;
   evidence?: (Pick<RagAnswerResponse, 'sources' | 'contextSources'> & {
     origin?: 'CORE' | 'DIALOG' | 'DIALOG_CONTEXT_CONFIRMATION' | null;
   }) | null;
@@ -364,6 +365,7 @@ export interface StudioPreviewHistoryMessage {
 
 export interface StudioRuntimeResponse {
   message: string;
+  answerStatus?: ConversationMessageResponse['answerStatus'];
   matchedIntent?: string;
   recognizedEntities: Record<string, string>;
   matchedNode?: string;
@@ -897,18 +899,19 @@ export function normalizeAssistantContent(raw: string): string {
 export function ragSourceToCitation(source: RagSourceResponse): Citation {
   const score = typeof source.score === 'number' ? ` • độ liên quan ${(source.score * 100).toFixed(1)}%` : '';
   const isEnterpriseSource = source.sourceType === 'ENTERPRISE_DOCUMENT';
+  const isProduct = source.sourceType === 'PRODUCT_CATALOG';
   return {
     id: `${source.documentId}:${source.chunkId}`,
     sourceId: source.documentId,
     title: source.filename,
-    section: `Chunk ${source.chunkId}${score}`,
+    section: isProduct ? `SKU ${source.chunkId}` : `Chunk ${source.chunkId}${score}`,
     version: source.sourceType === 'SYNTHETIC_DEMO'
       ? 'Dữ liệu demo'
-      : isEnterpriseSource ? 'Nguồn doanh nghiệp' : 'Nguồn RAG API',
+      : isProduct ? 'Danh mục sản phẩm đã đồng bộ' : isEnterpriseSource ? 'Nguồn doanh nghiệp' : 'Nguồn RAG API',
     effectiveDate: source.approvalStatus === 'PENDING_OWNER_REVIEW' ? 'Chưa được phê duyệt' : 'Đã xác minh khi truy xuất',
     owner: source.sourceType === 'SYNTHETIC_DEMO'
       ? 'Bộ dữ liệu mẫu BlueAI'
-      : isEnterpriseSource ? 'Kho tri thức do Admin cung cấp' : 'Kho tri thức BlueAI',
+      : isProduct ? 'Danh mục Bluecom' : isEnterpriseSource ? 'Kho tri thức do Admin cung cấp' : 'Kho tri thức BlueAI',
     scope: 'Theo quyền truy cập của tài khoản hiện tại',
     snippet: source.excerpt,
     status: source.approvalStatus === 'PENDING_OWNER_REVIEW' ? 'scope_mismatch' : 'valid',
@@ -916,11 +919,13 @@ export function ragSourceToCitation(source: RagSourceResponse): Citation {
 }
 
 export function conversationMessageToChatMessage(message: ConversationMessageResponse): ChatMessage {
-  if (message.role === 'ASSISTANT' && message.evidence) {
+  const hasKnownStatus = ['ANSWERED', 'NEEDS_DETAILS', 'INSUFFICIENT_EVIDENCE', 'SAFE_FALLBACK'].includes(message.answerStatus || '');
+  if (message.role === 'ASSISTANT' && (message.evidence || hasKnownStatus)) {
     return ragAnswerToChatMessage({
       userMessage: message,
       assistantMessage: message,
-      ...message.evidence,
+      sources: message.evidence?.sources || [],
+      contextSources: message.evidence?.contextSources,
     });
   }
   const createdAt = new Date(message.createdAt);
@@ -940,6 +945,16 @@ export function ragAnswerToChatMessage(response: RagAnswerResponse): ChatMessage
   const createdAt = new Date(response.assistantMessage.createdAt);
   const origin = response.assistantMessage.evidence?.origin;
   const isDialog = origin === 'DIALOG' || origin === 'DIALOG_CONTEXT_CONFIRMATION';
+  const answerStatus = response.assistantMessage.answerStatus;
+  if (answerStatus === 'SAFE_FALLBACK' || answerStatus === 'NEEDS_DETAILS') {
+    return {
+      id: response.assistantMessage.id,
+      sender: 'assistant',
+      content: normalizeAssistantContent(response.assistantMessage.content),
+      timestamp: Number.isNaN(createdAt.getTime()) ? '' : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      ...(answerStatus === 'SAFE_FALLBACK' ? { error: { category: 'service' as const } } : {}),
+    };
+  }
   return {
     id: response.assistantMessage.id,
     sender: 'assistant',
@@ -947,9 +962,10 @@ export function ragAnswerToChatMessage(response: RagAnswerResponse): ChatMessage
     timestamp: Number.isNaN(createdAt.getTime())
       ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    // No verified source is not an error: the assistant is expected to say the
-    // knowledge base does not cover the question. Red is reserved for real failures.
-    confidence: origin === 'DIALOG_CONTEXT_CONFIRMATION' ? 'context_confirmation'
+    // Only an explicit knowledge gap gets the insufficient-evidence badge.
+    // Legacy source-less answers keep their existing neutral provenance.
+    confidence: answerStatus === 'INSUFFICIENT_EVIDENCE' ? 'danger'
+      : origin === 'DIALOG_CONTEXT_CONFIRMATION' ? 'context_confirmation'
       : origin === 'DIALOG' ? 'dialog'
       : citations.length === 0
       ? contextSources.length > 0 ? 'context' : 'ungrounded'

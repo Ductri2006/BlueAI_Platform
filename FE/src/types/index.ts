@@ -12,6 +12,12 @@ export type ConfidenceLevel = 'confirmed' | 'context' | 'inferred' | 'proposal' 
 
 export type AIStreamStatus = 'idle' | 'searching' | 'tool_calling' | 'streaming' | 'complete' | 'abstained' | 'error';
 
+export interface ChatError {
+  category: 'language' | 'quota' | 'network' | 'service' | 'access';
+  /** Diagnostics only; ordinary users must never see an upstream error code. */
+  code?: string;
+}
+
 export interface Citation {
   id: string;
   sourceId: string;
@@ -32,6 +38,7 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   confidence?: ConfidenceLevel;
+  error?: ChatError;
   citations?: Citation[];
   contextSources?: ConversationContextReference[];
   toolsUsed?: string[];

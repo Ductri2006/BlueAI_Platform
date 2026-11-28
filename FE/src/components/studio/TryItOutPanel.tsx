@@ -7,6 +7,7 @@ import { QuotaIndicator } from '../chat/QuotaIndicator';
 import { AiQuotaMenu } from '../chat/AiQuotaMenu';
 import { useChatInputComposition } from '../chat/useChatInputComposition';
 import { withoutDocumentSources } from '../chat/answerText';
+import { chatErrorToMessage } from '../../api/chatErrors';
 
 interface TryItOutPanelProps {
   botId: string;
@@ -94,9 +95,9 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
     event.preventDefault();
     const value = message.trim();
     if (!value || isSending || quota.blocked) return;
+    const submitted = message;
 
     setItems(current => [...current, { id: crypto.randomUUID(), role: 'user', text: value }]);
-    setMessage('');
     setError('');
     setIsSending(true);
     const currentGeneration = generation.current;
@@ -107,6 +108,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
         history: items.slice(-20).map(item => ({ role: item.role, content: item.text.slice(0, 4000) })),
       });
       if (currentGeneration !== generation.current) return;
+      if (response.answerStatus !== 'SAFE_FALLBACK') setMessage(current => current === submitted ? '' : current);
       setContext(response.context);
       setItems(current => [...current, {
         id: crypto.randomUUID(),
@@ -122,8 +124,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
       }]);
     } catch (requestError) {
       if (currentGeneration === generation.current) {
-        setMessage(value);
-        setError(requestError instanceof Error ? requestError.message : 'Không thể chạy bản thử nghiệm.');
+        setError(chatErrorToMessage(requestError).content);
       }
     } finally {
       if (currentGeneration === generation.current) setIsSending(false);
@@ -184,7 +185,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
                   {Object.entries(item.recognizedEntities || {}).map(([name, value]) => (
                     <span key={name} className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-cyan-200">@{name}:{value}</span>
                   ))}
-                  <StudioPreviewFallbackBadge fallback={item.fallback} pendingEntity={item.pendingEntity} />
+                  <StudioPreviewFallbackBadge fallback={item.fallback} pendingEntity={item.pendingEntity} answerStatus={item.result?.answerStatus} />
                   </div>
                   <p className="text-slate-400">Entity nhận diện ở câu này: {Object.keys(item.recognizedEntities || {}).length ? Object.entries(item.recognizedEntities || {}).map(([name, value]) => `@${name}=${value}`).join(', ') : 'không có'}</p>
                   <p className="text-slate-400">Context sau câu này: {Object.keys(item.contextVariables || {}).length ? Object.entries(item.contextVariables || {}).map(([name, value]) => `@${name}=${value}`).join(', ') : 'không giữ entity'}{item.pendingEntity ? ` · Đang đợi @${item.pendingEntity}` : ''}</p>
@@ -207,7 +208,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
 
       <div className="border-t border-white/10 p-4">
         {quota.blocked && <div className="mb-2"><QuotaIndicator seconds={quota.seconds} blocked /></div>}
-        {error && <p className="mb-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</p>}
+        {error && <p role="status" className="mb-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</p>}
         {context && (
           <div className="mb-3 flex flex-wrap gap-1.5 text-[10px] text-slate-400">
             <span className="font-bold uppercase tracking-wider">Context cho câu tiếp theo</span>
