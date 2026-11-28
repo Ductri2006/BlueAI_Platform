@@ -283,6 +283,10 @@ public final class BotStudioDtos {
             List<RagSourceResponse> sources,
             List<ConversationContextSourceResponse> contextSources
     ) {
+        public RuntimeResponse {
+            message = PublicAnswerText.toPlainText(message);
+        }
+
         public RuntimeResponse(String message, String matchedIntent, Map<String, String> recognizedEntities,
                                String matchedNode, PreviewContext context, boolean fallback, boolean dialogHandled) {
             this(message, matchedIntent, recognizedEntities, matchedNode, context, fallback, dialogHandled,
@@ -335,7 +339,7 @@ public final class BotStudioDtos {
             boolean fallback
     ) {
         public PublicRuntimeOutput {
-            message = PublicAnswerText.withoutSources(message);
+            message = PublicAnswerText.toPlainText(message);
         }
 
         public static PublicRuntimeOutput from(RuntimeResponse response) {

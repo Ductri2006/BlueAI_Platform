@@ -890,18 +890,19 @@ export function normalizeAssistantContent(raw: string): string {
 export function ragSourceToCitation(source: RagSourceResponse): Citation {
   const score = typeof source.score === 'number' ? ` • độ liên quan ${(source.score * 100).toFixed(1)}%` : '';
   const isEnterpriseSource = source.sourceType === 'ENTERPRISE_DOCUMENT';
+  const isProduct = source.sourceType === 'PRODUCT_CATALOG';
   return {
     id: `${source.documentId}:${source.chunkId}`,
     sourceId: source.documentId,
     title: source.filename,
-    section: `Chunk ${source.chunkId}${score}`,
+    section: isProduct ? `SKU ${source.chunkId}` : `Chunk ${source.chunkId}${score}`,
     version: source.sourceType === 'SYNTHETIC_DEMO'
       ? 'Dữ liệu demo'
-      : isEnterpriseSource ? 'Nguồn doanh nghiệp' : 'Nguồn RAG API',
+      : isProduct ? 'Danh mục sản phẩm đã đồng bộ' : isEnterpriseSource ? 'Nguồn doanh nghiệp' : 'Nguồn RAG API',
     effectiveDate: source.approvalStatus === 'PENDING_OWNER_REVIEW' ? 'Chưa được phê duyệt' : 'Đã xác minh khi truy xuất',
     owner: source.sourceType === 'SYNTHETIC_DEMO'
       ? 'Bộ dữ liệu mẫu BlueAI'
-      : isEnterpriseSource ? 'Kho tri thức do Admin cung cấp' : 'Kho tri thức BlueAI',
+      : isProduct ? 'Danh mục Bluecom' : isEnterpriseSource ? 'Kho tri thức do Admin cung cấp' : 'Kho tri thức BlueAI',
     scope: 'Theo quyền truy cập của tài khoản hiện tại',
     snippet: source.excerpt,
     status: source.approvalStatus === 'PENDING_OWNER_REVIEW' ? 'scope_mismatch' : 'valid',

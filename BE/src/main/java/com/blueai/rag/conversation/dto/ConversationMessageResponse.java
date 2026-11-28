@@ -10,6 +10,11 @@ public record ConversationMessageResponse(
         String id, MessageRole role, String content, Instant createdAt, MessageEvidence evidence
 ) {
 
+    public ConversationMessageResponse {
+        if (role == MessageRole.ASSISTANT)
+            content = com.blueai.studio.dto.PublicAnswerText.toPlainText(content);
+    }
+
     public static ConversationMessageResponse from(ConversationMessage message) {
         return new ConversationMessageResponse(
                 message.getId(),

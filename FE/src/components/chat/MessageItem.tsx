@@ -2,7 +2,6 @@ import React from 'react';
 import { ChatMessage } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { GroundedStatusBadge } from './GroundedStatusBadge';
-import { RichMarkdownRenderer } from './RichMarkdownRenderer';
 import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles, Info, Layers, GitFork } from 'lucide-react';
 
 interface MessageItemProps {
@@ -67,9 +66,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
           )}
         </div>
 
-        {/* Content Body with Rich Markdown & Tables */}
-        <div className="text-slate-800 dark:text-slate-200">
-          <RichMarkdownRenderer content={message.content} citations={message.citations} />
+        {/* The same plain text is displayed, copied and delivered to messaging apps. */}
+        <div className="whitespace-pre-wrap break-words text-[14.5px] leading-relaxed text-slate-800 dark:text-slate-200">
+          {message.content}
         </div>
 
         {message.confidence === 'dialog' && (
