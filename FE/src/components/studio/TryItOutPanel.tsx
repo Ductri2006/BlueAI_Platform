@@ -6,6 +6,7 @@ import { useSharedChatQuota } from '../chat/ChatQuotaContext';
 import { QuotaIndicator } from '../chat/QuotaIndicator';
 import { AiQuotaMenu } from '../chat/AiQuotaMenu';
 import { useChatInputComposition } from '../chat/useChatInputComposition';
+import { withoutDocumentSources } from '../chat/answerText';
 
 interface TryItOutPanelProps {
   botId: string;
@@ -174,7 +175,7 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
               {item.role === 'assistant' ? <Bot className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
             </div>
             <div className={`max-w-[82%] rounded-2xl px-3.5 py-3 text-sm leading-6 ${item.role === 'assistant' ? 'rounded-tl-md bg-slate-800' : 'rounded-tr-md bg-cobalt-600'}`}>
-              <p className="whitespace-pre-wrap">{item.text}</p>
+              <p className="whitespace-pre-wrap">{item.role === 'user' ? item.text : withoutDocumentSources(item.text)}</p>
               {item.role === 'assistant' && item.id !== 'welcome' && (
                 <div className="mt-3 space-y-1.5 border-t border-white/10 pt-2 text-[10px]">
                   <div className="flex flex-wrap gap-1.5 font-bold">
@@ -194,7 +195,6 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
                     {item.result.trace.contextSource && <p className="mt-1">Nguồn dữ kiện: {item.result.trace.contextSource}</p>}
                     {Object.entries(item.result.trace.confirmedEntities).map(([key, value]) => <p key={key}>Đã xác nhận: {key} = {value}</p>)}
                   </details>}
-                  {(item.result?.sources || []).map((source, index) => <p key={`${source.chunkId}-${index}`} className="text-emerald-200">[S{index + 1}] {source.filename} · {source.excerpt}</p>)}
                   {(item.result?.contextSources || []).map((source, index) => <p key={index} className="text-violet-200">Context: {source.title}{source.memoryKey ? ` · ${source.memoryKey}` : ''}</p>)}
                 </div>
               )}

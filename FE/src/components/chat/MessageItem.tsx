@@ -3,21 +3,22 @@ import { ChatMessage } from '../../types';
 import { useAppStore } from '../../store/useAppStore';
 import { GroundedStatusBadge } from './GroundedStatusBadge';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
-import { Copy, ThumbsUp, ThumbsDown, BookOpen, Check, User, Sparkles, Info, Layers, GitFork } from 'lucide-react';
+import { visibleMessageText } from './answerText';
+import { Copy, ThumbsUp, ThumbsDown, Check, User, Sparkles, Info, Layers, GitFork } from 'lucide-react';
 
 interface MessageItemProps {
   message: ChatMessage;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
-  const { openEvidence, showToast, openHITLModal, sendMessage } = useAppStore();
+  const { showToast, sendMessage } = useAppStore();
   const [copied, setCopied] = React.useState(false);
   const [feedback, setFeedback] = React.useState<'up' | 'down' | null>(null);
 
   const isUser = message.sender === 'user';
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(message.content);
+    navigator.clipboard.writeText(visibleMessageText(message));
     setCopied(true);
     showToast('Đã sao chép nội dung tin nhắn', 'info');
     setTimeout(() => setCopied(false), 2000);
@@ -59,17 +60,16 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
           </span>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">• {message.timestamp}</span>
           
-          {message.confidence && (
+          {message.confidence && message.confidence !== 'confirmed' && message.confidence !== 'context' && (
             <GroundedStatusBadge 
               confidence={message.confidence} 
-              sourcesCount={message.citations?.length || message.contextSources?.length || 1}
             />
           )}
         </div>
 
         {/* Content Body with Rich Markdown & Tables */}
         <div className="text-slate-800 dark:text-slate-200">
-          <RichMarkdownRenderer content={message.content} citations={message.citations} />
+          <RichMarkdownRenderer content={message.content} />
         </div>
 
         {message.confidence === 'dialog' && (
@@ -87,27 +87,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({ message }) => {
               Câu trả lời này không dựa trên tài liệu nào trong kho tri thức nội bộ. Nếu bạn cần câu trả lời có
               căn cứ, hãy đề nghị admin tải tài liệu liên quan lên mục <strong className="font-semibold">Tài liệu &amp; Tri thức RAG</strong>.
             </span>
-          </div>
-        )}
-
-        {/* Citations list pills */}
-        {message.citations && message.citations.length > 0 && (
-          <div className="pt-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Nguồn tham chiếu:
-              </span>
-              {message.citations.map((citation, idx) => (
-                <button
-                  key={citation.id}
-                  onClick={() => openEvidence(citation)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-slate-100 hover:bg-cobalt-50 text-slate-700 hover:text-cobalt-700 dark:bg-slate-800 dark:hover:bg-cobalt-950/60 dark:text-slate-300 dark:hover:text-cobalt-300 border border-slate-200 dark:border-slate-700 transition-colors"
-                >
-                  <BookOpen className="w-3 h-3 text-cobalt-600 dark:text-cobalt-400" />
-                  <span className="font-medium truncate max-w-[200px]">[{idx + 1}] {citation.title}</span>
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
