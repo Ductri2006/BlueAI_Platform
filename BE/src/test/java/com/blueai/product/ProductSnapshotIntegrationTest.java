@@ -140,4 +140,17 @@ class ProductSnapshotIntegrationTest {
         assertThat(advisor.grounding("Recommend eSIM Japan 31 days",List.of()).context()).doesNotContain("12345","costPrice","refundPolicy");
         assertThat(catalog.detail("SAFE",true).path("price").asInt()).isEqualTo(12345);
     }
+
+    @Test void adviceSkipsRejectedCheapestRowsAndFindsEligibleProductsBeyondFirstPage() {
+        List<JsonNode> incoming=new ArrayList<>();
+        for(int i=0;i<70;i++) incoming.add(plan("DEMO-"+i,"JP",7,"1","VND"));
+        var conflict=plan("BAD-30","JP",3,"2","VND");conflict.put("name","Japan - 30 Ngày");incoming.add(conflict);
+        var good=plan("JP-VERIFIED","JP",7,"3","VND");good.put("name","Japan - 07 Ngày");incoming.add(good);
+        sync(incoming.toArray(JsonNode[]::new));
+        assertThat(lookup(Set.of("JP"),null).facts()).extracting(ProductFacts::sku).containsExactly("JP-VERIFIED");
+        assertThat(products.findById("BAD-30")).isPresent();
+        assertThat(catalog.detail("BAD-30",true).path("adviceEligible").asBoolean()).isFalse();
+        assertThat(catalog.detail("BAD-30",true).path("adviceExclusionReasons").toString()).contains("VALIDITY_CONFLICT");
+        assertThat(catalog.detail("JP-VERIFIED",false).has("adviceExclusionReasons")).isFalse();
+    }
 }

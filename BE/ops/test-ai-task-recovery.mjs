@@ -49,6 +49,9 @@ const providerScript = `
   }).listen(8080, '0.0.0.0');
 `;
 
+// Native fetch/AbortSignal timers can be unref'ed while a fixture starts. Keep
+// the harness alive until its bounded waits finish, instead of Node exiting 13.
+const keepAlive = setInterval(() => {}, 1000);
 let interruptedRequests = [];
 try {
   docker('network', 'create', network);
@@ -74,7 +77,7 @@ try {
     ...options, signal: AbortSignal.timeout(45_000),
   });
   const ready = () => request('/actuator/health').then(response => response.status === 200);
-  await waitFor(ready, 'backend startup with Flyway V7');
+  await waitFor(ready, 'backend startup with migrated schema');
   const login = await request('/api/v1/auth/login', { method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({email:'crash-admin@example.test',password:'FixtureAdmin123!'}),
@@ -127,7 +130,14 @@ try {
   assert.equal(result.result.label, 'sales');
   assert.equal((await (await fetch(`${providerUrl}/state`)).json()).calls, 5);
   console.log('AI process crash/restart PASS: four claims expired, scheduler recovered, exact replay, no duplicate provider calls, fresh task completed.');
+} catch (error) {
+  for (const name of [backend, database, provider]) {
+    const logs = spawnSync('docker', ['logs', '--tail', '80', name], {encoding: 'utf8', timeout: 10_000});
+    console.error(`Disposable fixture diagnostics: ${name}\n${logs.stdout || ''}\n${logs.stderr || ''}`);
+  }
+  throw error;
 } finally {
+  clearInterval(keepAlive);
   cleanup('rm', '--force', backend, provider, database);
   cleanup('network', 'rm', network);
   await Promise.allSettled(interruptedRequests);

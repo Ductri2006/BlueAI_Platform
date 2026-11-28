@@ -205,6 +205,6 @@ describe('diagnostic code disclosure', () => {
     }} />));
     expect(host.textContent).toContain('**JP-7D**\nGiá: 80000 VND\n<script>unsafe</script>');
     expect(host.querySelector('script')).toBeNull();
-    expect(host.textContent).toContain('tài liệu tham chiếu');
+    expect(host.textContent).not.toContain('tài liệu tham chiếu');
   });
 });

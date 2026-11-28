@@ -98,7 +98,7 @@ class ProductAdvisorTest {
         reset(catalog);
         for (String language : List.of("vi","en","zh-CN")) {
             String reply = snapshot.deterministicReply(new ReplyLanguagePolicy.State(language,true)).orElseThrow();
-            assertThat(reply).contains("BLU-ESIM-JP-31D","Gói Nhật 日本 eSIM","19.95 USD","31","SANDBOX")
+            assertThat(reply).contains("BLU-ESIM-JP-31D",language.equals("vi") ? "19,95 USD" : "19.95 USD","31","SANDBOX").doesNotContain("Gói Nhật 日本 eSIM")
                     .doesNotContain("19.95 VND","1024 MB");
         }
         assertThat(snapshot.sources()).hasSize(1);
@@ -146,5 +146,28 @@ class ProductAdvisorTest {
         when(catalog.integrationConfigured()).thenReturn(false);
         assertThat(advisor.grounding("List eSIM plans for Japan",List.of()).status()).isEqualTo(ProductAdvisor.Status.NONE);
         verify(catalog,never()).adviceSnapshot(anySet(),any(),any(),any());
+    }
+
+    @Test void strictSalesNeverFallsBackToDemoKnowledgeWhenCatalogueIsMissing() {
+        when(catalog.integrationConfigured()).thenReturn(false);
+        when(catalog.requiresVerifiedCatalog()).thenReturn(true);
+        var result=advisor.grounding("Recommend Japan eSIM for 7 days",List.of());
+        assertThat(result.status()).isEqualTo(ProductAdvisor.Status.UNAVAILABLE);
+        assertThat(result.deterministicReply(new ReplyLanguagePolicy.State("en",true)).orElseThrow()).contains("cannot currently verify");
+        verify(catalog,never()).adviceSnapshot(anySet(),any(),any(),any());
+    }
+    @Test void rejectedMockCatalogueFactsCannotLeakThroughTheRenderer() {
+        when(catalog.adviceSnapshot(anySet(),any(),any(),any())).thenReturn(
+                new ProductCatalogService.AdviceSnapshot(ProductCatalogService.Availability.READY,
+                        List.of(plan("DEMO-JP7","DEMO JP", "1","VND",7),plan("SKU-30","Japan 30 Ngày", "2","VND",3))));
+        assertThat(advisor.grounding("Recommend Japan eSIM for 7 days",List.of()).status()).isEqualTo(ProductAdvisor.Status.NO_MATCHES);
+    }
+
+    @ParameterizedTest @ValueSource(strings={"Recommend Japan eSIM 31 days and help me install it", "Tư vấn eSIM Nhật Bản 31 ngày và hướng dẫn kích hoạt", "推荐日本eSIM31天并帮助安装"})
+    void mixedSalesAndInstallationUsesVerifiedProductsAndAsksForDevice(String question) {
+        var result=advisor.grounding(question,List.of());
+        assertThat(result.status()).isEqualTo(ProductAdvisor.Status.MATCHES);
+        String text=result.deterministicReply(new ReplyLanguagePolicy.State("en",true)).orElseThrow();
+        assertThat(text).contains("Japan", "phone model").doesNotContain("DEMO");
     }
 }

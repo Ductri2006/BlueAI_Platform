@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { MessageItem } from './MessageItem';
+import { visibleMessageText } from './answerText';
 import { Composer } from './Composer';
 import { ConversationContextPanel } from './ConversationContextPanel';
 import { 
@@ -70,7 +71,7 @@ export const ChatWorkspace: React.FC = () => {
       return;
     }
     const mdContent = `# ${currentSession.title}\n\n` +
-      messages.map(m => `### ${m.sender === 'user' ? 'Người dùng' : 'BlueAI'} (${m.timestamp})\n\n${m.content}\n\n---\n`).join('\n');
+      messages.map(m => `### ${m.sender === 'user' ? 'Người dùng' : 'BlueAI'} (${m.timestamp})\n\n${visibleMessageText(m)}\n\n---\n`).join('\n');
     
     const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

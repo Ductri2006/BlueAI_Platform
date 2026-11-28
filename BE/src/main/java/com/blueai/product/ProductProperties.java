@@ -11,6 +11,7 @@ public class ProductProperties {
     private Duration maxAge = Duration.ofMinutes(30);
     private String sourceEnvironment = "AUTO";
     private boolean productionApproved;
+    private boolean requireVerifiedCatalog;
     private boolean publicAdviceEnabled;
     private boolean sellingPriceCurrencyConfirmed;
     public String getBaseUrl() { return baseUrl; }
@@ -24,6 +25,8 @@ public class ProductProperties {
     public void setMaxAge(Duration value) { maxAge = value; }
     public String getSourceEnvironment() { return sourceEnvironment; }
     public void setSourceEnvironment(String value) { sourceEnvironment = value; }
+    public boolean isRequireVerifiedCatalog() { return requireVerifiedCatalog; }
+    public void setRequireVerifiedCatalog(boolean value) { requireVerifiedCatalog = value; }
     public boolean isProductionApproved() { return productionApproved; }
     public void setProductionApproved(boolean value) { productionApproved = value; }
     public boolean isPublicAdviceEnabled() { return publicAdviceEnabled; }

@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
 @Service
 public class ProductAdvisor {
     public enum Status { NONE, NEEDS_DETAILS, MATCHES, NO_MATCHES, UNAVAILABLE, STALE }
-    public enum Detail { COUNTRY, DAYS, CALENDAR_MONTH, BUDGET_CURRENCY, MULTIPLE_DURATIONS }
+    public enum Detail { COUNTRY, DAYS, CALENDAR_MONTH, BUDGET_CURRENCY, MULTIPLE_DURATIONS, SUPPORT_FOLLOWUP }
     public record Grounding(String context, List<RagSourceResponse> sources, Status status,
                             List<ProductFacts> facts, Set<Detail> details) {
         public Grounding {
@@ -62,7 +62,7 @@ public class ProductAdvisor {
         if (!query.intent()) return result(Status.NONE, List.of(), Set.of());
         // Installing the optional catalogue must not disable existing approved-KB answers.
         if (!catalog.integrationConfigured() || (publicAccess && !catalog.publicAdviceEnabled()))
-            return result(Status.NONE, List.of(), Set.of());
+            return result(catalog.requiresVerifiedCatalog() ? Status.UNAVAILABLE : Status.NONE, List.of(), Set.of());
         ProductCatalogService.AdviceSnapshot snapshot;
         try { snapshot = catalog.adviceSnapshot(query.countries(), query.days(), query.budget(), query.sku()); }
         catch (DataAccessException | com.blueai.auth.exception.ApiException unavailable) {
@@ -72,12 +72,13 @@ public class ProductAdvisor {
             return result(Status.UNAVAILABLE, List.of(), Set.of());
         if (snapshot.availability() == ProductCatalogService.Availability.STALE)
             return result(Status.STALE, List.of(), Set.of());
-        if (!query.details().isEmpty()) return result(Status.NEEDS_DETAILS, List.of(), query.details());
-        return result(snapshot.facts().isEmpty() ? Status.NO_MATCHES : Status.MATCHES, snapshot.facts(), Set.of());
+        if (query.details().stream().anyMatch(detail -> detail != Detail.SUPPORT_FOLLOWUP)) return result(Status.NEEDS_DETAILS, List.of(), query.details());
+        List<ProductFacts> verified = snapshot.facts().stream().filter(ProductQuality::eligible).toList();
+        return result(verified.isEmpty() ? Status.NO_MATCHES : Status.MATCHES, verified, query.details());
     }
 
     private Grounding result(Status status, List<ProductFacts> facts, Set<Detail> details) {
-        List<ProductFacts> bounded = List.copyOf(facts.stream().limit(6).toList());
+        List<ProductFacts> bounded = List.copyOf(facts.stream().filter(ProductQuality::eligible).limit(6).toList());
         if (status == Status.NONE) return new Grounding("", List.of(), status, bounded, details);
         StringBuilder context = new StringBuilder("PRODUCT CATALOGUE: ").append(status).append(".\n");
         List<RagSourceResponse> sources = new ArrayList<>();
@@ -100,11 +101,14 @@ public class ProductAdvisor {
                 && !SUPPORT.matcher(normalizedPrior).find();
         boolean followup = priorProduct && (DAYS.matcher(current).find() || MONTH.matcher(current).find()
                 || BUDGET_MARKER.matcher(current).find() || SALES.matcher(current).find() || !countryCodes(question).isEmpty());
-        boolean intent = !SUPPORT.matcher(current).find() && (sku != null
+        boolean mixed = SUPPORT.matcher(current).find() && PRODUCT.matcher(current).find()
+                && Pattern.compile("recommend|advise|purchase|buy|available|list|tu van|danh sach|muon mua|cac goi|推荐|推薦|购买|購買|哪些").matcher(current).find();
+        boolean intent = (!SUPPORT.matcher(current).find() || mixed) && (sku != null
                 || (PRODUCT.matcher(current).find() && (SALES.matcher(current).find() || DAYS.matcher(current).find() || MONTH.matcher(current).find()))
                 || followup);
         if (!intent) return new Query(false, Set.of(), null, null, null, Set.of());
         Set<Detail> details = EnumSet.noneOf(Detail.class);
+        if (mixed) details.add(Detail.SUPPORT_FOLLOWUP);
         // A country-looking token inside a SKU is an identifier, not a requested destination.
         String destinationText = sku == null ? question : question.substring(0,skuMatch.start()) + " " + question.substring(skuMatch.end());
         Set<String> countries = countryCodes(destinationText);

@@ -92,6 +92,7 @@ public class ProductCatalogService {
 
     public boolean publicAdviceEnabled() { return properties.isPublicAdviceEnabled(); }
     public boolean integrationConfigured() { return properties.configured(); }
+    public boolean requiresVerifiedCatalog() { return properties.isRequireVerifiedCatalog(); }
 
     /** One bounded database snapshot supplies the immutable facts, renderer and evidence for a turn. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -115,8 +116,14 @@ public class ProductCatalogService {
             if (exactSku != null) predicates.add(cb.equal(cb.upper(root.get("sku")), exactSku.toUpperCase(Locale.ROOT)));
             return cb.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         });
-        Page<Product> found = repository.findAll(spec, PageRequest.of(0, 6, Sort.by("currencyCode", "sellingPrice", "sku")));
-        return new AdviceSnapshot(Availability.READY, found.stream().map(this::facts).toList());
+        List<ProductFacts> eligible = new ArrayList<>();
+        // Scan beyond rejected cheapest rows, but bound work per chat request.
+        for (int page = 0; page < 16 && eligible.size() < 6; page++) {
+            Page<Product> found = repository.findAll(spec, PageRequest.of(page, 64, Sort.by("currencyCode", "sellingPrice", "sku")));
+            found.stream().map(this::facts).filter(ProductQuality::eligible).limit(6 - eligible.size()).forEach(eligible::add);
+            if (!found.hasNext()) break;
+        }
+        return new AdviceSnapshot(Availability.READY, List.copyOf(eligible));
     }
 
     public PageResult search(String query, String country, Integer days, BigDecimal budget, int page, int size, boolean admin) {
@@ -153,6 +160,12 @@ public class ProductCatalogService {
     private JsonNode view(Product product, boolean admin) {
         ObjectNode raw = payload(product);
         ObjectNode data = admin ? raw : ProductPublicProjection.project(mapper,raw);
+        if (admin) {
+            Set<String> issues = ProductQuality.issues(facts(product));
+            data.put("adviceEligible",issues.isEmpty());
+            var reasons = data.putArray("adviceExclusionReasons");
+            issues.forEach(reasons::add);
+        }
         if (!admin && !properties.isSellingPriceCurrencyConfirmed()) data.remove("currencyCode");
         data.put("syncedAt",product.getSyncedAt().toString());
         data.put("available",product.isAvailable());

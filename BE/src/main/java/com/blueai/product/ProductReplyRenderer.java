@@ -28,7 +28,8 @@ final class ProductReplyRenderer {
                     "Mình chưa xác minh được gói đáp ứng đầy đủ yêu cầu trong bản danh mục hiện tại. Bạn có muốn điều chỉnh quốc gia, số ngày hoặc ngân sách không?",
                     "I could not verify a plan meeting all your constraints in the current catalogue. Would you like to adjust the destinations, number of days or budget?",
                     "当前目录中暂未核实到满足全部条件的套餐。是否需要调整目的地、旅行天数或预算？"));
-            case MATCHES -> Optional.of(matches(language, grounding.facts()));
+            case MATCHES -> Optional.of(matches(language, grounding.facts()) + (grounding.details().contains(ProductAdvisor.Detail.SUPPORT_FOLLOWUP)
+                    ? "\n" + ProductLabels.label(language,"supportNext") : ""));
         };
     }
     private static String details(String language, Set<ProductAdvisor.Detail> details) {
@@ -53,9 +54,9 @@ final class ProductReplyRenderer {
                 "Các gói trong bản danh mục đã đồng bộ (tối đa 6 gói):",
                 "Plans in the synchronized catalogue (up to 6):", "已同步目录中的套餐（最多6个）："));
         for (ProductFacts fact : facts) {
-            text.append("\n- ").append(fact.sku()).append(" — ").append(fact.name());
+            text.append("\n- ").append(fact.sku()).append(" — ").append(ProductLabels.name(fact,language));
             text.append("; ").append(tr(language, "phủ sóng: ", "coverage: ", "覆盖："));
-            text.append(fact.countryCodes().isEmpty() ? tr(language, "chưa xác định", "not verified", "尚未核实") : String.join(", ", fact.countryCodes()));
+            text.append(fact.countryCodes().isEmpty() ? tr(language, "chưa xác định", "not verified", "尚未核实") : fact.countryCodes().stream().map(country -> ProductLabels.country(country,language)).collect(java.util.stream.Collectors.joining(", ")));
             text.append("; ").append(tr(language, "thời hạn: ", "validity: ", "有效期："));
             text.append(fact.validityDays() == null ? tr(language, "chưa xác định", "not verified", "尚未核实")
                     : fact.validityDays() + tr(language, " ngày", " days", "天"));
@@ -76,7 +77,7 @@ final class ProductReplyRenderer {
                 text.append(tr(language, "chưa xác minh giá và tiền tệ", "amount and currency not verified", "金额及货币尚未核实"));
             else if (fact.currencyCode() == null)
                 text.append(number(fact.sellingPrice())).append(tr(language," (chưa xác minh tiền tệ)"," (currency not verified)","（货币尚未核实）"));
-            else text.append(number(fact.sellingPrice())).append(' ').append(fact.currencyCode());
+            else text.append(ProductLabels.price(fact.sellingPrice(),fact.currencyCode(),language));
             if (fact.conditions() != null) {
                 if (!fact.conditions().supportedNetworks().isEmpty())
                     text.append("; ").append(tr(language,"công nghệ mạng hỗ trợ: ","supported network technology: ","支持网络制式："))
