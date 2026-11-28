@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
-import { Citation } from '../../types';
+import { withoutDocumentSources } from './answerText';
 import { useAppStore } from '../../store/useAppStore';
-import { Copy, Check, BookOpen, AlertCircle, Info, CheckCircle } from 'lucide-react';
+import { Copy, Check, Info } from 'lucide-react';
 
 interface RichMarkdownRendererProps {
   content: string;
-  citations?: Citation[];
 }
 
-export const RichMarkdownRenderer: React.FC<RichMarkdownRendererProps> = ({ content, citations = [] }) => {
-  const { openEvidence, showToast } = useAppStore();
+export const RichMarkdownRenderer: React.FC<RichMarkdownRendererProps> = ({ content }) => {
+  const { showToast } = useAppStore();
   const [copiedCodeIndex, setCopiedCodeIndex] = useState<number | null>(null);
 
   const handleCopyCode = (code: string, index: number) => {
@@ -20,7 +19,7 @@ export const RichMarkdownRenderer: React.FC<RichMarkdownRendererProps> = ({ cont
   };
 
   // Process text into structured blocks (Paragraphs, Headings, Lists, Code, Tables, Callouts)
-  const lines = content.split('\n');
+  const lines = withoutDocumentSources(content).split('\n');
   const renderedElements: React.ReactNode[] = [];
   let inCodeBlock = false;
   let codeBuffer: string[] = [];
@@ -86,7 +85,7 @@ export const RichMarkdownRenderer: React.FC<RichMarkdownRendererProps> = ({ cont
     if (line.startsWith('### ')) {
       renderedElements.push(
         <h4 key={`h3-${i}`} className="text-sm font-bold text-slate-900 dark:text-slate-100 mt-3 mb-1 tracking-tight">
-          {renderInlineText(line.replace('### ', ''), citations, openEvidence)}
+          {renderInlineText(line.replace('### ', ''))}
         </h4>
       );
       continue;
@@ -95,7 +94,7 @@ export const RichMarkdownRenderer: React.FC<RichMarkdownRendererProps> = ({ cont
     if (line.startsWith('## ')) {
       renderedElements.push(
         <h3 key={`h2-${i}`} className="text-base font-bold text-slate-900 dark:text-slate-100 mt-4 mb-2 tracking-tight">
-          {renderInlineText(line.replace('## ', ''), citations, openEvidence)}
+          {renderInlineText(line.replace('## ', ''))}
         </h3>
       );
       continue;
@@ -107,7 +106,7 @@ export const RichMarkdownRenderer: React.FC<RichMarkdownRendererProps> = ({ cont
         <div key={`li-${i}`} className="flex items-start gap-2 my-1 text-slate-700 dark:text-slate-300">
           <span className="w-1.5 h-1.5 rounded-full bg-cobalt-500 mt-2 shrink-0" />
           <div className="flex-1 leading-relaxed">
-            {renderInlineText(line.trim().substring(2), citations, openEvidence)}
+            {renderInlineText(line.trim().substring(2))}
           </div>
         </div>
       );
@@ -123,7 +122,7 @@ export const RichMarkdownRenderer: React.FC<RichMarkdownRendererProps> = ({ cont
               {match[1]}
             </span>
             <div className="flex-1 leading-relaxed">
-              {renderInlineText(match[2], citations, openEvidence)}
+              {renderInlineText(match[2])}
             </div>
           </div>
         );
@@ -136,7 +135,7 @@ export const RichMarkdownRenderer: React.FC<RichMarkdownRendererProps> = ({ cont
       renderedElements.push(
         <div key={`callout-${i}`} className="my-2.5 p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-300 leading-relaxed">
           <Info className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
-          <div>{renderInlineText(line.replace(/^>\s*/, ''), citations, openEvidence)}</div>
+          <div>{renderInlineText(line.replace(/^>\s*/, ''))}</div>
         </div>
       );
       continue;
@@ -146,7 +145,7 @@ export const RichMarkdownRenderer: React.FC<RichMarkdownRendererProps> = ({ cont
     if (line.trim()) {
       renderedElements.push(
         <p key={`p-${i}`} className="my-1.5 leading-relaxed text-slate-800 dark:text-slate-200">
-          {renderInlineText(line, citations, openEvidence)}
+          {renderInlineText(line)}
         </p>
       );
     }
@@ -197,9 +196,9 @@ function renderTable(tableLines: string[], key: string) {
   );
 }
 
-// Helper to render inline formatting and source chips (`[S1]` is the Backend contract).
-function renderInlineText(text: string, citations: Citation[], onOpenCitation: (c: Citation) => void): React.ReactNode {
-  const parts = text.split(/(\*\*.*?\*\*|`.*?`|\[S?\d+\]|\$\$.*?\$\$|\$.*?\$)/gi);
+// Source identifiers are removed before parsing Markdown blocks.
+function renderInlineText(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`|\$\$.*?\$\$|\$.*?\$)/gi);
 
   return parts.map((part, idx) => {
     if (part.startsWith('**') && part.endsWith('**')) {
@@ -210,22 +209,6 @@ function renderInlineText(text: string, citations: Citation[], onOpenCitation: (
         <code key={idx} className="px-1.5 py-0.5 mx-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-cobalt-600 dark:text-cobalt-400 font-mono text-[12px] font-medium border border-slate-200 dark:border-slate-700">
           {part.slice(1, -1)}
         </code>
-      );
-    }
-    if (/^\[S?\d+\]$/i.test(part)) {
-      const citNum = Number.parseInt(part.replace(/\D/g, ''), 10);
-      const targetCitation = citations[citNum - 1];
-      if (!targetCitation) return part;
-      return (
-        <button
-          key={idx}
-          onClick={() => onOpenCitation(targetCitation)}
-          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded bg-cobalt-50 hover:bg-cobalt-100 text-cobalt-700 dark:bg-cobalt-950 dark:hover:bg-cobalt-900 dark:text-cobalt-300 text-[11px] font-bold border border-cobalt-200 dark:border-cobalt-800 cursor-pointer transition-colors align-baseline"
-          title={`Xem nguồn tham chiếu ${part}`}
-        >
-          <BookOpen className="w-2.5 h-2.5" />
-          {part}
-        </button>
       );
     }
     return part;

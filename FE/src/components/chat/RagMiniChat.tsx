@@ -6,6 +6,7 @@ import type { ConversationContextMode } from '../../api/blueAiApi';
 import { Button } from '../ui/Button';
 import { ConversationContextPanel } from './ConversationContextPanel';
 import { useChatInputComposition } from './useChatInputComposition';
+import { visibleMessageText } from './answerText';
 
 interface RagMiniChatProps {
   title: string;
@@ -74,16 +75,11 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
         </button>
       </div>
       <div className="flex-1 p-4 space-y-3 overflow-y-auto">
-        {messages.length === 0 && <p className="text-sm text-slate-500">Chưa có hội thoại. Câu trả lời sẽ được lấy từ RAG API và kèm nguồn khi có căn cứ.</p>}
+        {messages.length === 0 && <p className="text-sm text-slate-500">Chưa có hội thoại. Hãy nhập câu hỏi để bắt đầu.</p>}
         {messages.map(message => (
           <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[86%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${message.sender === 'user' ? 'bg-cobalt-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100'}`}>
-              {message.content}
-              {!!message.citations?.length && (
-                <div className="mt-2 pt-2 border-t border-current/20 text-xs opacity-80">
-                  Nguồn: {message.citations.map(citation => citation.title).join(', ')}
-                </div>
-              )}
+              {visibleMessageText(message)}
               {!!message.contextSources?.length && (
                 <div className="mt-2 pt-2 border-t border-current/20 text-xs opacity-80">
                   Context: {message.contextSources.map(source => source.title).join(', ')}
