@@ -5,6 +5,7 @@ import type { ChatMessage } from '../../types';
 import type { ConversationContextMode } from '../../api/blueAiApi';
 import { Button } from '../ui/Button';
 import { ConversationContextPanel } from './ConversationContextPanel';
+import { useChatInputComposition } from './useChatInputComposition';
 
 interface RagMiniChatProps {
   title: string;
@@ -13,6 +14,7 @@ interface RagMiniChatProps {
 }
 
 export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, conversationTitle }) => {
+  const composition = useChatInputComposition();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -96,7 +98,9 @@ export const RagMiniChat: React.FC<RagMiniChatProps> = ({ title, placeholder, co
         <input
           value={text}
           onChange={event => setText(event.target.value)}
-          onKeyDown={event => { if (event.key === 'Enter') void send(); }}
+          onKeyDown={event => { if (composition.shouldSubmitOnEnter(event)) void send(); }}
+          onCompositionStart={composition.onCompositionStart}
+          onCompositionEnd={composition.onCompositionEnd}
           placeholder={placeholder}
           className="flex-1 px-3 py-2 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
         />

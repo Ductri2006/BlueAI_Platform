@@ -78,6 +78,7 @@ jobs:
       MYSQL_MIGRATION_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_migration_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
       MYSQL_MIGRATION_TEST_USERNAME: migration_test
       MYSQL_MIGRATION_TEST_PASSWORD: ci-disposable-migration-password
+      MYSQL_CHINESE_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_chinese_chat_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
       MYSQL_LEGACY_V1_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_legacy_v1_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
       MYSQL_LEGACY_V3_TEST_URL: jdbc:mysql://127.0.0.1:3306/blueai_legacy_v3_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
       MYSQL_AUTH_TEST_URL: jdbc:mysql://127.0.0.1:3307/blueai_auth_test?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
@@ -100,10 +101,22 @@ jobs:
         env:
           MYSQL_CONTAINER_ID: ${{ job.services.mysql.id }}
         run: |
-          docker exec "$MYSQL_CONTAINER_ID" mysql --protocol=TCP -h127.0.0.1 -uroot -pci-disposable-root-password -e "CREATE DATABASE blueai_legacy_v1_test; CREATE DATABASE blueai_legacy_v3_test; CREATE DATABASE blueai_token_quota_test; GRANT ALL ON blueai_token_quota_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v1_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v3_test.* TO 'migration_test'@'%';"
+          docker exec "$MYSQL_CONTAINER_ID" mysql --protocol=TCP -h127.0.0.1 -uroot -pci-disposable-root-password -e "CREATE DATABASE blueai_legacy_v1_test; CREATE DATABASE blueai_legacy_v3_test; CREATE DATABASE blueai_token_quota_test; CREATE DATABASE blueai_chinese_chat_test; GRANT ALL ON blueai_chinese_chat_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_token_quota_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v1_test.* TO 'migration_test'@'%'; GRANT ALL ON blueai_legacy_v3_test.* TO 'migration_test'@'%';"
       - run: mvn -B -Dtest=MySqlMigrationIntegrationTest,MySqlLegacyMigrationIntegrationTest test
       - run: mvn -B -Dtest=AiTokenQuotaMySqlTest test
       - run: mvn -B -Dtest=AuthMySqlConcurrencyIntegrationTest,SingleLoginMySqlIntegrationTest,AuthAdminMutationMySqlIntegrationTest,AiTaskMySqlRecoveryIntegrationTest,AiTaskMySqlAuthorizationIntegrationTest,MySqlPasswordRecoveryIntegrationTest,WidgetRateLimiterRedisIntegrationTest test
+      - name: Chinese chat and legacy widget runtime on MySQL 8.4
+        env:
+          BLUEAI_CHINESE_QA_DB_URL: ${{ env.MYSQL_CHINESE_TEST_URL }}
+          BLUEAI_CHINESE_QA_DB_DRIVER: com.mysql.cj.jdbc.Driver
+          SPRING_DATASOURCE_URL: ${{ env.MYSQL_CHINESE_TEST_URL }}
+          SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+          SPRING_DATASOURCE_USERNAME: migration_test
+          SPRING_DATASOURCE_PASSWORD: ci-disposable-migration-password
+          SPRING_FLYWAY_PLACEHOLDERS_TEXT_TYPE: LONGTEXT
+          SPRING_FLYWAY_PLACEHOLDERS_LONG_TEXT_TYPE: LONGTEXT
+          SPRING_FLYWAY_PLACEHOLDERS_IDEMPOTENCY_KEY_TYPE: VARBINARY(128)
+        run: mvn -B -Dtest=ChineseChatIntegrationTest,WidgetRagDialogIntegrationTest test
 
   flyway-engine-upgrade:
     name: Flyway 11.7.2 to 11.20.3 on MySQL 8.4

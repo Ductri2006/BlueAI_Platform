@@ -238,7 +238,7 @@ public final class BotStudioDtos {
             @Size(max = 120) String waitingNode,
             @Size(max = 1) Map<@NotBlank @Size(max = 100) String, @NotBlank @Size(max = 150) String> suggestedVariables,
             @Size(max = 500) String suggestionSource,
-            @Pattern(regexp = "vi|en") String replyLanguage,
+            @Pattern(regexp = "vi|en|zh-CN") String replyLanguage,
             boolean languageExplicit
     ) {
         public PreviewContext(String pendingIntent, String pendingEntity, String lastIntent, Map<String, String> variables,

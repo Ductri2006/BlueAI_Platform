@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
 public class DialogRuntimeService {
 
     private static final Pattern COMBINING_MARKS = Pattern.compile("\\p{M}+");
-    private static final Pattern NON_WORD = Pattern.compile("[^a-z0-9]+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern NON_WORD = Pattern.compile("[^\\p{L}\\p{N}]+", Pattern.UNICODE_CHARACTER_CLASS);
     private static final double INTENT_THRESHOLD = 0.42;
     private static final int MAX_AUTOMATIC_STEPS = 20;
 
@@ -62,7 +62,7 @@ public class DialogRuntimeService {
         }
         PreviewContext current = suppliedContext == null ? emptyContext() : suppliedContext;
         String normalizedMessage = normalize(message);
-        if (Set.of("huy", "cancel", "bat dau lai", "restart", "reset").contains(normalizedMessage)) {
+        if (Set.of("huy", "cancel", "bat dau lai", "restart", "reset", "取消", "重新开始").contains(normalizedMessage)) {
             return new RuntimeResponse(
                     "Đã hủy yêu cầu hiện tại. Bạn muốn mình hỗ trợ việc gì tiếp theo?",
                     null,
@@ -88,9 +88,9 @@ public class DialogRuntimeService {
             current = new PreviewContext(current.pendingIntent(), current.pendingEntity(), current.lastIntent(),
                     current.variables(), current.waitingNode(), current.suggestedVariables(), liveSuggestion.source());
         }
-        boolean confirmed = suggested != null && Set.of("dung", "dung roi", "xac nhan", "dong y", "yes", "ok", "chinh xac").contains(normalizedMessage);
+        boolean confirmed = suggested != null && Set.of("dung", "dung roi", "xac nhan", "dong y", "yes", "ok", "chinh xac", "是", "对", "确认", "正确", "同意").contains(normalizedMessage);
         if (confirmed && !isCanonicalValue(snapshot, current.pendingEntity(), suggested)) confirmed = false;
-        if (suggested != null && Set.of("khong", "khong dung", "no", "khong phai").contains(normalizedMessage)) {
+        if (suggested != null && Set.of("khong", "khong dung", "no", "khong phai", "不是", "不对", "不同意").contains(normalizedMessage)) {
             DialogNodeInput waiting = findNodeByName(snapshot.dialogNodes(), current.waitingNode());
             return new RuntimeResponse(missingEntityPrompt(waiting, current.pendingEntity()), current.pendingIntent(),
                     Map.of(), current.waitingNode(), new PreviewContext(current.pendingIntent(), current.pendingEntity(),
@@ -501,6 +501,12 @@ public class DialogRuntimeService {
     }
 
     private boolean containsPhrase(String message, String alias) {
+        // Chinese words do not require spaces. Keep Latin identifiers on the
+        // original token-boundary path so a partial SKU cannot become an entity.
+        if (alias.codePoints().anyMatch(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.HAN)) {
+            if (alias.codePoints().allMatch(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.HAN)) return message.contains(alias);
+            return Pattern.compile("(?<![a-z0-9_])" + Pattern.quote(alias) + "(?![a-z0-9_])").matcher(message).find();
+        }
         return (" " + message + " ").contains(" " + alias + " ");
     }
 

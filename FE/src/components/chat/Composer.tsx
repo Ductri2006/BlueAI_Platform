@@ -9,6 +9,7 @@ import { SlashCommandMenu, SlashCommand } from './SlashCommandMenu';
 import { VoiceInputModal } from './VoiceInputModal';
 import { useSharedChatQuota } from './ChatQuotaContext';
 import { QuotaIndicator } from './QuotaIndicator';
+import { useChatInputComposition } from './useChatInputComposition';
 
 interface ComposerProps {
   placeholder?: string;
@@ -23,6 +24,7 @@ export const Composer: React.FC<ComposerProps> = ({
 }) => {
   const { sendMessage, streamStatus } = useAppStore();
   const quota = useSharedChatQuota();
+  const composition = useChatInputComposition();
   const [text, setText] = useState('');
   const [slashFilter, setSlashFilter] = useState('');
   const [isSlashOpen, setIsSlashOpen] = useState(false);
@@ -68,8 +70,7 @@ export const Composer: React.FC<ComposerProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+    if (composition.shouldSubmitOnEnter(e)) {
       void handleSend();
     }
   };
@@ -112,6 +113,8 @@ export const Composer: React.FC<ComposerProps> = ({
           value={text}
           onChange={handleTextChange}
           onKeyDown={handleKeyDown}
+          onCompositionStart={composition.onCompositionStart}
+          onCompositionEnd={composition.onCompositionEnd}
           rows={1}
           placeholder={placeholder}
           aria-label="Nhập câu hỏi cho BlueAI"

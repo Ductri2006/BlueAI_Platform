@@ -134,6 +134,16 @@
   let sessionId;
   let accessToken;
   let busy = false;
+  let composing = false;
+
+  input.addEventListener('compositionstart', () => { composing = true; });
+  input.addEventListener('compositionend', () => { composing = false; });
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    if (event.shiftKey || composing || event.isComposing || event.keyCode === 229 || event.repeat) return;
+    form.requestSubmit();
+  });
 
   const addMessage = (role, text) => {
     const row = document.createElement('div');

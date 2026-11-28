@@ -5,6 +5,7 @@ import { StudioPreviewFallbackBadge } from './StudioPreviewFallbackBadge';
 import { useSharedChatQuota } from '../chat/ChatQuotaContext';
 import { QuotaIndicator } from '../chat/QuotaIndicator';
 import { AiQuotaMenu } from '../chat/AiQuotaMenu';
+import { useChatInputComposition } from '../chat/useChatInputComposition';
 
 interface TryItOutPanelProps {
   botId: string;
@@ -56,6 +57,7 @@ const structureLabels: Record<string, string> = {
 
 export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, blueAiCoreEnabled, dialogEnabled = true, customization, onClose, welcomeMessage }) => {
   const quota = useSharedChatQuota();
+  const composition = useChatInputComposition();
   const welcome = { ...INITIAL_MESSAGE, text: welcomeMessage || (dialogEnabled ? INITIAL_MESSAGE.text : 'Chế độ chỉ RAG: hỏi đáp trực tiếp từ kho tri thức, không chạy kịch bản Dialog.') };
   const [items, setItems] = React.useState<TranscriptItem[]>([welcome]);
   const [conversations, setConversations] = React.useState<ConversationResponse[]>([]);
@@ -219,6 +221,9 @@ export const TryItOutPanel: React.FC<TryItOutPanelProps> = ({ botId, botName, bl
           <input
             value={message}
             onChange={event => setMessage(event.target.value)}
+            onKeyDown={event => { if (composition.shouldSubmitOnEnter(event)) event.currentTarget.form?.requestSubmit(); }}
+            onCompositionStart={composition.onCompositionStart}
+            onCompositionEnd={composition.onCompositionEnd}
             placeholder="Nhập câu để thử BlueAI…"
             className="min-w-0 flex-1 rounded-xl border border-white/10 bg-slate-900 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500"
             autoFocus
