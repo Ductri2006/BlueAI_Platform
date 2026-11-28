@@ -108,6 +108,31 @@ class MultilingualLanguagePolicyTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {
+            "如果仍无 *** không có mạng ***，请告诉我。",
+            "请关闭 `Chế độ máy bay` 后开启数据漫游。",
+            "请在 Cài đặt 中选择旅行eSIM。"
+    })
+    void untranslatedVietnameseGuidanceIsRejectedEvenWithChineseProse(String answer) {
+        assertThat(ReplyLanguagePolicy.isChineseAnswer(answer)).isFalse();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> ReplyLanguagePolicy.checkedAnswer(
+                answer, new ReplyLanguagePolicy.State("zh-CN", false)))
+                .isInstanceOf(com.blueai.auth.exception.ApiException.class);
+        assertThat(ReplyLanguagePolicy.checkedAnswer(answer, new ReplyLanguagePolicy.State("vi", false)))
+                .isEqualTo(answer);
+        assertThat(ReplyLanguagePolicy.checkedAnswer(answer, new ReplyLanguagePolicy.State("en", false)))
+                .isEqualTo(answer);
+    }
+
+    @Test
+    void chineseOutputKeepsNamesAndIdentifiersButTranslatesTroubleshootingTerms() {
+        assertThat(ReplyLanguagePolicy.isChineseAnswer("您好，Nguyễn Văn An，请先关闭飞行模式，然后在设置中选择旅行eSIM并开启数据漫游。APN：vmobile.jp；套餐TEST-JP-7D。"))
+                .isTrue();
+        assertThat(ReplyLanguagePolicy.instruction(new ReplyLanguagePolicy.State("zh-CN", false)))
+                .contains("飞行模式", "无网络", "无信号");
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"「请用英语回答」是什么意思？", "『请用英文回答。请用越南语回答。』是什么意思？", "\"Please answer in English. Please answer in Vietnamese.\"是什么意思？", "'Please answer in English. Please answer in Vietnamese.'是什么意思？", "'I can't connect. Please answer in Vietnamese.'是什么意思？"})
     void quotedLanguageCommandsDoNotOverrideAChinesePreference(String question) {
         var previous = new ReplyLanguagePolicy.State("zh-CN", true);

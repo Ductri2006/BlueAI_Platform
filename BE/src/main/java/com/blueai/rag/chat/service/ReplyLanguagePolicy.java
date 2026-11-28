@@ -123,7 +123,7 @@ public final class ReplyLanguagePolicy {
     public static String instruction(State state) {
         return "\nReply language for this turn: " + state.name() + " (" + state.code() + "). "
                 + ("zh-CN".equals(state.code()) ? "请用简体中文完整回答，包括追问、信息不足提示、操作步骤和界面菜单名称。请将越南语参考资料中的说明和菜单翻译成中文，不能直接复制越南语句子。只保留必须保持原样的姓名、产品标识、URL、APN、错误代码和数值。 " : "")
-                + ("zh-CN".equals(state.code()) ? "术语参考（仅翻译相关来源，不补充未获证实的步骤或设备能力）：iPhone的Cài đặt为设置，Di động为蜂窝网络（或移动数据，具体以设备界面为准），Chuyển vùng dữ liệu为数据漫游，Bật đường dây này为启用此号码，eSIM du lịch为旅行eSIM。 " : "")
+                + ("zh-CN".equals(state.code()) ? "术语参考（仅翻译相关来源，不补充未获证实的步骤或设备能力）：iPhone的Cài đặt为设置，Di động为蜂窝网络（或移动数据，具体以设备界面为准），Chuyển vùng dữ liệu为数据漫游，Bật đường dây này为启用此号码，eSIM du lịch为旅行eSIM，Chế độ máy bay为飞行模式，không có mạng为无网络，không có sóng为无信号。不要将越南语说明作为引文、括注或代码保留；这些说明必须译成中文。 " : "")
                 + "Write all customer-facing prose in this language, including follow-up questions and insufficient-evidence messages. "
                 + "Translate the meaning of authorized evidence as needed. Keep product identifiers, URLs, APNs, error codes, "
                 + "amounts, currencies, data allowances and validity periods exact. Do not infer product availability from the language. "
@@ -141,7 +141,13 @@ public final class ReplyLanguagePolicy {
     /** Output may legitimately be a short answer; input slot ambiguity rules do not apply here. */
     public static boolean isChineseAnswer(String answer) {
         if (answer == null || answer.isBlank()) return false;
-        String prose = IDENTIFIERS.matcher(answer).replaceAll(" ")
+        String unprotected = IDENTIFIERS.matcher(answer).replaceAll(" ");
+        // Common Vietnamese UI prose is not an identifier, even inside Markdown code.
+        // Keep names/APNs/SKUs intact; reject a known untranslated phrase without a second generation.
+        String normalizedProse = normalize(unprotected);
+        if (Pattern.compile("\\b(?:khong co mang|khong co song|che do may bay|chuyen vung du lieu|cai dat|du lieu di dong|esim du lich|bat duong day nay)\\b")
+                .matcher(normalizedProse).find()) return false;
+        String prose = unprotected
                 .replaceAll("`[^`]+`", " ")
                 .replaceAll("(?i)\\b(?:esim|sim|apn|qr|ios|android|iphone|ipad|gb|mb|tb|usd|vnd|jpy|wifi|wi-fi|5g|4g)\\b", " ");
         long han = prose.codePoints().filter(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.HAN).count();
