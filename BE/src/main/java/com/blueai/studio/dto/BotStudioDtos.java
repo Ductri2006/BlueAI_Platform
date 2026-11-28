@@ -306,8 +306,22 @@ public final class BotStudioDtos {
             boolean dialogHandled,
             DialogTrace trace,
             List<RagSourceResponse> sources,
-            List<ConversationContextSourceResponse> contextSources
+            List<ConversationContextSourceResponse> contextSources,
+            com.blueai.rag.conversation.model.AnswerStatus answerStatus
     ) {
+        public RuntimeResponse {
+            message = PublicAnswerText.toPlainText(message);
+            answerStatus = answerStatus == null ? com.blueai.rag.conversation.model.AnswerStatus.ANSWERED : answerStatus;
+        }
+
+        public RuntimeResponse(String message, String matchedIntent, Map<String, String> recognizedEntities,
+                               String matchedNode, PreviewContext context, boolean fallback, boolean dialogHandled,
+                               DialogTrace trace, List<RagSourceResponse> sources,
+                               List<ConversationContextSourceResponse> contextSources) {
+            this(message, matchedIntent, recognizedEntities, matchedNode, context, fallback, dialogHandled,
+                    trace, sources, contextSources, com.blueai.rag.conversation.model.AnswerStatus.ANSWERED);
+        }
+
         public RuntimeResponse(String message, String matchedIntent, Map<String, String> recognizedEntities,
                                String matchedNode, PreviewContext context, boolean fallback, boolean dialogHandled) {
             this(message, matchedIntent, recognizedEntities, matchedNode, context, fallback, dialogHandled,
@@ -327,13 +341,18 @@ public final class BotStudioDtos {
 
         public RuntimeResponse withTrace(DialogTrace value) {
             return new RuntimeResponse(message, matchedIntent, recognizedEntities, matchedNode, context,
-                    fallback, dialogHandled, value, sources, contextSources);
+                    fallback, dialogHandled, value, sources, contextSources, answerStatus);
         }
 
         public RuntimeResponse withEvidence(List<RagSourceResponse> documents,
                                              List<ConversationContextSourceResponse> contexts) {
             return new RuntimeResponse(message, matchedIntent, recognizedEntities, matchedNode, context,
-                    fallback, dialogHandled, trace, documents, contexts);
+                    fallback, dialogHandled, trace, documents, contexts, answerStatus);
+        }
+
+        public RuntimeResponse withAnswerStatus(com.blueai.rag.conversation.model.AnswerStatus status) {
+            return new RuntimeResponse(message, matchedIntent, recognizedEntities, matchedNode, context,
+                    fallback, dialogHandled, trace, sources, contextSources, status);
         }
     }
 
@@ -357,14 +376,20 @@ public final class BotStudioDtos {
 
     public record PublicRuntimeOutput(
             String message,
-            boolean fallback
+            boolean fallback,
+            com.blueai.rag.conversation.model.AnswerStatus answerStatus
     ) {
         public PublicRuntimeOutput {
-            message = PublicAnswerText.withoutSources(message);
+            message = PublicAnswerText.toPlainText(message);
+            answerStatus = answerStatus == null ? com.blueai.rag.conversation.model.AnswerStatus.ANSWERED : answerStatus;
+        }
+
+        public PublicRuntimeOutput(String message, boolean fallback) {
+            this(message, fallback, com.blueai.rag.conversation.model.AnswerStatus.ANSWERED);
         }
 
         public static PublicRuntimeOutput from(RuntimeResponse response) {
-            return new PublicRuntimeOutput(response.message(), response.fallback());
+            return new PublicRuntimeOutput(response.message(), response.fallback(), response.answerStatus());
         }
     }
 

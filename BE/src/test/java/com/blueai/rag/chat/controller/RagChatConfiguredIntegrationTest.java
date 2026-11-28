@@ -312,7 +312,7 @@ class RagChatConfiguredIntegrationTest {
                         .content("{\"question\":\"Điều kiện hoàn tiền là gì?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.assistantMessage.content")
-                        .value("Khách hàng được hoàn tiền trong 7 ngày. [S1]"))
+                        .value("Khách hàng được hoàn tiền trong 7 ngày."))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].documentId")
                         .value(documentId))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].sourceType")
@@ -415,7 +415,7 @@ class RagChatConfiguredIntegrationTest {
                         .content("{\"question\":\"Nội dung đang áp dụng là gì?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.assistantMessage.content")
-                        .value("Nội dung release đang áp dụng. [S1]"))
+                        .value("Nội dung release đang áp dụng."))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].documentId")
                         .value(documentId));
 
@@ -477,7 +477,7 @@ class RagChatConfiguredIntegrationTest {
                         .content("{\"question\":\"Điều kiện hoàn tiền là gì?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.assistantMessage.content")
-                        .value("Mã QR chưa quét có thể được xem xét hoàn tiền. [S1]"))
+                        .value("Mã QR chưa quét có thể được xem xét hoàn tiền."))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].documentId").value(documentId))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].filename").value("refund-policy.pdf"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].chunkId").value("chunk-refund-1"))
@@ -525,7 +525,7 @@ class RagChatConfiguredIntegrationTest {
                         .content("{\"question\":\"Khi nào cần gửi báo giá?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.assistantMessage.content")
-                        .value("Ưu tiên gửi báo giá trước thứ Sáu. [S1]"))
+                        .value("Ưu tiên gửi báo giá trước thứ Sáu."))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.sources[0].documentId")
                         .value(documentId));
 

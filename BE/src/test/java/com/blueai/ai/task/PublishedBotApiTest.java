@@ -61,7 +61,7 @@ class PublishedBotApiTest {
 
     @BeforeEach void fixture() {
         owner = users.save(new User(UUID.randomUUID()+"@published.test", "unused", "Key owner", UserRole.ADMIN));
-        reset(rag); when(rag.answerForWidget(any(), anyString(), anyList(), any())).thenReturn("Core reply");
+        reset(rag); when(rag.answerForWidgetReply(any(), anyString(), anyList(), any())).thenReturn(com.blueai.rag.chat.service.GroundedReplyComposer.Reply.answered("Core reply"));
     }
 
     @Test void firstPublishGeneratesACopyableEncryptedKeyAndRepublishKeepsIt() throws Exception {

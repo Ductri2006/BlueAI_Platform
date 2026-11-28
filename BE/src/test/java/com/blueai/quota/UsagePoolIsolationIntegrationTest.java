@@ -87,7 +87,7 @@ class UsagePoolIsolationIntegrationTest {
             .andRespond(request->{
                 // A bounded fake provider delay keeps real chat transactions occupied together.
                 try { Thread.sleep(100); } catch(InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new java.io.IOException(interrupted); }
-                return withSuccess("{\"model\":\"gemini-3.5-flash-lite\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"Concurrent QA answer\"}}],\"usage\":{\"prompt_tokens\":20,\"completion_tokens\":5,\"total_tokens\":30}}",MediaType.APPLICATION_JSON).createResponse(request);
+                return withSuccess("{\"model\":\"gemini-3.5-flash-lite\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"Đây là câu trả lời kiểm thử đồng thời.\"}}],\"usage\":{\"prompt_tokens\":20,\"completion_tokens\":5,\"total_tokens\":30}}",MediaType.APPLICATION_JSON).createResponse(request);
             });
         var start=new CountDownLatch(1);
         var ready=new CountDownLatch(10);

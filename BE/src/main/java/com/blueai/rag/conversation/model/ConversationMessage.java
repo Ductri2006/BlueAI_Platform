@@ -45,6 +45,10 @@ public class ConversationMessage {
     @Column(name = "evidence_json", updatable = false, columnDefinition = "LONGTEXT")
     private MessageEvidence evidence;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "answer_status", length = 30, nullable = false, updatable = false)
+    private AnswerStatus answerStatus = AnswerStatus.ANSWERED;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -65,6 +69,12 @@ public class ConversationMessage {
 
     public MessageEvidence getEvidence() {
         return evidence;
+    }
+
+    public AnswerStatus getAnswerStatus() { return answerStatus; }
+
+    public void setAnswerStatus(AnswerStatus value) {
+        this.answerStatus = value == null ? AnswerStatus.ANSWERED : value;
     }
 
     @PrePersist

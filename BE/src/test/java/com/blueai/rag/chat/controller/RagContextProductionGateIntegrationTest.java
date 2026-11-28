@@ -200,7 +200,7 @@ class RagContextProductionGateIntegrationTest {
     private void expectCompletion(Consumer<JsonNode> assertion) {
         provider.expect(requestTo("http://production-gate-stub.test/v1/chat/completions"))
                 .andExpect(request -> assertion.accept(json.readTree(((MockClientHttpRequest) request).getBodyAsString())))
-                .andRespond(withSuccess("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"Synthetic context gate response.\"}}]}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess("{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"Đây là phản hồi kiểm thử ngữ cảnh.\"}}]}", MediaType.APPLICATION_JSON));
     }
 
     private void ask(String token, String conversationId) throws Exception {

@@ -58,9 +58,10 @@ class MySqlFlywayUpgradeIntegrationTest {
                 // A standalone validate before migrate rejects pending migrations.
                 assertThat(flyway.migrate().migrationsExecuted).isEqualTo(11);
                 flyway.validate();
-                assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
+                assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
                 assertThat(flyway.info().pending()).isEmpty();
                 assertThat(flyway.migrate().migrationsExecuted).isZero();
+                ProductSchemaAssertions.verify(connection);
                 verifyPreservationProbes(connection);
                 assertThat(count(connection, "SELECT COUNT(*) FROM app_users WHERE active_session_id IS NULL"))
                         .as("existing users have no active login session after V10").isEqualTo(1);

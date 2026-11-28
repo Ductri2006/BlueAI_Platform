@@ -157,12 +157,11 @@ class RagCompletionUsageTest {
 
     @Test
     void exhaustedRetriesDoNotRecordAnUnreportedCall() {
-        for (int i = 0; i < 3; i++) {
-            server.expect(requestTo("http://gemini.test/v1/chat/completions"))
-                    .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
-        }
+        server.expect(requestTo("http://gemini.test/v1/chat/completions"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
         assertThatThrownBy(this::ask).isInstanceOfSatisfying(ApiException.class,
-                error -> assertThat(error.getCode()).isEqualTo("LLM_REQUEST_FAILED"));
+                error -> assertThat(error.getCode()).isEqualTo("AI_PROVIDER_RATE_LIMITED"));
+        verify(factory, times(1)).create();
         verifyNoInteractions(usageService);
     }
 

@@ -8,6 +8,7 @@ import {
   type ConversationContextMode,
   type ConversationMessageResponse,
 } from '../api/blueAiApi';
+import { chatErrorToMessage } from '../api/chatErrors';
 
 export interface AppState {
   activeRole: UserRole;
@@ -198,27 +199,18 @@ export function useAppStore(): AppState {
       state.currentStreamActivity = 'Đang tổng hợp câu trả lời có căn cứ...';
       notify();
       const answer = await blueAiApi.askQuestion(conversationId, question);
-      state.sessions.find(item => item.id === sessionId)?.messages.push(ragAnswerToChatMessage(answer));
-      state.streamStatus = 'complete';
+      const message = ragAnswerToChatMessage(answer);
+      state.sessions.find(item => item.id === sessionId)?.messages.push(message);
+      state.streamStatus = message.error ? 'error' : 'complete';
       state.currentStreamActivity = '';
       notify();
-      return true;
+      return !message.error;
     } catch (error) {
-      const apiError = error instanceof BlueAiApiError ? error : new BlueAiApiError('Không thể kết nối BlueAI API.', 0, 'API_UNREACHABLE');
-      state.sessions.find(item => item.id === sessionId)?.messages.push({
-        id: `error-${crypto.randomUUID()}`,
-        sender: 'system',
-        content: apiError.status === 429
-          ? apiError.code.startsWith('AI_') ? apiError.message
-            : `Đã đạt giới hạn gửi câu hỏi. Vui lòng chờ ${apiError.retryAfterSeconds || 60} giây rồi gửi lại.`
-          : `Không thể nhận câu trả lời từ RAG API.\n\n**${apiError.code}**: ${apiError.message}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        confidence: 'danger',
-      });
+      const message = chatErrorToMessage(error);
+      state.sessions.find(item => item.id === sessionId)?.messages.push(message);
       state.streamStatus = 'error';
       state.currentStreamActivity = '';
-      showToast(apiError.status === 429 ? `${apiError.code.startsWith('AI_') ? apiError.message : 'Đã đạt giới hạn gửi.'} Câu đang soạn được giữ lại để bạn thử sau.`
-        : 'RAG API đang lỗi hoặc chưa được cấu hình.', 'warning');
+      showToast(message.content, 'warning');
       return false;
     }
   };

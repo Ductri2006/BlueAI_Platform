@@ -131,7 +131,8 @@ public final class ReplyLanguagePolicy {
     }
 
     public static String checkedAnswer(String answer, State language) {
-        if ("zh-CN".equals(language.code()) && !isChineseAnswer(answer)) {
+        if ("zh-CN".equals(language.code()) && OutputLanguageAssessment.assess(answer, language, List.of())
+                == OutputLanguageAssessment.Result.MISMATCH) {
             throw new com.blueai.auth.exception.ApiException(org.springframework.http.HttpStatus.BAD_GATEWAY,
                     "LLM_RESPONSE_LANGUAGE_MISMATCH", "暂时无法生成准确的简体中文回答，请稍后重试或联系人工客服。");
         }
@@ -141,22 +142,11 @@ public final class ReplyLanguagePolicy {
     /** Output may legitimately be a short answer; input slot ambiguity rules do not apply here. */
     public static boolean isChineseAnswer(String answer) {
         if (answer == null || answer.isBlank()) return false;
-        String unprotected = IDENTIFIERS.matcher(answer).replaceAll(" ");
-        // Common Vietnamese UI prose is not an identifier, even inside Markdown code.
-        // Keep names/APNs/SKUs intact; reject a known untranslated phrase without a second generation.
-        String normalizedProse = normalize(unprotected);
-        if (Pattern.compile("\\b(?:khong co mang|khong co song|che do may bay|chuyen vung du lieu|cai dat|du lieu di dong|esim du lich|bat duong day nay)\\b")
-                .matcher(normalizedProse).find()) return false;
-        String prose = unprotected
-                .replaceAll("`[^`]+`", " ")
-                .replaceAll("(?i)\\b(?:esim|sim|apn|qr|ios|android|iphone|ipad|gb|mb|tb|usd|vnd|jpy|wifi|wi-fi|5g|4g)\\b", " ");
-        long han = prose.codePoints().filter(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.HAN).count();
-        long latin = prose.codePoints().filter(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.LATIN).count();
-        boolean otherCjk = prose.codePoints().anyMatch(cp -> switch (Character.UnicodeScript.of(cp)) {
-            case HIRAGANA, KATAKANA, HANGUL -> true;
-            default -> false;
-        });
-        return !otherCjk && han > 0 && (latin == 0 || han >= 4 && han >= latin);
+        var assessment = OutputLanguageAssessment.assess(answer, new State("zh-CN", false), List.of());
+        // Legacy boolean callers have no evidence registry. Do not reject Chinese prose merely
+        // because an unclassified brand/name remains; new callers should use the three-way API.
+        return assessment != OutputLanguageAssessment.Result.MISMATCH
+                && answer.codePoints().anyMatch(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.HAN);
     }
 
     private static String normalize(String text) {

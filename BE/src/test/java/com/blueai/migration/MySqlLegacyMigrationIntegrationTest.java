@@ -72,15 +72,16 @@ class MySqlLegacyMigrationIntegrationTest {
             }
         }
         Flyway latest = configuration(url, username, password).load();
-        assertThat(latest.migrate().migrationsExecuted).isEqualTo(17 - version);
+        assertThat(latest.migrate().migrationsExecuted).isEqualTo(18 - version);
         latest.validate();
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("17");
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("18");
         assertThat(latest.info().pending()).isEmpty();
         assertThat(latest.migrate().migrationsExecuted).isZero();
         Map<String, Integer> newChecksums = Arrays.stream(latest.info().applied())
                 .collect(Collectors.toMap(migration -> migration.getVersion().getVersion(), migration -> migration.getChecksum()));
         assertThat(newChecksums).containsAllEntriesOf(oldChecksums);
         try (var connection = DriverManager.getConnection(url, username, password)) {
+            ProductSchemaAssertions.verify(connection);
             try (var statement = connection.prepareStatement("""
                     SELECT u.auth_version,u.active_session_id,c.title,c.deleted_at,m.content,d.status,d.attempt_count,d.produced_chunk_count
                     FROM app_users u JOIN rag_conversations c ON c.owner_id=u.id

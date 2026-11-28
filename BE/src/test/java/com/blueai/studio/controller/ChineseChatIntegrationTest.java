@@ -152,28 +152,26 @@ class ChineseChatIntegrationTest {
     }
 
     @Test
-    void chineseRequestRejectsEnglishProviderAnswerWithoutRegenerationOrPersistingSuccess() throws Exception {
+    void chineseRequestMakesOneBoundedRepairThenPersistsExplicitSafeFallback() throws Exception {
         var session = session(configure(create(), false, true, List.of(publicDocument.getId())));
-        JsonNode initialState = state(session.sessionId());
         String question = "请用简体中文回答，如何安装eSIM并连接网络？";
         expectRetrieval(question);
         doReturn(ENGLISH_ANSWER).when(completion).complete(anyList());
 
-        assertThatThrownBy(() -> message(session, question, "wrong-provider-language"))
-                .isInstanceOfSatisfying(ApiException.class, exception -> {
-                    assertThat(exception.getCode()).isEqualTo("LLM_RESPONSE_LANGUAGE_MISMATCH");
-                    assertThat(exception.getStatus().value()).isEqualTo(502);
-                });
+        var response = message(session, question, "wrong-provider-language");
+        assertThat(response.result().fallback()).isTrue();
+        assertThat(response.result().answerStatus()).isEqualTo(com.blueai.rag.conversation.model.AnswerStatus.SAFE_FALLBACK);
+        assertThat(response.result().message()).contains("请稍后重试").doesNotContain("LLM_RESPONSE_LANGUAGE_MISMATCH", ENGLISH_ANSWER);
 
         ArgumentCaptor<List<LlmChatMessage>> completionPrompt = ArgumentCaptor.captor();
-        verify(completion, times(1)).complete(completionPrompt.capture());
-        prompts.add(List.copyOf(completionPrompt.getValue()));
+        verify(completion, times(2)).complete(completionPrompt.capture());
+        prompts.add(List.copyOf(completionPrompt.getAllValues().getFirst()));
         assertPrompt(0, "Simplified Chinese (zh-CN)", question);
         assertThat(prompts).hasSize(1);
         verifyNoMoreInteractions(completion);
         verify(clientFactory, times(1)).create();
-        assertTurnCount(session.sessionId(), 0);
-        assertThat(state(session.sessionId())).isEqualTo(initialState);
+        assertTurnCount(session.sessionId(), 1);
+        assertLanguage(session.sessionId(), "zh-CN", true);
     }
 
     @ParameterizedTest

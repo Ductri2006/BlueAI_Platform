@@ -491,7 +491,7 @@ class DialogSalesContextIntegrationTest {
         });
 
         JsonNode answer = ask(fixture.userToken(), fixture.conversationId(), KB_QUESTION);
-        assertThat(answer.path("assistantMessage").path("content").asText()).isEqualTo(PROVIDER_FIXTURE_ANSWER);
+        assertThat(answer.path("assistantMessage").path("content").asText()).isEqualTo("Phản hồi provider giả lập: bật Data Roaming.");
         assertKnowledgeSource(answer, documentId, "USER_DOCUMENT");
         assertKnowledgeSource(messages(fixture.userToken(), fixture.conversationId()).get(1).path("evidence"),
                 documentId, "USER_DOCUMENT");
@@ -724,7 +724,7 @@ class DialogSalesContextIntegrationTest {
         request.set("history", previewHistory(2));
 
         JsonNode result = preview(fixture, request);
-        assertThat(result.path("message").asText()).isEqualTo(PROVIDER_FIXTURE_ANSWER);
+        assertThat(result.path("message").asText()).isEqualTo("Phản hồi provider giả lập: bật Data Roaming.");
         assertThat(result.path("trace").path("route").asText()).isEqualTo("CORE");
         assertThat(result.path("matchedNode").asText()).isEqualTo("BlueAI Core");
         assertKnowledgeSource(result, documentId, "ENTERPRISE_DOCUMENT");
@@ -746,7 +746,7 @@ class DialogSalesContextIntegrationTest {
         request.set("history", previewHistory(2));
 
         JsonNode result = preview(fixture, request);
-        assertThat(result.path("message").asText()).isEqualTo(PROVIDER_FIXTURE_ANSWER);
+        assertThat(result.path("message").asText()).isEqualTo("Phản hồi provider giả lập: bật Data Roaming.");
         assertThat(result.path("trace").path("route").asText()).isEqualTo("CORE");
         assertKnowledgeSource(result, documentId, "ENTERPRISE_DOCUMENT");
         assertThat(result.path("contextSources")).isEmpty();
@@ -789,7 +789,7 @@ class DialogSalesContextIntegrationTest {
         });
 
         JsonNode result = preview(fixture, previewRequest(KB_QUESTION, null));
-        assertThat(result.path("message").asText()).isEqualTo(PROVIDER_FIXTURE_ANSWER);
+        assertThat(result.path("message").asText()).isEqualTo("Phản hồi provider giả lập: bật Data Roaming.");
         assertThat(result.path("trace").path("route").asText()).isEqualTo("CORE");
         assertKnowledgeSource(result, documentId, "ENTERPRISE_DOCUMENT");
         assertThat(result.path("contextSources")).isEmpty();
