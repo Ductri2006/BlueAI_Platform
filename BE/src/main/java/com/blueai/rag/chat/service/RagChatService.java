@@ -367,7 +367,7 @@ public class RagChatService {
                 .skip(Math.max(0, history.size() - 20))
                 .forEach(item -> messages.add(new LlmChatMessage(item.role(), shorten(item.content(), 2000))));
         messages.add(new LlmChatMessage("user", question));
-        return completionClient.complete(messages);
+        return ReplyLanguagePolicy.checkedAnswer(completionClient.complete(messages), language);
     }
 
     private List<RetrievedChunk> retrieve(String ownerId, String question) {
@@ -489,7 +489,7 @@ public class RagChatService {
         }
         messages.add(new LlmChatMessage("user", question));
 
-        return completionClient.complete(messages);
+        return ReplyLanguagePolicy.checkedAnswer(completionClient.complete(messages), language);
     }
 
     private String buildSystemPrompt(
