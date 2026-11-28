@@ -119,4 +119,14 @@ class MultilingualLanguagePolicyTest {
         var state = new ReplyLanguagePolicy.State("zh-CN", true);
         assertThat(ReplyLanguagePolicy.resolve("'" + "sample ".repeat(1000) + " Please answer in English.'是什么意思？", state, List.of())).isEqualTo(state);
     }
+
+    @Test
+    void deviceTerminologyIsScopedToChineseAndDoesNotAddDeviceCapabilities() {
+        assertThat(ReplyLanguagePolicy.instruction(new ReplyLanguagePolicy.State("zh-CN", false)))
+                .contains("蜂窝网络", "数据漫游", "不补充未获证实的步骤或设备能力");
+        for (String code : List.of("vi", "en")) {
+            assertThat(ReplyLanguagePolicy.instruction(new ReplyLanguagePolicy.State(code, false)))
+                    .doesNotContain("蜂窝网络", "数据漫游");
+        }
+    }
 }
