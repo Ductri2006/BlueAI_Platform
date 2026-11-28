@@ -76,6 +76,12 @@ class ProductAdvisorTest {
         assertThat(result.status()).isEqualTo(ProductAdvisor.Status.MATCHES);
         verify(catalog).adviceSnapshot(Set.of(),null,null,"BLU-ESIM-JP-31D");
     }
+    @ParameterizedTest @ValueSource(strings={"Price for ","Price for SKU: "})
+    void lookupKeepsSpacesInsidePartnerSkuInsteadOfTruncatingTheCountryLabel(String prefix) {
+        String sku="BLU-ESIM-04-SOUTH -1D-1024-6F34C139";
+        advisor.grounding(prefix+sku,List.of());
+        verify(catalog).adviceSnapshot(Set.of(),null,null,sku);
+    }
 
     @Test void sameImmutableSnapshotRendersThreeLanguagesAndRetainsExactFactsAfterRefresh() {
         List<ProductFacts> products = new ArrayList<>(List.of(plan("BLU-ESIM-JP-31D","Gói Nhật 日本 eSIM","19.9500","USD",31)));

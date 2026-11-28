@@ -125,7 +125,10 @@ public class BluecomProductClient {
         Set<String> seen = new HashSet<>();
         for (JsonNode product : products) {
             if (product == null || !product.isObject() || !product.path("sku").isTextual()
-                    || !product.path("sku").textValue().matches("[A-Za-z0-9][A-Za-z0-9._-]{0,159}")
+                    // Partner SKU is opaque: real country labels include internal ASCII spaces.
+                    // Preserve them verbatim rather than rewriting product identity.
+                    || !product.path("sku").textValue().matches("[A-Za-z0-9][A-Za-z0-9 ._-]{0,159}")
+                    || !product.path("sku").textValue().equals(product.path("sku").textValue().strip())
                     || !product.path("name").isTextual() || product.path("name").textValue().isBlank()
                     || product.path("name").textValue().length() > 500
                     || product.path("name").textValue().codePoints().anyMatch(Character::isISOControl)

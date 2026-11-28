@@ -39,7 +39,7 @@ public class ProductAdvisor {
     private record Query(boolean intent, Set<String> countries, Integer days, ProductCatalogService.Budget budget,
                          String sku, Set<Detail> details) { }
     private record CountryMatch(int start, int end, String code) { }
-    private static final Pattern SKU = Pattern.compile("(?i)(?<![a-z0-9])(?:(?:BLU-ESIM|ESIM|SIM|TOPUP)-[a-z0-9-]+|SKU\\s*[:=]?\\s*[a-z0-9][a-z0-9_-]{1,159})");
+    private static final Pattern SKU = Pattern.compile("(?i)(?<![a-z0-9])(?:(?:SKU\\s*[:=]?\\s*)?BLU-ESIM-[a-z0-9 ._-]{1,140}-[a-f0-9]{8}(?![a-z0-9])|(?:BLU-ESIM|ESIM|SIM|TOPUP)-[a-z0-9-]+|SKU\\s*[:=]?\\s*[a-z0-9][a-z0-9_-]{1,159})");
     private static final Pattern DAYS = Pattern.compile("(?<![\\d.\\-])(\\d{1,4})\\s*(?:ngay|days?|天|日)(?![a-z])");
     private static final Pattern MONTH = Pattern.compile("(?:\\b(?:one|a|1)\\s+(?:calendar\\s+)?month\\b|\\b(?:mot|1)\\s*thang\\b|(?:一个|一個|一|1)个?月)");
     private static final Pattern SUPPORT = Pattern.compile("\\b(?:install(?:ation)?|activate|activation|troubleshoot(?:ing)?|refund|qr|signal|error|setup)\\b|cai dat|kich hoat|khong hoat dong|khong ket noi|mat song|hoan tien|安装|安裝|激活|啟用|故障|无法|無法|没信号|沒有信號|退款|排查|设置|設定");

@@ -25,6 +25,12 @@ class BluecomProductClientContractTest {
         properties.setApiKey("synthetic-partner-key");
         server.expect(anything()).andRespond(withSuccess(json,MediaType.APPLICATION_JSON));
     }
+    @Test void partnerSkuWithInternalCountryLabelSpaceIsPreservedVerbatim() {
+        String sku="BLU-ESIM-04-SOUTH -1D-1024-6F34C139";
+        responds("{\"count\":1,\"page\":1,\"size\":200,\"totalPages\":1,\"packageList\":[{\"sku\":\""+sku+"\",\"name\":\"Country daily plan\",\"sellingPrice\":22000}]}");
+        assertThat(client.fetchAll().getFirst().path("sku").asText()).isEqualTo(sku);
+        server.verify();
+    }
     @Test void exactDecimalPriceSurvivesHttpParsingWithoutRoundingOrCurrencyInference() {
         responds("""
                 {"count":1,"page":1,"size":200,"totalPages":1,"packageList":[

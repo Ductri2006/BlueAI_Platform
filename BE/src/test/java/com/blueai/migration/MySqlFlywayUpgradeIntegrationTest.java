@@ -56,7 +56,7 @@ class MySqlFlywayUpgradeIntegrationTest {
                 assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("6");
                 // migrate validates applied checksums while allowing pending migrations.
                 // A standalone validate before migrate rejects pending migrations.
-                assertThat(flyway.migrate().migrationsExecuted).isEqualTo(11);
+                assertThat(flyway.migrate().migrationsExecuted).isEqualTo(12);
                 flyway.validate();
                 assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("18");
                 assertThat(flyway.info().pending()).isEmpty();
