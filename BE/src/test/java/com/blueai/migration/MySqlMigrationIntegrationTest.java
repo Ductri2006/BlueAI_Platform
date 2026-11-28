@@ -116,14 +116,15 @@ class MySqlMigrationIntegrationTest {
                         "idempotency_key_type", "VARCHAR(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"))
                 .cleanDisabled(true)
                 .load();
-        assertThat(latest.migrate().migrationsExecuted).isEqualTo(10);
-        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("16");
+        assertThat(latest.migrate().migrationsExecuted).isEqualTo(11);
+        assertThat(latest.info().current().getVersion().getVersion()).isEqualTo("17");
         latest.validate();
         assertThat(latest.info().pending()).isEmpty();
         assertThat(latest.migrate().migrationsExecuted).isZero();
 
         try (var connection = DriverManager.getConnection(url, username, password);
              var statement = connection.createStatement()) {
+            ProductSchemaAssertions.verify(connection);
             try (var node = statement.executeQuery("""
                     SELECT n.response_text,n.context_reuse_policy,b.dialog_enabled,b.widget_document_ids
                     FROM studio_bot_dialog_nodes n JOIN studio_bots b ON b.id=n.bot_id

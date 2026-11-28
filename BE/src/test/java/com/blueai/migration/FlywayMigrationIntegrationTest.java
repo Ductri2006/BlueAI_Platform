@@ -54,7 +54,11 @@ class FlywayMigrationIntegrationTest {
             "ai_integration_bot_sessions",
             "studio_bot_api_settings",
             "studio_bot_api_keys",
-            "studio_bot_api_sessions"
+            "studio_bot_api_sessions",
+            "ai_quota_accounts",
+            "ai_token_operations",
+            "ai_project_windows",
+            "products"
     );
 
     @Autowired
@@ -65,8 +69,12 @@ class FlywayMigrationIntegrationTest {
 
     @Test
     void appliesFullMigrationChainAndLeavesExpectedSchemaForHibernateValidation() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("16");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("17");
         flyway.validate();
+        jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) connection -> {
+            ProductSchemaAssertions.verify(connection);
+            return null;
+        });
 
         Set<String> usageColumns = jdbcTemplate.queryForList(
                         "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
