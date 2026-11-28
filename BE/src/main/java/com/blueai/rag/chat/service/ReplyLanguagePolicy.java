@@ -69,6 +69,7 @@ public final class ReplyLanguagePolicy {
         for (String clause : preferenceText.split("[.!?;。！？；\\n]+")) {
             if (clause.stripLeading().matches("^[\"'`“‘「『《].*")) continue;
             String command = normalize(clause);
+            command = command.replaceFirst("^(?:(?:vui long|lam on|hay|xin) )+", "");
             if (ENGLISH_REQUEST.matcher(command).lookingAt()) preference = "en";
             if (VIETNAMESE_REQUEST.matcher(command).lookingAt()) preference = "vi";
             if (CHINESE_ENGLISH_REQUEST.matcher(command).lookingAt()) preference = "en";
