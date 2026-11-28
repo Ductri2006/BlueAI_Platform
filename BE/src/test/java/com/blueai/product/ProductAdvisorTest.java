@@ -82,6 +82,12 @@ class ProductAdvisorTest {
         advisor.grounding(prefix+sku,List.of());
         verify(catalog).adviceSnapshot(Set.of(),null,null,sku);
     }
+    @Test void anExactSkuPriceQuestionDoesNotInheritAnotherTripsDestinationAndDuration() {
+        String sku="BLU-ESIM-04-SOUTH -1D-1024-6F34C139";
+        advisor.grounding("请用简体中文回答。查询 "+sku+" 的价格。",
+                List.of(new LlmChatMessage("user","Vui lòng trả lời bằng tiếng Việt. Tư vấn eSIM Nhật Bản 31 ngày")));
+        verify(catalog).adviceSnapshot(Set.of(),null,null,sku);
+    }
 
     @Test void sameImmutableSnapshotRendersThreeLanguagesAndRetainsExactFactsAfterRefresh() {
         List<ProductFacts> products = new ArrayList<>(List.of(plan("BLU-ESIM-JP-31D","Gói Nhật 日本 eSIM","19.9500","USD",31)));

@@ -108,13 +108,13 @@ public class ProductAdvisor {
         // A country-looking token inside a SKU is an identifier, not a requested destination.
         String destinationText = sku == null ? question : question.substring(0,skuMatch.start()) + " " + question.substring(skuMatch.end());
         Set<String> countries = countryCodes(destinationText);
-        if (countries.isEmpty() && priorProduct) countries = countryCodes(prior);
+        if (countries.isEmpty() && priorProduct && sku == null) countries = countryCodes(prior);
         if (countries.isEmpty() && sku == null) details.add(Detail.COUNTRY);
         List<Integer> durations = durationValues(current);
-        if (durations.isEmpty() && priorProduct && !MONTH.matcher(current).find()) durations = durationValues(normalizedPrior);
+        if (durations.isEmpty() && priorProduct && sku == null && !MONTH.matcher(current).find()) durations = durationValues(normalizedPrior);
         Integer days = durations.size() == 1 ? durations.getFirst() : null;
         if (durations.size() > 1) details.add(Detail.MULTIPLE_DURATIONS);
-        boolean month = MONTH.matcher(current).find() || (priorProduct && durations.isEmpty() && MONTH.matcher(normalizedPrior).find());
+        boolean month = MONTH.matcher(current).find() || (priorProduct && sku == null && durations.isEmpty() && MONTH.matcher(normalizedPrior).find());
         if (month && days == null) details.add(Detail.CALENDAR_MONTH);
         else if (days == null && sku == null && RECOMMEND.matcher(current).find()) details.add(Detail.DAYS);
         if (days != null && (days < 1 || days > 3650)) { details.add(Detail.DAYS); days = null; }
